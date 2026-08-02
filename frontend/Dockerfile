@@ -3,7 +3,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS deps
 WORKDIR /app
-
 COPY package.json package-lock.json ./
 RUN npm install --legacy-peer-deps
 
@@ -16,7 +15,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build-time env — points at the EC2 API gateway.
+# MUST create public dir BEFORE next build runs — Next.js needs it to exist
+# and the runner stage COPYs from this builder stage's filesystem
+RUN mkdir -p public
+
 ARG NEXT_PUBLIC_GATEWAY_URL=http://16.192.160.85
 ARG NEXT_PUBLIC_API_URL=http://16.192.160.85
 ARG NEXT_PUBLIC_NOTIF_WS_URL=ws://16.192.160.85
@@ -26,13 +28,10 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_NOTIF_WS_URL=$NEXT_PUBLIC_NOTIF_WS_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Ensure public dir exists (Next.js requires it but it may be empty)
-RUN mkdir -p public
-
 RUN npm run build
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stage 3: Production runner — minimal image
+# Stage 3: Production runner
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -40,17 +39,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Ensure public dir exists in runner too
-RUN mkdir -p public
-
-# Copy public folder (may be empty but must exist)
+# Copy public dir from builder (guaranteed to exist because of mkdir above)
 COPY --from=builder /app/public ./public
 
-# Copy standalone server output
+# Copy standalone server and static assets
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
