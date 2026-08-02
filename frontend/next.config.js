@@ -4,6 +4,8 @@ const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:800
 const nextConfig = {
   reactStrictMode: true,
   optimizeFonts: false,
+  // Required for Docker: produces a self-contained server.js in .next/standalone
+  output: 'standalone',
   env: {
     NEXT_PUBLIC_GATEWAY_URL: GATEWAY_URL,
     NEXT_PUBLIC_API_URL: GATEWAY_URL,

@@ -194,6 +194,10 @@ jobs:
           - service: api-gateway
             context: services/api-gateway
             port: 8000
+          # Next.js frontend
+          - service: frontend
+            context: frontend
+            port: 3000
 
     steps:
       - uses: actions/checkout@v4
@@ -224,105 +228,50 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
 # ─────────────────────────────────────────────────────────────────────────────
-# JOB 5: Deploy to Kubernetes (EKS)
-# Runs only after all images are pushed to ECR
+# JOB 5: Deploy to EC2 via SSH
+# SSHes into the EC2 instance, pulls new images from ECR, restarts stack
 # ─────────────────────────────────────────────────────────────────────────────
-  deploy-to-eks:
+  deploy-to-ec2:
     needs: [build-and-push-ecr]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 300s
+          script: |
+            set -e
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'v1.29.0'
+            # Re-authenticate Docker with ECR (tokens expire every 12h)
+            aws ecr get-login-password --region eu-north-1 | \
+              docker login --username AWS --password-stdin \
+              067514126471.dkr.ecr.eu-north-1.amazonaws.com
 
-      - name: Configure kubeconfig for EKS
-        run: |
-          aws eks update-kubeconfig \
-            --name devmeet-cluster \
-            --region ${{ env.AWS_REGION }}
+            cd /opt/devmeet
 
-      - name: Update k8s image tags to new ECR images
-        run: |
-          IMAGE_TAG=${{ github.sha }}
-          REGISTRY=${{ env.ECR_REGISTRY }}
+            # Pull latest images for all services including frontend
+            for svc in auth-service user-service orchestrator-service \
+                        ai-interviewer-service code-execution-service \
+                        video-service feedback-service notification-service \
+                        analytics-service admin-service file-service \
+                        payment-service search-service api-gateway frontend; do
+              echo "Pulling devmeet-$svc..."
+              docker pull 067514126471.dkr.ecr.eu-north-1.amazonaws.com/devmeet-$svc:latest || true
+            done
 
-          for service in \
-            auth-service user-service orchestrator-service ai-interviewer-service \
-            code-execution-service feedback-service analytics-service admin-service \
-            file-service payment-service search-service video-service \
-            notification-service api-gateway; do
-            # Update each deployment to use the newly-built SHA-tagged image
-            kubectl set image deployment/${service} \
-              ${service}=${REGISTRY}/devmeet-${service}:${IMAGE_TAG} \
-              -n devmeet --record 2>/dev/null || true
-          done
+            # Restart stack with new images (zero-downtime rolling update)
+            export AWS_ACCOUNT_ID=067514126471
+            export IMAGE_TAG=latest
+            export AWS_REGION=eu-north-1
+            docker compose -f docker-compose.prod.yml --env-file .env up -d --remove-orphans
 
-      - name: Apply Kubernetes manifests
-        run: |
-          kubectl apply -f k8s/namespace.yaml
+            # Health check
+            sleep 15
+            curl -sf http://localhost:80/health && echo "Gateway healthy!" || echo "Gateway not yet ready"
 
-          # Core config
-          kubectl apply -f k8s/configmap.yaml
-          kubectl apply -f k8s/secrets.yaml
-
-          # Infrastructure
-          kubectl apply -f k8s/postgres-deployment.yaml
-          kubectl apply -f k8s/redis-deployment.yaml
-          kubectl apply -f k8s/rabbitmq-cluster.yaml
-          kubectl apply -f k8s/kafka-cluster.yaml
-          kubectl apply -f k8s/elasticsearch-cluster.yaml
-
-          # Microservices
-          kubectl apply -f k8s/auth-service-deployment.yaml
-          kubectl apply -f k8s/user-service-deployment.yaml
-          kubectl apply -f k8s/orchestrator-service-deployment.yaml
-          kubectl apply -f k8s/ai-interviewer-service-deployment.yaml
-          kubectl apply -f k8s/code-execution-service-deployment.yaml
-          kubectl apply -f k8s/video-service-deployment.yaml
-          kubectl apply -f k8s/feedback-service-deployment.yaml
-          kubectl apply -f k8s/notification-service-deployment.yaml
-          kubectl apply -f k8s/analytics-service-deployment.yaml
-          kubectl apply -f k8s/admin-service-deployment.yaml
-          kubectl apply -f k8s/file-service-deployment.yaml
-          kubectl apply -f k8s/payment-service-deployment.yaml
-          kubectl apply -f k8s/search-service-deployment.yaml
-          kubectl apply -f k8s/api-gateway-deployment.yaml
-
-          # HPA + Istio + Monitoring
-          kubectl apply -f k8s/hpa-all-services.yaml
-          kubectl apply -f k8s/istio-gateway.yaml
-          kubectl apply -f k8s/monitoring/
-
-      - name: Wait for rollout to complete
-        run: |
-          for service in \
-            auth-service user-service orchestrator-service ai-interviewer-service \
-            feedback-service analytics-service admin-service file-service \
-            payment-service search-service video-service notification-service \
-            api-gateway; do
-            echo "Waiting for $service..."
-            kubectl rollout status deployment/${service} -n devmeet --timeout=300s
-          done
-
-      - name: Verify deployment health
-        run: |
-          echo "=== Pods ==="
-          kubectl get pods -n devmeet
-          echo ""
-          echo "=== Services ==="
-          kubectl get svc -n devmeet
-          echo ""
-          echo "=== HPA ==="
-          kubectl get hpa -n devmeet
+            echo "Deployment complete!"
