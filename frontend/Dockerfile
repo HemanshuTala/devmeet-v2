@@ -17,7 +17,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build-time env — points at the EC2 API gateway.
-# These get baked into the static bundle so must be set at build time.
 ARG NEXT_PUBLIC_GATEWAY_URL=http://16.192.160.85
 ARG NEXT_PUBLIC_API_URL=http://16.192.160.85
 ARG NEXT_PUBLIC_NOTIF_WS_URL=ws://16.192.160.85
@@ -26,6 +25,9 @@ ENV NEXT_PUBLIC_GATEWAY_URL=$NEXT_PUBLIC_GATEWAY_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_NOTIF_WS_URL=$NEXT_PUBLIC_NOTIF_WS_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Ensure public dir exists (Next.js requires it but it may be empty)
+RUN mkdir -p public
 
 RUN npm run build
 
@@ -42,8 +44,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy only what's needed to run
+# Ensure public dir exists in runner too
+RUN mkdir -p public
+
+# Copy public folder (may be empty but must exist)
 COPY --from=builder /app/public ./public
+
+# Copy standalone server output
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
