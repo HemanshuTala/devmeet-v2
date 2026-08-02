@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: code-execution-service
+  namespace: devmeet
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: code-execution-service
+  template:
+    metadata:
+      labels:
+        app: code-execution-service
+    spec:
+      # Run as root so we can access the Docker socket on the host node.
+      # In production you should restrict this via PSP / OPA Gatekeeper to only
+      # allow this specific deployment to use hostPath /var/run/docker.sock.
+      serviceAccountName: default
+      containers:
+      - name: code-execution-service
+        image: devmeet/code-execution-service:latest
+        ports:
+        - containerPort: 8005
+        envFrom:
+        - configMapRef:
+            name: devmeet-config
+        - secretRef:
+            name: devmeet-secrets
+        env:
+        - name: CODE_EXECUTION_SERVICE_PORT
+          value: "8005"
+        # Tell the Docker SDK where to find the socket.
+        # On Linux (EC2/EKS nodes) the socket is always /var/run/docker.sock.
+        - name: DOCKER_HOST
+          value: "unix:///var/run/docker.sock"
+        volumeMounts:
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        securityContext:
+          # Needs to run as root to access the Docker socket
+          runAsUser: 0
+      volumes:
+      # Mount the host Docker socket so the service can spawn sandbox containers.
+      # This is the standard DooD (Docker-out-of-Docker) pattern.
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: code-execution-service
+  namespace: devmeet
+spec:
+  selector:
+    app: code-execution-service
+  ports:
+  - port: 8005
+    targetPort: 8005
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: code-execution-service-hpa
+  namespace: devmeet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: code-execution-service
+  minReplicas: 3
+  maxReplicas: 15
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

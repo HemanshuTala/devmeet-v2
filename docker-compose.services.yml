@@ -1,0 +1,266 @@
+services:
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-devmeet_jwt_secret_change_in_prod}
+      - FRONTEND_URL=http://localhost:3000
+      - OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/auth/oauth/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "8002:8002"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - FILE_SERVICE_URL=http://file-service:8011
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  orchestrator-service:
+    build: ./services/orchestrator-service
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./services/orchestrator-service/app:/app/app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - USER_SERVICE_URL=http://user-service:8002
+      - AI_INTERVIEWER_URL=http://ai-interviewer-service:8004
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  ai-interviewer-service:
+    build: ./services/ai-interviewer-service
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./services/ai-interviewer-service/app:/app/app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  code-execution-service:
+    build: ./services/code-execution-service
+    ports:
+      - "8005:8005"
+    volumes:
+      # Mount Docker socket so containers can be spawned for code sandboxing
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # Do NOT set DOCKER_HOST here — let it auto-detect via socket above
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - rabbitmq
+      - redis
+
+
+  video-service:
+    build: ./services/video-service
+    ports:
+      - "8006:8006"
+    environment:
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+
+  feedback-service:
+    build: ./services/feedback-service
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./services/feedback-service/app:/app/app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - FILE_SERVICE_URL=http://file-service:8011
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8008
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET=${S3_BUCKET}
+      - AWS_S3_REPORTS_BUCKET=${AWS_S3_REPORTS_BUCKET:-aakruti-s3}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+
+  notification-service:
+    build: ./services/notification-service
+    ports:
+      - "8008:8008"
+    environment:
+      - AWS_REGION=${AWS_REGION}
+      - SES_REGION=${SES_REGION}
+      - SES_FROM_EMAIL=${SES_FROM_EMAIL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    depends_on:
+      - rabbitmq
+
+  analytics-service:
+    build: ./services/analytics-service
+    ports:
+      - "8009:8009"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+
+  admin-service:
+    build: ./services/admin-service
+    ports:
+      - "8010:8010"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+
+  file-service:
+    build: ./services/file-service
+    ports:
+      - "8011:8011"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET=${S3_BUCKET}
+      - BASE_URL=http://localhost:8011
+
+  payment-service:
+    build: ./services/payment-service
+    ports:
+      - "8012:8012"
+    env_file:
+      - .env
+    environment:
+      # Override DB/service URLs to use Docker internal hostnames
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - USER_SERVICE_URL=http://user-service:8002
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      # Razorpay keys come from env_file (.env) — do NOT override here
+    depends_on:
+      - postgres
+
+  search-service:
+    build: ./services/search-service
+    ports:
+      - "8013:8013"
+    volumes:
+      - ./services/search-service/app:/app/app
+    environment:
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth-service
+      - user-service
+      - orchestrator-service
+      - ai-interviewer-service
+      - code-execution-service
+      - video-service
+      - feedback-service
+      - notification-service
+      - analytics-service
+      - admin-service
+      - file-service
+      - payment-service
+      - search-service
+
+

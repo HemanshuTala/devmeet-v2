@@ -1,0 +1,338 @@
+# =============================================================================
+# DevMeet v2.0 — Production Docker Compose (AWS EC2)
+# =============================================================================
+# Usage on EC2:
+#   export AWS_ACCOUNT_ID=<your-account-id>
+#   export IMAGE_TAG=latest   # or a git SHA
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# All secrets are read from the .env file on the EC2 instance.
+# Copy .env.example → .env and fill in production values before deploying.
+# =============================================================================
+
+x-ecr-registry: &ecr_registry "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com"
+
+x-python-service: &python_base
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "5"
+  networks:
+    - devmeet_net
+
+x-db-env: &db_env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: devmeet
+  POSTGRES_USER: devmeet
+  POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-devmeet_password}"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+
+x-healthcheck-depends: &healthcheck_depends
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16
+    <<: *python_base
+    command: postgres -c max_connections=200 -c shared_buffers=256MB
+    environment:
+      POSTGRES_DB: devmeet
+      POSTGRES_USER: devmeet
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-devmeet_password}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/init_dev_schema.sql:/docker-entrypoint-initdb.d/01_init_dev_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devmeet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    <<: *python_base
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    <<: *python_base
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER:-guest}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:-guest}"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    <<: *python_base
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    <<: *python_base
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    <<: *python_base
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx1g"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qv 'red'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ── Microservices ──────────────────────────────────────────────────────────
+
+  auth-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-auth-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      <<: *healthcheck_depends
+    environment:
+      <<: *db_env
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+      JWT_ALGORITHM: "${JWT_ALGORITHM:-HS256}"
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}"
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: "${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID:-}"
+      GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET:-}"
+      OAUTH_REDIRECT_URI: "${OAUTH_REDIRECT_URI}"
+      FRONTEND_URL: "${FRONTEND_URL}"
+
+  user-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-user-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      <<: *healthcheck_depends
+    environment:
+      <<: *db_env
+      AUTH_SERVICE_URL: http://auth-service:8001
+      FILE_SERVICE_URL: http://file-service:8011
+
+  orchestrator-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-orchestrator-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      <<: *healthcheck_depends
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      <<: *db_env
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: "${RABBITMQ_USER:-guest}"
+      RABBITMQ_PASSWORD: "${RABBITMQ_PASSWORD:-guest}"
+      AUTH_SERVICE_URL: http://auth-service:8001
+      USER_SERVICE_URL: http://user-service:8002
+      AI_INTERVIEWER_URL: http://ai-interviewer-service:8004
+
+  ai-interviewer-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-ai-interviewer-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      <<: *healthcheck_depends
+    environment:
+      <<: *db_env
+      GROQ_API_KEY: "${GROQ_API_KEY}"
+      AUTH_SERVICE_URL: http://auth-service:8001
+
+  code-execution-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-code-execution-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      - rabbitmq
+      - redis
+    volumes:
+      # On Linux EC2 the Docker socket is always at this path.
+      # The service has a full CLI fallback so it works even if
+      # the SDK can't connect.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DOCKER_HOST: unix:///var/run/docker.sock
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION: "${AWS_REGION:-eu-north-1}"
+      S3_BUCKET: "${AWS_S3_CODE_SNAPSHOTS_BUCKET:-aakruti-s3}"
+    user: root   # needed to access Docker socket on EC2
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  video-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-video-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    environment:
+      LIVEKIT_URL: "${LIVEKIT_URL}"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
+
+  feedback-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-feedback-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      <<: *healthcheck_depends
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      <<: *db_env
+      GROQ_API_KEY: "${GROQ_API_KEY}"
+      AUTH_SERVICE_URL: http://auth-service:8001
+      FILE_SERVICE_URL: http://file-service:8011
+      NOTIFICATION_SERVICE_URL: http://notification-service:8008
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION: "${AWS_REGION:-eu-north-1}"
+      S3_BUCKET: "${S3_BUCKET:-aakruti-s3}"
+      AWS_S3_REPORTS_BUCKET: "${AWS_S3_REPORTS_BUCKET:-aakruti-s3}"
+
+  notification-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-notification-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      - rabbitmq
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      AWS_REGION: "${AWS_REGION:-eu-north-1}"
+      SES_REGION: "${SES_REGION:-eu-north-1}"
+      SES_FROM_EMAIL: "${SES_FROM_EMAIL}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+
+  analytics-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-analytics-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      <<: *healthcheck_depends
+      kafka:
+        condition: service_started
+    environment:
+      <<: *db_env
+      KAFKA_BROKERS: kafka:9092
+
+  admin-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-admin-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      <<: *healthcheck_depends
+    environment:
+      <<: *db_env
+      AUTH_SERVICE_URL: http://auth-service:8001
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION: "${AWS_REGION:-eu-north-1}"
+
+  file-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-file-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    environment:
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION: "${AWS_REGION:-eu-north-1}"
+      S3_BUCKET: "${S3_BUCKET:-aakruti-s3}"
+      BASE_URL: "${FRONTEND_URL:-https://devmeet.com}"
+
+  payment-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-payment-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      - postgres
+    environment:
+      <<: *db_env
+      USER_SERVICE_URL: http://user-service:8002
+      AUTH_SERVICE_URL: http://auth-service:8001
+      RAZORPAY_KEY_ID: "${RAZORPAY_KEY_ID}"
+      RAZORPAY_KEY_SECRET: "${RAZORPAY_KEY_SECRET}"
+      RAZORPAY_WEBHOOK_SECRET: "${RAZORPAY_WEBHOOK_SECRET:-}"
+
+  search-service:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-search-service:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOST: http://elasticsearch:9200
+
+  api-gateway:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-api-gateway:${IMAGE_TAG:-latest}"
+    <<: *python_base
+    ports:
+      - "80:8000"
+      - "443:8000"   # TLS should be terminated at the ALB/ELB, not here
+    depends_on:
+      - auth-service
+      - user-service
+      - orchestrator-service
+      - ai-interviewer-service
+      - code-execution-service
+      - video-service
+      - feedback-service
+      - notification-service
+      - analytics-service
+      - admin-service
+      - file-service
+      - payment-service
+      - search-service
+
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  kafka_data:
+  zookeeper_data:
+  elasticsearch_data:
+
+networks:
+  devmeet_net:
+    driver: bridge

@@ -1,0 +1,296 @@
+---
+# Kafka Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka
+
+---
+# Zookeeper StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: kafka
+spec:
+  serviceName: zookeeper
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: confluentinc/cp-zookeeper:7.5.0
+        ports:
+        - containerPort: 2181
+          name: client
+        - containerPort: 2888
+          name: peer
+        - containerPort: 3888
+          name: leader-election
+        env:
+        - name: ZOOKEEPER_CLIENT_PORT
+          value: "2181"
+        - name: ZOOKEEPER_TICK_TIME
+          value: "2000"
+        - name: ZOOKEEPER_INIT_LIMIT
+          value: "5"
+        - name: ZOOKEEPER_SYNC_LIMIT
+          value: "2"
+        - name: ZOOKEEPER_SERVERS
+          value: "zookeeper-0.zookeeper:2888:3888;zookeeper-1.zookeeper:2888:3888;zookeeper-2.zookeeper:2888:3888"
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/lib/zookeeper
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Zookeeper Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: kafka
+spec:
+  clusterIP: None
+  ports:
+  - port: 2181
+    name: client
+  - port: 2888
+    name: peer
+  - port: 3888
+    name: leader-election
+  selector:
+    app: zookeeper
+
+---
+# Kafka StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: kafka
+spec:
+  serviceName: kafka
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:7.5.0
+        ports:
+        - containerPort: 9092
+          name: kafka
+        - containerPort: 9093
+          name: kafka-internal
+        env:
+        - name: KAFKA_BROKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: "zookeeper-0.zookeeper:2181,zookeeper-1.zookeeper:2181,zookeeper-2.zookeeper:2181"
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: "PLAINTEXT://$(POD_NAME).kafka:9092,INTERNAL://$(POD_NAME).kafka:9093"
+        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+          value: "PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT"
+        - name: KAFKA_INTER_BROKER_LISTENER_NAME
+          value: "INTERNAL"
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "3"
+        - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+          value: "3"
+        - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+          value: "2"
+        - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+          value: "3"
+        - name: KAFKA_MIN_INSYNC_REPLICAS
+          value: "2"
+        - name: KAFKA_LOG_RETENTION_HOURS
+          value: "168"
+        - name: KAFKA_LOG_SEGMENT_BYTES
+          value: "1073741824"
+        - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+          value: "true"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/lib/kafka/data
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# Kafka Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: kafka
+spec:
+  clusterIP: None
+  ports:
+  - port: 9092
+    name: kafka
+  - port: 9093
+    name: kafka-internal
+  selector:
+    app: kafka
+
+---
+# Kafka Client Service (for apps to connect)
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-client
+  namespace: kafka
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9092
+    targetPort: 9092
+    name: kafka
+  selector:
+    app: kafka
+
+---
+# Kafka Topics ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-topics
+  namespace: devmeet
+data:
+  topics.json: |
+    {
+      "topics": [
+        {
+          "name": "interview.sessions.created",
+          "partitions": 6,
+          "replication_factor": 3,
+          "config": {
+            "retention.ms": "604800000",
+            "compression.type": "snappy"
+          }
+        },
+        {
+          "name": "interview.sessions.completed",
+          "partitions": 6,
+          "replication_factor": 3
+        },
+        {
+          "name": "interview.questions.asked",
+          "partitions": 12,
+          "replication_factor": 3
+        },
+        {
+          "name": "interview.code.executed",
+          "partitions": 12,
+          "replication_factor": 3
+        },
+        {
+          "name": "interview.feedback.generated",
+          "partitions": 6,
+          "replication_factor": 3
+        },
+        {
+          "name": "user.actions",
+          "partitions": 6,
+          "replication_factor": 3
+        },
+        {
+          "name": "analytics.events",
+          "partitions": 12,
+          "replication_factor": 3
+        },
+        {
+          "name": "notifications.send",
+          "partitions": 6,
+          "replication_factor": 3
+        },
+        {
+          "name": "payments.events",
+          "partitions": 3,
+          "replication_factor": 3
+        },
+        {
+          "name": "audit.logs",
+          "partitions": 3,
+          "replication_factor": 3,
+          "config": {
+            "retention.ms": "2592000000",
+            "compression.type": "gzip"
+          }
+        }
+      ]
+    }
+
+---
+# Kafka Topic Initializer Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topic-init
+  namespace: kafka
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: topic-creator
+        image: confluentinc/cp-kafka:7.5.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic interview.sessions.created --partitions 6 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic interview.sessions.completed --partitions 6 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic interview.questions.asked --partitions 12 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic interview.code.executed --partitions 12 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic interview.feedback.generated --partitions 6 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic user.actions --partitions 6 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic analytics.events --partitions 12 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic notifications.send --partitions 6 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic payments.events --partitions 3 --replication-factor 3
+          kafka-topics --bootstrap-server kafka-0.kafka:9092 --create --if-not-exists --topic audit.logs --partitions 3 --replication-factor 3
+          echo "All topics created successfully"

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-service
+  namespace: devmeet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-service
+  template:
+    metadata:
+      labels:
+        app: admin-service
+    spec:
+      containers:
+      - name: admin-service
+        image: devmeet/admin-service:latest
+        ports:
+        - containerPort: 8010
+        envFrom:
+        - configMapRef:
+            name: devmeet-config
+        - secretRef:
+            name: devmeet-secrets
+        env:
+        - name: ADMIN_SERVICE_PORT
+          value: "8010"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+  namespace: devmeet
+spec:
+  selector:
+    app: admin-service
+  ports:
+  - port: 8010
+    targetPort: 8010

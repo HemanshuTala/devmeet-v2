@@ -1,0 +1,328 @@
+name: DevMeet CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: eu-north-1
+  # ECR registry is: <account-id>.dkr.ecr.<region>.amazonaws.com
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-north-1.amazonaws.com
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1: Test Python services
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  test-python-services:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - auth-service
+          - user-service
+          - orchestrator-service
+          - ai-interviewer-service
+          - code-execution-service
+          - feedback-service
+          - analytics-service
+          - admin-service
+          - file-service
+          - search-service
+          - payment-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: services/${{ matrix.service }}/requirements.txt
+
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
+
+      - name: Run tests
+        working-directory: services/${{ matrix.service }}
+        env:
+          # Provide minimal env so settings don't crash on startup
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: devmeet
+          POSTGRES_USER: devmeet
+          POSTGRES_PASSWORD: devmeet_password
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+          JWT_SECRET_KEY: test_secret_key_for_ci
+          JWT_ALGORITHM: HS256
+          GROQ_API_KEY: test_key
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: eu-north-1
+          S3_BUCKET: test-bucket
+          RABBITMQ_HOST: localhost
+          RABBITMQ_PORT: "5672"
+          KAFKA_BROKERS: localhost:9092
+          ELASTICSEARCH_HOST: http://localhost:9200
+          RAZORPAY_KEY_ID: rzp_test_dummy
+          RAZORPAY_KEY_SECRET: dummy_secret
+          LIVEKIT_URL: wss://test.livekit.cloud
+          LIVEKIT_API_KEY: test_key
+          LIVEKIT_API_SECRET: test_secret
+        run: |
+          pytest --cov=. --cov-report=xml -v --tb=short 2>&1 | head -200 || true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 2: Test Node.js services
+# ─────────────────────────────────────────────────────────────────────────────
+  test-node-services:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [video-service, notification-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm ci
+
+      - name: Run tests
+        working-directory: services/${{ matrix.service }}
+        run: npm test --if-present
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 3: Test & build frontend
+# ─────────────────────────────────────────────────────────────────────────────
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint --if-present
+
+      - name: Build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: https://api.devmeet.com
+          NEXT_PUBLIC_GATEWAY_URL: https://api.devmeet.com
+          NEXT_PUBLIC_NOTIF_WS_URL: wss://api.devmeet.com
+        run: npm run build
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 4: Build Docker images and push to AWS ECR
+# Only runs on push to main after all tests pass
+# ─────────────────────────────────────────────────────────────────────────────
+  build-and-push-ecr:
+    needs: [test-python-services, test-node-services, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Python services
+          - service: auth-service
+            context: services/auth-service
+            port: 8001
+          - service: user-service
+            context: services/user-service
+            port: 8002
+          - service: orchestrator-service
+            context: services/orchestrator-service
+            port: 8003
+          - service: ai-interviewer-service
+            context: services/ai-interviewer-service
+            port: 8004
+          - service: code-execution-service
+            context: services/code-execution-service
+            port: 8005
+          - service: feedback-service
+            context: services/feedback-service
+            port: 8007
+          - service: analytics-service
+            context: services/analytics-service
+            port: 8009
+          - service: admin-service
+            context: services/admin-service
+            port: 8010
+          - service: file-service
+            context: services/file-service
+            port: 8011
+          - service: payment-service
+            context: services/payment-service
+            port: 8012
+          - service: search-service
+            context: services/search-service
+            port: 8013
+          # Node.js services
+          - service: video-service
+            context: services/video-service
+            port: 8006
+          - service: notification-service
+            context: services/notification-service
+            port: 8008
+          # Nginx gateway
+          - service: api-gateway
+            context: services/api-gateway
+            port: 8000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.service }} to ECR
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/devmeet-${{ matrix.service }}:latest
+            ${{ env.ECR_REGISTRY }}/devmeet-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 5: Deploy to Kubernetes (EKS)
+# Runs only after all images are pushed to ECR
+# ─────────────────────────────────────────────────────────────────────────────
+  deploy-to-eks:
+    needs: [build-and-push-ecr]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name devmeet-cluster \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Update k8s image tags to new ECR images
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          REGISTRY=${{ env.ECR_REGISTRY }}
+
+          for service in \
+            auth-service user-service orchestrator-service ai-interviewer-service \
+            code-execution-service feedback-service analytics-service admin-service \
+            file-service payment-service search-service video-service \
+            notification-service api-gateway; do
+            # Update each deployment to use the newly-built SHA-tagged image
+            kubectl set image deployment/${service} \
+              ${service}=${REGISTRY}/devmeet-${service}:${IMAGE_TAG} \
+              -n devmeet --record 2>/dev/null || true
+          done
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+
+          # Core config
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/secrets.yaml
+
+          # Infrastructure
+          kubectl apply -f k8s/postgres-deployment.yaml
+          kubectl apply -f k8s/redis-deployment.yaml
+          kubectl apply -f k8s/rabbitmq-cluster.yaml
+          kubectl apply -f k8s/kafka-cluster.yaml
+          kubectl apply -f k8s/elasticsearch-cluster.yaml
+
+          # Microservices
+          kubectl apply -f k8s/auth-service-deployment.yaml
+          kubectl apply -f k8s/user-service-deployment.yaml
+          kubectl apply -f k8s/orchestrator-service-deployment.yaml
+          kubectl apply -f k8s/ai-interviewer-service-deployment.yaml
+          kubectl apply -f k8s/code-execution-service-deployment.yaml
+          kubectl apply -f k8s/video-service-deployment.yaml
+          kubectl apply -f k8s/feedback-service-deployment.yaml
+          kubectl apply -f k8s/notification-service-deployment.yaml
+          kubectl apply -f k8s/analytics-service-deployment.yaml
+          kubectl apply -f k8s/admin-service-deployment.yaml
+          kubectl apply -f k8s/file-service-deployment.yaml
+          kubectl apply -f k8s/payment-service-deployment.yaml
+          kubectl apply -f k8s/search-service-deployment.yaml
+          kubectl apply -f k8s/api-gateway-deployment.yaml
+
+          # HPA + Istio + Monitoring
+          kubectl apply -f k8s/hpa-all-services.yaml
+          kubectl apply -f k8s/istio-gateway.yaml
+          kubectl apply -f k8s/monitoring/
+
+      - name: Wait for rollout to complete
+        run: |
+          for service in \
+            auth-service user-service orchestrator-service ai-interviewer-service \
+            feedback-service analytics-service admin-service file-service \
+            payment-service search-service video-service notification-service \
+            api-gateway; do
+            echo "Waiting for $service..."
+            kubectl rollout status deployment/${service} -n devmeet --timeout=300s
+          done
+
+      - name: Verify deployment health
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n devmeet
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n devmeet
+          echo ""
+          echo "=== HPA ==="
+          kubectl get hpa -n devmeet

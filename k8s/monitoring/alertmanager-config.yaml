@@ -1,0 +1,221 @@
+---
+# AlertManager Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: devmeet
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:v0.26.0
+        ports:
+        - containerPort: 9093
+          name: http
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+        - name: storage
+          mountPath: /alertmanager
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-config
+      - name: storage
+        emptyDir: {}
+
+---
+# AlertManager Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: devmeet
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9093
+    targetPort: 9093
+    name: http
+  selector:
+    app: alertmanager
+
+---
+# AlertManager Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: devmeet
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+    
+    # Template files
+    templates:
+    - '/etc/alertmanager/*.tmpl'
+    
+    # Route tree
+    route:
+      receiver: 'default'
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      
+      routes:
+      # Critical alerts to PagerDuty
+      - match:
+          severity: critical
+        receiver: 'pagerduty-critical'
+        continue: true
+      
+      # Critical alerts also to Slack
+      - match:
+          severity: critical
+        receiver: 'slack-critical'
+        group_wait: 10s
+      
+      # Warning alerts to Slack only
+      - match:
+          severity: warning
+        receiver: 'slack-warnings'
+      
+      # SLO violations
+      - match:
+          slo: 'availability'
+        receiver: 'slo-team'
+        group_wait: 10s
+        repeat_interval: 30m
+      
+      - match:
+          slo: 'latency'
+        receiver: 'slo-team'
+        repeat_interval: 1h
+      
+      # Database alerts
+      - match_re:
+          alertname: 'Database.*'
+        receiver: 'database-team'
+      
+      # Infrastructure alerts
+      - match_re:
+          alertname: '(PodMemoryUsageHigh|PodCPUUsageHigh|DiskSpaceLow)'
+        receiver: 'infrastructure-team'
+    
+    # Inhibition rules
+    inhibit_rules:
+    # Inhibit warning if critical is firing
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['alertname', 'service']
+    
+    # Inhibit slow burn if fast burn is firing
+    - source_match:
+        slo: 'error_budget'
+        alertname: 'ErrorBudgetFastBurn'
+      target_match:
+        slo: 'error_budget'
+        alertname: 'ErrorBudgetSlowBurn'
+      equal: ['service']
+    
+    # Receivers
+    receivers:
+    - name: 'default'
+      slack_configs:
+      - channel: '#devmeet-alerts'
+        title: '{{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    
+    - name: 'slack-critical'
+      slack_configs:
+      - channel: '#devmeet-critical'
+        color: 'danger'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |-
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Service:* {{ .Labels.service }}
+          {{ end }}
+        send_resolved: true
+    
+    - name: 'slack-warnings'
+      slack_configs:
+      - channel: '#devmeet-warnings'
+        color: 'warning'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    
+    - name: 'pagerduty-critical'
+      pagerduty_configs:
+      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        severity: '{{ .CommonLabels.severity }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+    
+    - name: 'slo-team'
+      slack_configs:
+      - channel: '#devmeet-slo'
+        color: 'danger'
+        title: '📊 SLO Violation: {{ .GroupLabels.alertname }}'
+        text: |-
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *SLO:* {{ .Labels.slo }}
+          *Service:* {{ .Labels.service }}
+          {{ end }}
+      email_configs:
+      - to: 'slo-team@devmeet.com'
+        subject: 'SLO Violation: {{ .GroupLabels.alertname }}'
+        html: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    
+    - name: 'database-team'
+      slack_configs:
+      - channel: '#devmeet-database'
+        title: '🗄️ Database Alert: {{ .GroupLabels.alertname }}'
+    
+    - name: 'infrastructure-team'
+      slack_configs:
+      - channel: '#devmeet-infra'
+        title: '🖥️ Infrastructure Alert: {{ .GroupLabels.alertname }}'
+
+  notification.tmpl: |
+    {{ define "slack.devmeet.title" }}
+    [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }}
+    {{ end }}
+    
+    {{ define "slack.devmeet.text" }}
+    {{ range .Alerts }}
+    *Alert:* {{ .Annotations.summary }}
+    *Description:* {{ .Annotations.description }}
+    *Severity:* {{ .Labels.severity }}
+    *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+    {{ if .EndsAt }}*Ended:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+    {{ end }}
+    {{ end }}

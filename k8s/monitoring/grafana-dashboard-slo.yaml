@@ -1,0 +1,224 @@
+---
+# Grafana Dashboard ConfigMap for SLO Monitoring
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-slo
+  namespace: devmeet
+  labels:
+    grafana_dashboard: "1"
+data:
+  slo-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "DevMeet SLO Dashboard",
+        "tags": ["slo", "devmeet"],
+        "timezone": "UTC",
+        "schemaVersion": 36,
+        "version": 1,
+        "refresh": "30s",
+        "panels": [
+          {
+            "id": 1,
+            "title": "API Availability SLO (99.5%)",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "devmeet:api:success_rate:5m * 100",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+            "options": {
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"]
+              },
+              "text": {},
+              "textMode": "value_and_name",
+              "colorMode": "background",
+              "graphMode": "area",
+              "justifyMode": "center"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": null, "color": "red"},
+                    {"value": 99.5, "color": "green"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "API Latency P95 (< 500ms SLO)",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "devmeet:api:latency:p95:5m * 1000",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": null, "color": "green"},
+                    {"value": 500, "color": "yellow"},
+                    {"value": 1000, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 3,
+            "title": "API Latency P99 (< 2s SLO)",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "devmeet:api:latency:p99:5m * 1000",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": null, "color": "green"},
+                    {"value": 2000, "color": "yellow"},
+                    {"value": 5000, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 4,
+            "title": "Error Budget Remaining (Monthly)",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "(1 - (1 - avg_over_time(devmeet:api:success_rate:5m[30d])) / (1 - 0.995)) * 100",
+                "legendFormat": "Error Budget"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "red"},
+                    {"value": 20, "color": "yellow"},
+                    {"value": 50, "color": "green"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 5,
+            "title": "Request Rate by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total[5m])) by (service)",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 6,
+            "title": "Error Rate by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (service)",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 7,
+            "title": "AI Response Time SLO (< 5s)",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "devmeet:ai:response_time:p95:5m",
+                "legendFormat": "P95"
+              },
+              {
+                "expr": "5",
+                "legendFormat": "SLO Threshold"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 8,
+            "title": "Code Execution Time by Language",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "devmeet:code:execution_time:p95:5m",
+                "legendFormat": "{{language}} P95"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 9,
+            "title": "Interview Session Success Rate",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "devmeet:interview:success_rate:5m * 100"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 24},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "red"},
+                    {"value": 80, "color": "yellow"},
+                    {"value": 90, "color": "green"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 10,
+            "title": "Active Alerts",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "ALERTS{alertstate=\"firing\",namespace=\"devmeet\"}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 16, "x": 8, "y": 24}
+          }
+        ]
+      }
+    }

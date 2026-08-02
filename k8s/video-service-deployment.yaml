@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-service
+  namespace: devmeet
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: video-service
+  template:
+    metadata:
+      labels:
+        app: video-service
+    spec:
+      containers:
+      - name: video-service
+        image: devmeet/video-service:latest
+        ports:
+        - containerPort: 8006
+        envFrom:
+        - configMapRef:
+            name: devmeet-config
+        - secretRef:
+            name: devmeet-secrets
+        env:
+        - name: VIDEO_SERVICE_PORT
+          value: "8006"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: video-service
+  namespace: devmeet
+spec:
+  selector:
+    app: video-service
+  ports:
+  - port: 8006
+    targetPort: 8006
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: video-service-hpa
+  namespace: devmeet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: video-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

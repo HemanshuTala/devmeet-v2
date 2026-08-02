@@ -1,0 +1,14 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic[email]==2.5.3
+pydantic-settings==2.1.0
+email-validator==2.1.0
+# Pin urllib3 < 2.0 to fix "Not supported URL scheme http+docker" in docker SDK
+urllib3<2.0
+requests>=2.31.0,<3.0
+docker==7.0.0
+python-dotenv==1.0.0
+pika==1.3.2
+redis==5.0.1
+boto3==1.34.0
+httpx==0.26.0

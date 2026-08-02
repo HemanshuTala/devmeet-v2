@@ -1,0 +1,270 @@
+---
+# Prometheus Recording and Alerting Rules
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: devmeet
+data:
+  recording-rules.yml: |
+    groups:
+    - name: devmeet_slo_recording
+      interval: 30s
+      rules:
+      # API Success Rate
+      - record: devmeet:api:success_rate:5m
+        expr: |
+          sum(rate(http_requests_total{status=~"2.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service)
+      
+      # API Latency p95
+      - record: devmeet:api:latency:p95:5m
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+          )
+      
+      # API Latency p99
+      - record: devmeet:api:latency:p99:5m
+        expr: |
+          histogram_quantile(0.99, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+          )
+      
+      # Interview Session Success Rate
+      - record: devmeet:interview:success_rate:5m
+        expr: |
+          sum(rate(interview_sessions_completed_total[5m]))
+          /
+          sum(rate(interview_sessions_started_total[5m]))
+      
+      # AI Response Time
+      - record: devmeet:ai:response_time:p95:5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ai_response_duration_seconds_bucket[5m])) by (le)
+          )
+      
+      # Code Execution Time
+      - record: devmeet:code:execution_time:p95:5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(code_execution_duration_seconds_bucket[5m])) by (le, language)
+          )
+
+  alerting-rules.yml: |
+    groups:
+    - name: devmeet_slo_alerts
+      interval: 30s
+      rules:
+      
+      # SLO: 99.5% API availability
+      - alert: APIAvailabilityBelowSLO
+        expr: devmeet:api:success_rate:5m < 0.995
+        for: 5m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "API availability below 99.5% SLO"
+          description: "{{ $labels.service }} API success rate is {{ $value | humanizePercentage }} (threshold: 99.5%)"
+      
+      # SLO: API latency p95 < 500ms
+      - alert: APILatencyP95AboveSLO
+        expr: devmeet:api:latency:p95:5m > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "API p95 latency above 500ms SLO"
+          description: "{{ $labels.service }} API p95 latency is {{ $value }}s (threshold: 0.5s)"
+      
+      # SLO: API latency p99 < 2s
+      - alert: APILatencyP99AboveSLO
+        expr: devmeet:api:latency:p99:5m > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "API p99 latency above 2s SLO"
+          description: "{{ $labels.service }} API p99 latency is {{ $value }}s (threshold: 2.0s)"
+      
+      # SLO: AI response within 5s
+      - alert: AIResponseTimeAboveSLO
+        expr: devmeet:ai:response_time:p95:5m > 5.0
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "AI response time above 5s SLO"
+          description: "AI p95 response time is {{ $value }}s (threshold: 5.0s)"
+      
+      # SLO: Code execution within 10s
+      - alert: CodeExecutionTimeAboveSLO
+        expr: devmeet:code:execution_time:p95:5m > 10.0
+        for: 2m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "Code execution time above 10s SLO"
+          description: "Code execution for {{ $labels.language }} p95 time is {{ $value }}s (threshold: 10.0s)"
+      
+      # Interview session success rate
+      - alert: InterviewSuccessRateLow
+        expr: devmeet:interview:success_rate:5m < 0.90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Interview session success rate below 90%"
+          description: "Interview completion rate is {{ $value | humanizePercentage }}"
+      
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "{{ $labels.service }} error rate is {{ $value | humanizePercentage }}"
+      
+      # Pod memory usage
+      - alert: PodMemoryUsageHigh
+        expr: |
+          container_memory_usage_bytes{namespace="devmeet"}
+          /
+          container_spec_memory_limit_bytes{namespace="devmeet"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod memory usage above 90%"
+          description: "{{ $labels.pod }} memory usage is {{ $value | humanizePercentage }}"
+      
+      # Pod CPU usage
+      - alert: PodCPUUsageHigh
+        expr: |
+          rate(container_cpu_usage_seconds_total{namespace="devmeet"}[5m])
+          /
+          container_spec_cpu_quota{namespace="devmeet"} * 100000 > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod CPU usage above 90%"
+          description: "{{ $labels.pod }} CPU usage is {{ $value | humanizePercentage }}"
+      
+      # Service down
+      - alert: ServiceDown
+        expr: up{namespace="devmeet"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is down"
+          description: "{{ $labels.job }} is down"
+      
+      # Kafka lag
+      - alert: KafkaConsumerLagHigh
+        expr: kafka_consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag is high"
+          description: "Consumer {{ $labels.consumer_group }} lag is {{ $value }} messages"
+      
+      # RabbitMQ queue size
+      - alert: RabbitMQQueueSizeHigh
+        expr: rabbitmq_queue_messages > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue size is high"
+          description: "Queue {{ $labels.queue }} has {{ $value }} messages"
+      
+      # Database connections
+      - alert: DatabaseConnectionsHigh
+        expr: pg_stat_database_numbackends > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of database connections"
+          description: "Database has {{ $value }} active connections (threshold: 80)"
+      
+      # Redis memory
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 85%"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+      
+      # Disk space
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} 
+          / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space below 15%"
+          description: "Node {{ $labels.instance }} has {{ $value | humanizePercentage }} disk space available"
+      
+      # Certificate expiry
+      - alert: CertificateExpiringSoon
+        expr: |
+          (x509_cert_not_after - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate expiring soon"
+          description: "Certificate {{ $labels.subject }} expires in {{ $value }} days"
+
+  slo-burn-rate-rules.yml: |
+    groups:
+    - name: devmeet_slo_burn_rate
+      interval: 30s
+      rules:
+      # Fast burn: 1% error budget consumed in 1 hour
+      - alert: ErrorBudgetFastBurn
+        expr: |
+          (
+            1 - devmeet:api:success_rate:5m
+          ) / (1 - 0.995) > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          slo: error_budget
+        annotations:
+          summary: "Fast error budget burn detected"
+          description: "Consuming error budget at 14.4x rate for {{ $labels.service }}"
+      
+      # Slow burn: 5% error budget consumed in 1 day
+      - alert: ErrorBudgetSlowBurn
+        expr: |
+          (
+            1 - devmeet:api:success_rate:5m
+          ) / (1 - 0.995) > 3
+        for: 1h
+        labels:
+          severity: warning
+          slo: error_budget
+        annotations:
+          summary: "Slow error budget burn detected"
+          description: "Consuming error budget at 3x rate for {{ $labels.service }}"
