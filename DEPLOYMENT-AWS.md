@@ -366,9 +366,9 @@ The `.github/workflows/ci-cd.yml` pipeline is now fully configured. Add these Gi
 
 | Secret | Value |
 |--------|-------|
-| `AWS_ACCESS_KEY_ID` | `REDACTED_AWS_ACCESS_KEY_ID` |
-| `AWS_SECRET_ACCESS_KEY` | your AWS secret key |
-| `AWS_ACCOUNT_ID` | your 12-digit AWS account ID |
+| `AWS_ACCESS_KEY_ID` | Your IAM access key ID (from AWS Console → IAM → Security credentials) |
+| `AWS_SECRET_ACCESS_KEY` | Your IAM secret access key |
+| `AWS_ACCOUNT_ID` | Your 12-digit AWS account ID (`aws sts get-caller-identity --query Account`) |
 
 For EKS deploys, the CI/CD uses `aws eks update-kubeconfig` automatically — no `KUBE_CONFIG` secret needed.
 

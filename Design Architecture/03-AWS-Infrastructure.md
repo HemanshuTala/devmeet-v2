@@ -248,7 +248,7 @@ aakruti-s3/
 
 All services use **boto3** with credentials from environment variables:
 ```
-AWS_ACCESS_KEY_ID     = REDACTED_AWS_ACCESS_KEY_ID
+AWS_ACCESS_KEY_ID     = <REDACTED - use IAM role or GitHub Secret>
 AWS_SECRET_ACCESS_KEY = (from .env)
 AWS_REGION            = eu-north-1
 S3_BUCKET             = aakruti-s3
@@ -319,7 +319,7 @@ Currently in sandbox mode — emails can only be sent to **verified email addres
 |-----------|-------|
 | ARN | `arn:aws:iam::067514126471:user/hemanshu_tala` |
 | Console Access | Enabled (without MFA — should enable MFA) |
-| Access Key | `REDACTED_AWS_ACCESS_KEY_ID` (Active, used today) |
+| Access Key | `<REDACTED>` (rotate immediately — was exposed in git history) |
 
 ### 6.2 Attached Policies
 
@@ -385,8 +385,8 @@ Jobs (in order):
 
 | Secret | Value / Purpose |
 |--------|----------------|
-| `AWS_ACCESS_KEY_ID` | `REDACTED_AWS_ACCESS_KEY_ID` |
-| `AWS_SECRET_ACCESS_KEY` | IAM user secret key |
+| `AWS_ACCESS_KEY_ID` | Set in GitHub Secrets (do not hardcode) |
+| `AWS_SECRET_ACCESS_KEY` | Set in GitHub Secrets (do not hardcode) |
 | `AWS_ACCOUNT_ID` | `067514126471` |
 | `EC2_HOST` | `16.192.160.85` |
 | `EC2_SSH_KEY` | Contents of `devmeet-key.pem` |
