@@ -144,7 +144,7 @@ export function LoginForm() {
 
           <button
             type="button"
-            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+            className="text-xs text-[#4f46e5] hover:text-[#3730a3] font-medium"
             onClick={() => {
               setUseBackupCode((p) => !p);
               setMfaCode('');
@@ -215,7 +215,7 @@ export function LoginForm() {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link href="/forgot-password" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+            <Link href="/forgot-password" className="text-xs text-[#4f46e5] hover:text-[#3730a3] font-medium">
               Forgot password?
             </Link>
           </div>
@@ -261,7 +261,7 @@ export function LoginForm() {
 
       <p className="text-center text-sm text-slate-500">
         Don&apos;t have an account?{' '}
-        <Link href="/register" className="text-blue-600 font-semibold hover:text-blue-700">
+        <Link href="/register" className="text-[#4f46e5] font-semibold hover:text-[#3730a3]">
           Sign up
         </Link>
       </p>
