@@ -2,6 +2,7 @@ export const queryKeys = {
   profile: ['profile'] as const,
   quota: ['quota'] as const,
   plan: ['plan'] as const,
+  leaderboard: ['leaderboard'] as const,
   sessions: {
     all: ['sessions'] as const,
     detail: (sessionId: string) => ['sessions', sessionId] as const,

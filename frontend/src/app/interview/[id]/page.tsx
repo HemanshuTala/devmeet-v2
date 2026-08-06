@@ -93,7 +93,7 @@ export default function InterviewRoomPage() {
   const streaming = useAIStreaming({
     session,
     isMuted,
-    onError: (msg) => setChatError(msg || null),
+    onError: (msg) => setChatError(msg ? 'AI interviewer is temporarily unavailable. Please try again.' : null),
   });
 
   const speech = useSpeechRecognition();
@@ -219,6 +219,10 @@ export default function InterviewRoomPage() {
         setPageLoading(false);
       }
     })();
+    return () => {
+      timer.stopTimer();
+      timer.stopHeartbeat();
+    };
   }, [sessionId]);
 
   // ── Handlers ──
@@ -312,17 +316,21 @@ export default function InterviewRoomPage() {
     setExecutionResult(null);
     try {
       const apiLang = language === 'typescript' ? 'javascript' : language;
-      const payload = { code, language: apiLang, timeout_seconds: 10 };
+      const payload = { code, language: apiLang, timeout_seconds: 10, session_id: session?.id };
       let res;
-      if (asyncExecution) { try { res = await executionApi.executeAsync(payload); } catch { res = await executionApi.execute(payload); } }
-      else { res = await executionApi.execute(payload); }
+      if (asyncExecution) {
+        try { res = await executionApi.executeAsync(payload); }
+        catch { res = await executionApi.execute(payload); }
+      } else {
+        res = await executionApi.execute(payload);
+      }
       setExecutionResult({ stdout: res.output, stderr: res.error || '', executionTime: res.execution_time, success: res.success });
     } catch (err: any) {
       setExecutionResult({ stdout: '', stderr: err?.message || 'Execution failed.', executionTime: 0, success: false });
     } finally {
       setIsRunning(false);
     }
-  }, [code, language, asyncExecution]);
+  }, [code, language, asyncExecution, session?.id]);
 
   const handleSubmitCode = useCallback(async () => {
     if (!session || isRunning || isSubmittingCode) return;
@@ -332,10 +340,15 @@ export default function InterviewRoomPage() {
     setChatError(null);
     try {
       const apiLang = language === 'typescript' ? 'javascript' : language;
-      const payload = { code, language: apiLang, timeout_seconds: 10 };
+      const payload = { code, language: apiLang, timeout_seconds: 10, session_id: session.id };
       let res;
-      try { res = asyncExecution ? await executionApi.executeAsync(payload) : await executionApi.execute(payload); }
-      catch (err: any) { res = { success: false, output: '', error: err?.message || 'Execution failed', execution_time: 0 }; }
+      if (asyncExecution) {
+        try { res = await executionApi.executeAsync(payload); }
+        catch { res = await executionApi.execute(payload); }
+      } else {
+        try { res = await executionApi.execute(payload); }
+        catch (err: any) { res = { success: false, output: '', error: err?.message || 'Execution failed', execution_time: 0 }; }
+      }
       setExecutionResult({ stdout: res.output, stderr: res.error || '', executionTime: res.execution_time || 0, success: res.success });
       setIsRunning(false);
       await sessionApi.submitCode(session.id, language, code);

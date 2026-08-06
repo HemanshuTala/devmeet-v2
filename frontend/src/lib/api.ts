@@ -258,7 +258,7 @@ export const aiApi = {
 
 export const executionApi = {
   execute: (payload: unknown) => request<any>('/api/v1/execute', json('POST', payload)),
-  executeAsync: (payload: unknown) => request<any>('/api/v1/execute/async', json('POST', payload)),
+  executeAsync: (payload: unknown) => request<any>('/api/v1/execute/submit-async', json('POST', payload)),
 };
 
 export const analyticsApi = {
@@ -330,7 +330,8 @@ export const videoApi = {
 
 export const feedbackApi = {
   get: (sessionId: string) => request<any>(`/api/v1/feedback/${sessionId}`),
-  generate: (sessionId: string, payload: unknown) => request<any>('/api/v1/feedback/generate', json('POST', payload)),
+  generate: (sessionId: string, payload?: Record<string, unknown>) =>
+    request<any>('/api/v1/feedback/generate', json('POST', { ...payload, session_id: sessionId })),
   downloadPdf: (sessionId: string) => request<Blob>(`/api/v1/feedback/${sessionId}/pdf`, { headers: { Accept: 'application/pdf' } }),
 };
 
