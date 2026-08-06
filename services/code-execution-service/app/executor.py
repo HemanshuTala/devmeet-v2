@@ -172,10 +172,13 @@ class CodeExecutor:
                     f.write(code)
 
                 if language.lower() == "cpp":
-                    inner_cmd = f"g++ -o /code/main /code/{fname} && /code/main"
+                    # Compile to /tmp (writable tmpfs) — /code is read-only
+                    inner_cmd = f"g++ -o /tmp/main /code/{fname} && /tmp/main"
                 elif language.lower() == "java":
-                    inner_cmd = f"javac /code/{fname} && java -cp /code Main"
+                    # Compile class files to /tmp, run from there
+                    inner_cmd = f"javac -d /tmp /code/{fname} && java -cp /tmp Main"
                 elif language.lower() == "go":
+                    # go run streams directly — no output binary needed
                     inner_cmd = f"go run /code/{fname}"
                 elif language.lower() == "rust":
                     inner_cmd = f"rustc -o /tmp/main /code/{fname} && /tmp/main"
@@ -191,7 +194,7 @@ class CodeExecutor:
                     "--security-opt=no-new-privileges:true",
                     "--cap-drop=ALL",
                     "-v", f"{tmp_dir}:/code:ro",
-                    "--tmpfs=/tmp:size=32m",
+                    "--tmpfs=/tmp:size=64m",   # writable scratch space for compiled binaries
                     config["image"],
                     "sh", "-c", inner_cmd,
                 ]
@@ -288,9 +291,9 @@ class CodeExecutor:
             "python":     {"image": "python:3.11-slim",  "command": ["python", "-c"],  "file_extension": ".py"},
             "javascript": {"image": "node:20-slim",       "command": ["node",   "-e"],  "file_extension": ".js"},
             "java":       {"image": "openjdk:21-slim",    "command": ["java"],          "file_extension": ".java",  "compile": True},
-            "cpp":        {"image": "gcc:13-slim",        "command": ["./a.out"],       "file_extension": ".cpp",   "compile": True, "compile_command": ["g++", "-o", "a.out"]},
-            "go":         {"image": "golang:1.21-slim",   "command": ["go", "run"],     "file_extension": ".go"},
-            "rust":       {"image": "rust:1.75-slim",     "command": ["rustc", "-o", "/tmp/main", "/tmp/main.rs", "&&", "/tmp/main"], "file_extension": ".rs", "compile": True},
+            "cpp":        {"image": "gcc:13",             "command": ["/tmp/main"],     "file_extension": ".cpp",   "compile": True, "compile_command": ["g++", "-o", "/tmp/main"]},
+            "go":         {"image": "golang:1.21-alpine", "command": ["go", "run"],     "file_extension": ".go"},
+            "rust":       {"image": "rust:1.75-slim",     "command": ["/tmp/main"],     "file_extension": ".rs",    "compile": True},
         }
 
         config = language_configs.get(language.lower())
