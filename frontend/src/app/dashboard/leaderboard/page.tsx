@@ -295,8 +295,9 @@ export default function LeaderboardPage() {
         }
     };
     if (authLoading || !user) {
-        return /*#__PURE__*/ _jsx(PageLoader, {
-            label: "Loading leaderboard…"
+        return /*#__PURE__*/ _jsx(DashboardShell, {
+            maxWidth: "max-w-4xl",
+            children: /*#__PURE__*/ _jsx(LeaderboardSkeleton, {})
         });
     }
     const myRank = entries.findIndex((e)=>e.user_id === user.id) + 1;

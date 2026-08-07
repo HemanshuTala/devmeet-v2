@@ -145,8 +145,9 @@ export default function HistoryPage() {
         dateTo
     ]);
     if (authLoading) {
-        return /*#__PURE__*/ _jsx(PageLoader, {
-            label: "Checking credentials…"
+        return /*#__PURE__*/ _jsx(DashboardShell, {
+            maxWidth: "max-w-6xl",
+            children: /*#__PURE__*/ _jsx(HistorySkeleton, {})
         });
     }
     return /*#__PURE__*/ _jsx(DashboardShell, {

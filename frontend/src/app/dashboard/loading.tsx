@@ -2,56 +2,98 @@
 
 export default function DashboardLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div
+      className="min-h-screen p-6 flex flex-col gap-6"
+      style={{ background: 'var(--color-bg)' }}
+    >
       {/* Header skeleton */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <div className="h-7 w-48 bg-slate-200 rounded-md animate-pulse" />
-          <div className="h-4 w-64 bg-slate-200 rounded mt-2 animate-pulse" />
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <div className="skeleton-shimmer h-7 w-52 rounded-lg" />
+          <div className="skeleton-shimmer h-4 w-72 rounded-md" />
         </div>
-        <div className="h-10 w-36 bg-slate-200 rounded-lg animate-pulse" />
+        <div className="skeleton-shimmer h-10 w-36 rounded-lg" />
       </div>
 
-      {/* Stat cards skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* Stat cards skeleton — 4 columns */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
-            className="bg-white border border-slate-200 rounded-xl p-5 flex items-start gap-4"
+            className="rounded-xl p-5 flex items-start gap-4 border"
+            style={{
+              background: 'var(--color-bg-card)',
+              borderColor: 'var(--color-border)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
           >
-            <div className="w-10 h-10 rounded-lg bg-slate-200 animate-pulse" />
-            <div className="flex-1">
-              <div className="h-3 w-20 bg-slate-200 rounded animate-pulse" />
-              <div className="h-7 w-16 bg-slate-200 rounded mt-2 animate-pulse" />
+            <div className="skeleton-shimmer w-10 h-10 rounded-lg flex-shrink-0" />
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="skeleton-shimmer h-3 w-20 rounded-md" />
+              <div className="skeleton-shimmer h-7 w-14 rounded-md" />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Main content skeleton */}
+      {/* Main grid — chart + quick actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6">
-          <div className="h-5 w-40 bg-slate-200 rounded animate-pulse mb-4" />
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-200 animate-pulse" />
-                <div className="flex-1">
-                  <div className="h-4 w-3/4 bg-slate-200 rounded animate-pulse" />
-                  <div className="h-3 w-1/2 bg-slate-100 rounded mt-1 animate-pulse" />
-                </div>
-                <div className="h-6 w-16 bg-slate-200 rounded animate-pulse" />
-              </div>
+        {/* Chart area */}
+        <div
+          className="lg:col-span-2 rounded-xl p-6 border flex flex-col gap-4"
+          style={{
+            background: 'var(--color-bg-card)',
+            borderColor: 'var(--color-border)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <div className="skeleton-shimmer h-5 w-40 rounded-md" />
+          <div className="skeleton-shimmer h-52 w-full rounded-xl" />
+        </div>
+
+        {/* Quick actions */}
+        <div
+          className="rounded-xl p-6 border flex flex-col gap-4"
+          style={{
+            background: 'var(--color-bg-card)',
+            borderColor: 'var(--color-border)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <div className="skeleton-shimmer h-5 w-32 rounded-md" />
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton-shimmer h-12 w-full rounded-lg" />
             ))}
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-6">
-          <div className="h-5 w-32 bg-slate-200 rounded animate-pulse mb-4" />
-          <div className="space-y-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />
-            ))}
-          </div>
+      </div>
+
+      {/* Sessions table */}
+      <div
+        className="rounded-xl p-6 border flex flex-col gap-4"
+        style={{
+          background: 'var(--color-bg-card)',
+          borderColor: 'var(--color-border)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="skeleton-shimmer h-5 w-44 rounded-md" />
+          <div className="skeleton-shimmer h-8 w-24 rounded-lg" />
+        </div>
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 py-2">
+              <div className="skeleton-shimmer w-9 h-9 rounded-full flex-shrink-0" />
+              <div className="flex-1 flex flex-col gap-1.5">
+                <div className="skeleton-shimmer h-4 rounded-md" style={{ width: `${55 + (i % 3) * 15}%` }} />
+                <div className="skeleton-shimmer h-3 w-32 rounded-md" />
+              </div>
+              <div className="skeleton-shimmer h-6 w-20 rounded-full" />
+              <div className="skeleton-shimmer h-8 w-16 rounded-lg" />
+            </div>
+          ))}
         </div>
       </div>
     </div>

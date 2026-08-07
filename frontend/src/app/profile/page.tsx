@@ -213,8 +213,59 @@ export default function ProfilePage() {
     // ── Loading guard ──────────────────────────────────────────────────────────
     const currentPlan = planData?.plan ?? "free";
     if (authLoading || isLoadingProfile || profileQueryLoading) {
-        return /*#__PURE__*/ _jsx(PageLoader, {
-            label: "Loading profile…"
+        return /*#__PURE__*/ _jsx(DashboardShell, {
+            maxWidth: "max-w-6xl",
+            children: /*#__PURE__*/ _jsxs("div", {
+                className: "flex flex-col gap-6 animate-fade-in",
+                children: [
+                    // Header
+                    /*#__PURE__*/ _jsxs("div", {
+                        className: "rounded-2xl p-8 border flex flex-col sm:flex-row items-start sm:items-center gap-6",
+                        style: { background: "var(--color-bg-card)", borderColor: "var(--color-border)", boxShadow: "var(--shadow-sm)" },
+                        children: [
+                            /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer w-20 h-20 rounded-full flex-shrink-0" }),
+                            /*#__PURE__*/ _jsxs("div", {
+                                className: "flex-1 flex flex-col gap-2",
+                                children: [
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-6 w-48 rounded-md" }),
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-4 w-60 rounded-md" }),
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-3 w-36 rounded-md" })
+                                ]
+                            }),
+                            /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-9 w-28 rounded-lg flex-shrink-0" })
+                        ]
+                    }),
+                    // Tabs
+                    /*#__PURE__*/ _jsx("div", {
+                        className: "flex gap-2",
+                        children: [24, 28, 28].map((w, i) =>
+                            /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-9 rounded-lg", style: { width: w * 4 } }, i)
+                        )
+                    }),
+                    // Content grid
+                    /*#__PURE__*/ _jsx("div", {
+                        className: "grid grid-cols-1 lg:grid-cols-2 gap-6",
+                        children: [0, 1].map((j) =>
+                            /*#__PURE__*/ _jsxs("div", {
+                                className: "rounded-2xl p-6 border flex flex-col gap-4",
+                                style: { background: "var(--color-bg-card)", borderColor: "var(--color-border)", boxShadow: "var(--shadow-sm)" },
+                                children: [
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-5 w-36 rounded-md" }),
+                                    ...[0, 1, 2, 3].map((k) =>
+                                        /*#__PURE__*/ _jsxs("div", {
+                                            className: "flex items-center justify-between py-1",
+                                            children: [
+                                                /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-4 w-28 rounded-md" }),
+                                                /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-4 w-44 rounded-md" })
+                                            ]
+                                        }, k)
+                                    )
+                                ]
+                            }, j)
+                        )
+                    })
+                ]
+            })
         });
     }
     if (!user || !profile) return null;

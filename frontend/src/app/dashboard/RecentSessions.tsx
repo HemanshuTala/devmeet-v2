@@ -28,22 +28,23 @@ function formatDuration(minutes) {
 }
 function SkeletonRow() {
     return /*#__PURE__*/ _jsxs("div", {
-        className: "flex items-center gap-4 p-4 border-b border-blue-50 animate-pulse",
+        className: "flex items-center gap-4 p-4 border-b",
+        style: { borderColor: 'var(--color-border)' },
         children: [
             /*#__PURE__*/ _jsx("div", {
-                className: "h-5 bg-slate-200 rounded w-24"
+                className: "skeleton-shimmer h-5 rounded w-24"
             }),
             /*#__PURE__*/ _jsx("div", {
-                className: "h-5 bg-slate-200 rounded w-16"
+                className: "skeleton-shimmer h-5 rounded w-16"
             }),
             /*#__PURE__*/ _jsx("div", {
-                className: "h-5 bg-slate-200 rounded w-16"
+                className: "skeleton-shimmer h-5 rounded w-16"
             }),
             /*#__PURE__*/ _jsx("div", {
-                className: "h-5 bg-slate-105 rounded flex-1"
+                className: "skeleton-shimmer h-5 rounded flex-1"
             }),
             /*#__PURE__*/ _jsx("div", {
-                className: "h-5 bg-slate-200 rounded w-12"
+                className: "skeleton-shimmer h-5 rounded w-12"
             })
         ]
     });
@@ -432,6 +433,7 @@ export default function RecentSessions({ sessionsLoading, sessionsError, recentS
                     group px-5 py-4 transition-colors duration-150 hover:bg-slate-50/50
                     ${idx < filteredListSessions.length - 1 ? "border-b border-blue-50" : ""}
                   `,
+                                style: { contentVisibility: 'auto', containIntrinsicSize: '0 68px' },
                                 children: [
                                     /*#__PURE__*/ _jsxs("div", {
                                         className: "hidden md:grid grid-cols-[2.5fr_1fr_1fr_1.2fr_1fr_1.2fr_1fr] gap-4 items-center",

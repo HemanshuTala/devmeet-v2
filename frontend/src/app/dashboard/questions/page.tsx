@@ -165,7 +165,45 @@ export default function QuestionsPage() {
     }
   };
 
-  if (authLoading) return <PageLoader label="Loading question bank…" />;
+  if (authLoading) return (
+    <DashboardShell maxWidth="max-w-7xl">
+      <div className="flex flex-col gap-6 animate-fade-in">
+        <div className="skeleton-shimmer h-9 w-56 rounded-lg" />
+        {/* Filter bar skeleton */}
+        <div className="flex gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="skeleton-shimmer h-10 rounded-lg" style={{ width: i === 0 ? 200 : 130 }} />
+          ))}
+        </div>
+        {/* Question cards skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border p-5 flex flex-col gap-3"
+              style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="skeleton-shimmer h-5 rounded-md" style={{ width: `${60 + (i % 3) * 20}%` }} />
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <div className="skeleton-shimmer h-5 w-14 rounded-full" />
+                  <div className="skeleton-shimmer h-5 w-16 rounded-full" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="skeleton-shimmer h-3 w-full rounded-md" />
+                <div className="skeleton-shimmer h-3 rounded-md" style={{ width: '83%' }} />
+                <div className="skeleton-shimmer h-3 rounded-md" style={{ width: '67%' }} />
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <div key={j} className="skeleton-shimmer h-6 rounded-full" style={{ width: 50 + j * 15 }} />
+                ))}
+              </div>
+              <div className="skeleton-shimmer h-9 w-full rounded-xl mt-1" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </DashboardShell>
+  );
 
   return (
     <DashboardShell maxWidth="max-w-7xl">
@@ -259,7 +297,31 @@ export default function QuestionsPage() {
       )}
 
       {isLoading ? (
-        <PageLoader label="Searching question bank…" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border p-5 flex flex-col gap-3"
+              style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="skeleton-shimmer h-5 rounded-md" style={{ width: `${60 + (i % 3) * 20}%` }} />
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <div className="skeleton-shimmer h-5 w-14 rounded-full" />
+                  <div className="skeleton-shimmer h-5 w-16 rounded-full" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="skeleton-shimmer h-3 w-full rounded-md" />
+                <div className="skeleton-shimmer h-3 rounded-md" style={{ width: '83%' }} />
+                <div className="skeleton-shimmer h-3 rounded-md" style={{ width: '67%' }} />
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <div key={j} className="skeleton-shimmer h-6 rounded-full" style={{ width: 50 + j * 15 }} />
+                ))}
+              </div>
+              <div className="skeleton-shimmer h-9 w-full rounded-xl mt-1" />
+            </div>
+          ))}
+        </div>
       ) : questions.length === 0 ? (
         <EmptyState
           icon={BookOpen}

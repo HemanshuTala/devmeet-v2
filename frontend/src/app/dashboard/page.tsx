@@ -145,8 +145,92 @@ export default function DashboardPage() {
         dashboardData
     ]);
     if (authLoading || !user) {
-        return /*#__PURE__*/ _jsx(PageLoader, {
-            label: "Loading dashboard…"
+        return /*#__PURE__*/ _jsx(DashboardShell, {
+            children: /*#__PURE__*/ _jsxs("div", {
+                className: "flex flex-col gap-6 animate-fade-in",
+                children: [
+                    // Header skeleton
+                    /*#__PURE__*/ _jsxs("div", {
+                        className: "flex items-center justify-between",
+                        children: [
+                            /*#__PURE__*/ _jsxs("div", {
+                                className: "flex flex-col gap-2",
+                                children: [
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-8 w-64 rounded-lg" }),
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-4 w-48 rounded-md" })
+                                ]
+                            }),
+                            /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-12 w-40 rounded-2xl" })
+                        ]
+                    }),
+                    // Stat cards skeleton
+                    /*#__PURE__*/ _jsx("div", {
+                        className: "grid grid-cols-2 lg:grid-cols-4 gap-5",
+                        children: Array.from({ length: 4 }).map((_, i) =>
+                            /*#__PURE__*/ _jsxs("div", {
+                                className: "rounded-xl p-5 flex items-start gap-4 border",
+                                style: { background: "var(--color-bg-card)", borderColor: "var(--color-border)", boxShadow: "var(--shadow-sm)" },
+                                children: [
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer w-10 h-10 rounded-lg flex-shrink-0" }),
+                                    /*#__PURE__*/ _jsxs("div", {
+                                        className: "flex-1 flex flex-col gap-2",
+                                        children: [
+                                            /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-3 w-20 rounded-md" }),
+                                            /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-7 w-14 rounded-md" })
+                                        ]
+                                    })
+                                ]
+                            }, i)
+                        )
+                    }),
+                    // Chart + radar skeleton
+                    /*#__PURE__*/ _jsxs("div", {
+                        className: "grid grid-cols-1 lg:grid-cols-3 gap-5",
+                        children: [
+                            /*#__PURE__*/ _jsxs("div", {
+                                className: "lg:col-span-2 rounded-xl p-6 border flex flex-col gap-3",
+                                style: { background: "var(--color-bg-card)", borderColor: "var(--color-border)", boxShadow: "var(--shadow-sm)" },
+                                children: [
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-5 w-36 rounded-md" }),
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-52 w-full rounded-xl" })
+                                ]
+                            }),
+                            /*#__PURE__*/ _jsxs("div", {
+                                className: "rounded-xl p-6 border flex flex-col gap-3",
+                                style: { background: "var(--color-bg-card)", borderColor: "var(--color-border)", boxShadow: "var(--shadow-sm)" },
+                                children: [
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-5 w-28 rounded-md" }),
+                                    /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-52 w-full rounded-xl" })
+                                ]
+                            })
+                        ]
+                    }),
+                    // Sessions list skeleton
+                    /*#__PURE__*/ _jsxs("div", {
+                        className: "rounded-xl p-6 border flex flex-col gap-4",
+                        style: { background: "var(--color-bg-card)", borderColor: "var(--color-border)", boxShadow: "var(--shadow-sm)" },
+                        children: [
+                            /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-5 w-44 rounded-md" }),
+                            ...Array.from({ length: 4 }).map((_, i) =>
+                                /*#__PURE__*/ _jsxs("div", {
+                                    className: "flex items-center gap-4 py-1",
+                                    children: [
+                                        /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer w-9 h-9 rounded-full flex-shrink-0" }),
+                                        /*#__PURE__*/ _jsxs("div", {
+                                            className: "flex-1 flex flex-col gap-1.5",
+                                            children: [
+                                                /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-4 rounded-md", style: { width: `${55 + (i % 3) * 12}%` } }),
+                                                /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-3 w-32 rounded-md" })
+                                            ]
+                                        }),
+                                        /*#__PURE__*/ _jsx("div", { className: "skeleton-shimmer h-6 w-20 rounded-full" })
+                                    ]
+                                }, i)
+                            )
+                        ]
+                    })
+                ]
+            })
         });
     }
     const displayName = user.display_name ?? user.email ?? "User";

@@ -255,20 +255,44 @@ export default function VideoPanel({
             </div>
           ) : (
             <div className="flex-1 h-full flex flex-col items-center justify-center gap-1.5 p-3 bg-slate-950">
-              <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
-                <VideoOff className="w-4 h-4 text-slate-500" />
-              </div>
-              {media.permissionStatus === 'checking' && <p className="text-[9px] text-slate-400 font-semibold animate-pulse">Accessing...</p>}
-              {media.permissionStatus === 'denied' && (
-                <button onClick={media.requestPermissions} title={media.getPermissionInstructions()} className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-1 px-2.5 rounded-lg text-[9px] transition-colors">Retry</button>
-              )}
-              {media.permissionStatus === 'prompt' && (
-                <button onClick={media.requestPermissions} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-2.5 rounded-lg text-[9px] transition-all flex items-center gap-1 shadow-lg shadow-blue-900/30">
-                  <ShieldCheck className="w-3 h-3" /> Enable
-                </button>
+              {media.permissionStatus === 'checking' ? (
+                // Camera init skeleton — shimmer pulse instead of black void
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 relative overflow-hidden">
+                  <div
+                    style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(90deg, #1e1e30 0%, #252535 50%, #1e1e30 100%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 2s linear infinite',
+                    }}
+                  />
+                  <div className="relative z-10 flex flex-col items-center gap-1.5">
+                    <div className="w-8 h-8 rounded-full bg-slate-800/80 border border-slate-600/40 flex items-center justify-center">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.901L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                      </svg>
+                    </div>
+                    <p className="text-[9px] text-slate-500 font-semibold animate-pulse">Initialising camera…</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+                    <VideoOff className="w-4 h-4 text-slate-500" />
+                  </div>
+                  {media.permissionStatus === 'denied' && (
+                    <button onClick={media.requestPermissions} title={media.getPermissionInstructions()} className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-1 px-2.5 rounded-lg text-[9px] transition-colors">Retry</button>
+                  )}
+                  {media.permissionStatus === 'prompt' && (
+                    <button onClick={media.requestPermissions} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-2.5 rounded-lg text-[9px] transition-all flex items-center gap-1 shadow-lg shadow-blue-900/30">
+                      <ShieldCheck className="w-3 h-3" /> Enable
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
+
 
           {media.permissionStatus === 'granted' && media.audioActive && (
             <div className="absolute bottom-2 right-2 z-10 flex items-center gap-0.5 bg-slate-950/65 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] text-emerald-450 font-bold" title="Microphone Level">
@@ -357,35 +381,56 @@ export default function VideoPanel({
             </div>
           ) : (
             <div className="flex-1 h-full flex flex-col items-center justify-center gap-4 p-5 bg-slate-950">
-              <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
-                <VideoOff className="w-7 h-7 text-slate-500" />
-              </div>
-              {media.permissionStatus === 'checking' && (
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
-                  <p className="text-xs text-slate-400 font-semibold">Accessing camera...</p>
-                </div>
-              )}
-              {media.permissionStatus === 'denied' && (
-                <div className="flex flex-col items-center gap-3 text-center max-w-[220px]">
-                  <div className="bg-rose-950/40 border border-rose-800/40 rounded-xl p-3 text-left text-[11px] space-y-1.5 text-rose-300">
-                    <div className="flex items-center gap-1.5 font-bold text-rose-200">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Camera Blocked
+              {media.permissionStatus === 'checking' ? (
+                // Camera init skeleton — shimmer instead of black void
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 relative overflow-hidden">
+                  <div
+                    style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(90deg, #0d0d1a 0%, #1a1a2e 50%, #0d0d1a 100%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 2s linear infinite',
+                    }}
+                  />
+                  <div className="relative z-10 flex flex-col items-center gap-3">
+                    <div className="w-16 h-16 rounded-full bg-slate-800/60 border border-slate-600/30 flex items-center justify-center">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.901L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                      </svg>
                     </div>
-                    <p className="text-slate-450 leading-relaxed font-semibold">{media.getPermissionInstructions()}</p>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <p className="text-sm text-slate-400 font-semibold animate-pulse">Initialising camera…</p>
+                      <p className="text-xs text-slate-600 font-medium">Allow camera access when prompted</p>
+                    </div>
                   </div>
-                  <button onClick={media.requestPermissions} className="w-full bg-rose-900/60 hover:bg-rose-900 text-white font-bold py-2 px-4 rounded-xl text-xs transition-colors">
-                    Retry Access
-                  </button>
                 </div>
-              )}
-              {media.permissionStatus === 'prompt' && (
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <p className="text-xs text-slate-400 font-medium max-w-[180px] leading-relaxed">Allow camera &amp; microphone to enable video interview</p>
-                  <button onClick={media.requestPermissions} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-blue-900/30">
-                    <ShieldCheck className="w-4 h-4" /> Enable Camera &amp; Mic
-                  </button>
-                </div>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+                    <VideoOff className="w-7 h-7 text-slate-500" />
+                  </div>
+                  {media.permissionStatus === 'denied' && (
+                    <div className="flex flex-col items-center gap-3 text-center max-w-[220px]">
+                      <div className="bg-rose-950/40 border border-rose-800/40 rounded-xl p-3 text-left text-[11px] space-y-1.5 text-rose-300">
+                        <div className="flex items-center gap-1.5 font-bold text-rose-200">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Camera Blocked
+                        </div>
+                        <p className="text-slate-450 leading-relaxed font-semibold">{media.getPermissionInstructions()}</p>
+                      </div>
+                      <button onClick={media.requestPermissions} className="w-full bg-rose-900/60 hover:bg-rose-900 text-white font-bold py-2 px-4 rounded-xl text-xs transition-colors">
+                        Retry Access
+                      </button>
+                    </div>
+                  )}
+                  {media.permissionStatus === 'prompt' && (
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <p className="text-xs text-slate-400 font-medium max-w-[180px] leading-relaxed">Allow camera &amp; microphone to enable video interview</p>
+                      <button onClick={media.requestPermissions} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-blue-900/30">
+                        <ShieldCheck className="w-4 h-4" /> Enable Camera &amp; Mic
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

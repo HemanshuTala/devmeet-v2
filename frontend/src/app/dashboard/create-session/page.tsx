@@ -64,8 +64,29 @@ export default function CreateSessionPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-          <Spinner />
+        <div style={{ minHeight: '100vh', background: 'var(--color-bg)', padding: '24px' }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Title skeleton */}
+            <div className="skeleton-shimmer" style={{ height: 32, width: 220, borderRadius: 8 }} />
+            {/* Step 1 — interview type cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} className="skeleton-shimmer" style={{ height: 120, borderRadius: 12 }} />
+              ))}
+            </div>
+            {/* Step 2 — difficulty + duration */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="skeleton-shimmer" style={{ height: 56, borderRadius: 10 }} />
+              <div className="skeleton-shimmer" style={{ height: 56, borderRadius: 10 }} />
+            </div>
+            {/* Step 3 — text inputs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="skeleton-shimmer" style={{ height: 44, borderRadius: 8 }} />
+              <div className="skeleton-shimmer" style={{ height: 44, borderRadius: 8 }} />
+            </div>
+            {/* Launch button */}
+            <div className="skeleton-shimmer" style={{ height: 48, borderRadius: 12 }} />
+          </div>
         </div>
       }
     >

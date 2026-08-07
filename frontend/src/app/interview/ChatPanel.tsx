@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useMemo } from 'react';
+
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { MessageSquare, Send, Lightbulb, X, Brain, Volume2, VolumeX, Mic, MicOff, Video, VideoOff } from 'lucide-react';
@@ -185,8 +186,21 @@ export default function ChatPanel({
               <p className="text-slate-600 text-xs mt-1">Your AI interviewer will introduce themselves shortly.</p>
             </div>
           )}
-          {messages.map((msg) => (
-            <ChatBubble key={msg.id} message={msg} />
+          {/* Virtual window: render only last 100 messages */}
+          {messages.length > 100 && (
+            <div className="text-center py-2">
+              <span className="text-slate-600 text-[10px] font-semibold">
+                {messages.length - 100} earlier messages not shown
+              </span>
+            </div>
+          )}
+          {messages.slice(-100).map((msg) => (
+            <div
+              key={msg.id}
+              style={{ contentVisibility: 'auto', containIntrinsicSize: '0 80px' }}
+            >
+              <ChatBubble message={msg} />
+            </div>
           ))}
           {isAiTyping && <TypingIndicator />}
           <div ref={messagesEndRef} />

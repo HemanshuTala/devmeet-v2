@@ -8,10 +8,11 @@ interface PageTransitionProps {
 }
 
 const variants = {
-  hidden: { opacity: 0, y: 10, scale: 0.995 },
-  enter:  { opacity: 1, y: 0,  scale: 1 },
-  exit:   { opacity: 0, y: -6, scale: 0.998 },
+  hidden: { opacity: 0, y: 8, scale: 0.996 },
+  enter:  { opacity: 1, y: 0, scale: 1 },
+  exit:   { opacity: 0, y: -4, scale: 0.998 },
 };
+
 
 export default function PageTransition({ children }: PageTransitionProps) {
   const pathname = usePathname();
@@ -25,8 +26,8 @@ export default function PageTransition({ children }: PageTransitionProps) {
         animate="enter"
         exit="exit"
         transition={{
-          duration: 0.22,
-          ease: [0.25, 0.46, 0.45, 0.94],
+          duration: 0.15,
+          ease: [0.2, 0, 0, 1],
         }}
         className="w-full flex flex-col gap-6"
       >

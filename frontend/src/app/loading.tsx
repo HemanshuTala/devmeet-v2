@@ -1,7 +1,5 @@
 'use client';
 
-import { Loader } from '@/components/ui/loader';
-
 export default function Loading() {
   return (
     <div
@@ -10,7 +8,7 @@ export default function Loading() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#fafafa',
+        background: 'var(--color-bg)',
       }}
     >
       <div
@@ -28,7 +26,7 @@ export default function Loading() {
               width: 32,
               height: 32,
               borderRadius: 8,
-              background: '#4f46e5',
+              background: 'var(--color-brand)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -43,7 +41,7 @@ export default function Loading() {
             style={{
               fontSize: 17,
               fontWeight: 700,
-              color: '#111',
+              color: 'var(--color-text-primary)',
               letterSpacing: '-0.03em',
             }}
           >
@@ -51,8 +49,12 @@ export default function Loading() {
           </span>
         </div>
 
-        {/* Loader */}
-        <Loader size="md" />
+        {/* Shimmer skeleton bars */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 200 }}>
+          <div className="skeleton-shimmer" style={{ height: 12, borderRadius: 6 }} />
+          <div className="skeleton-shimmer" style={{ height: 12, borderRadius: 6, width: '75%' }} />
+          <div className="skeleton-shimmer" style={{ height: 12, borderRadius: 6, width: '55%' }} />
+        </div>
       </div>
     </div>
   );
