@@ -471,3 +471,5 @@ aws s3api put-bucket-cors \
 **SES emails not sending:**
 - Confirm the from-address `hemansutala8@gmail.com` is verified in SES eu-north-1
 - Check if SES account is still in sandbox (can only send to verified addresses)
+#   T r i g g e r   C I / C D   w i t h   u p d a t e d   c r e d e n t i a l s   -   0 8 / 0 8 / 2 0 2 6   1 8 : 5 6 : 0 2  
+ 
