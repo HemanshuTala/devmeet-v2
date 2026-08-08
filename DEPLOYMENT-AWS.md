@@ -472,4 +472,5 @@ aws s3api put-bucket-cors \
 - Confirm the from-address `hemansutala8@gmail.com` is verified in SES eu-north-1
 - Check if SES account is still in sandbox (can only send to verified addresses)
 #   T r i g g e r   C I / C D   w i t h   u p d a t e d   c r e d e n t i a l s   -   0 8 / 0 8 / 2 0 2 6   1 8 : 5 6 : 0 2  
+ #   T r i g g e r   C I / C D   t o   r e b u i l d   a p i - g a t e w a y   w i t h   C O R S   f i x   -   0 8 / 0 8 / 2 0 2 6   1 9 : 3 7 : 2 2  
  
