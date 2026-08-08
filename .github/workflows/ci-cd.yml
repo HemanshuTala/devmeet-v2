@@ -281,5 +281,3 @@ jobs:
             curl -sf http://localhost:80/health && echo "Gateway healthy!" || echo "Gateway not yet ready"
 
             echo "Deployment complete!"
-#   T r i g g e r   n e w   w o r k f l o w   r u n   w i t h   u p d a t e d   c r e d e n t i a l s   -   0 8 / 0 8 / 2 0 2 6   1 8 : 2 8 : 5 3  
- 
