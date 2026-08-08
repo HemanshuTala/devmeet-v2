@@ -151,7 +151,7 @@ SERVICES=(
   "auth-service" "user-service" "orchestrator-service" "ai-interviewer-service"
   "code-execution-service" "video-service" "feedback-service" "notification-service"
   "analytics-service" "admin-service" "file-service" "payment-service"
-  "search-service" "api-gateway"
+  "search-service" "api-gateway" "frontend"
 )
 
 for service in "${SERVICES[@]}"; do
