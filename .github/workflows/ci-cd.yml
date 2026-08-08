@@ -8,6 +8,7 @@ on:
 
 env:
   AWS_REGION: eu-north-1
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   # ECR registry is: <account-id>.dkr.ecr.<region>.amazonaws.com
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-north-1.amazonaws.com
 
@@ -255,7 +256,7 @@ jobs:
             # Re-authenticate Docker with ECR (tokens expire every 12h)
             aws ecr get-login-password --region eu-north-1 | \
               docker login --username AWS --password-stdin \
-              067514126471.dkr.ecr.eu-north-1.amazonaws.com
+              ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-north-1.amazonaws.com
 
             cd /opt/devmeet
 
@@ -266,11 +267,11 @@ jobs:
                         analytics-service admin-service file-service \
                         payment-service search-service api-gateway frontend; do
               echo "Pulling devmeet-$svc..."
-              docker pull 067514126471.dkr.ecr.eu-north-1.amazonaws.com/devmeet-$svc:latest || true
+              docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-north-1.amazonaws.com/devmeet-$svc:latest || true
             done
 
             # Restart stack with new images (zero-downtime rolling update)
-            export AWS_ACCOUNT_ID=067514126471
+            export AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}
             export IMAGE_TAG=latest
             export AWS_REGION=eu-north-1
             docker compose -f docker-compose.prod.yml --env-file .env up -d --remove-orphans
