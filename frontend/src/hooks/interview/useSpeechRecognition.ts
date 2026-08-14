@@ -56,21 +56,26 @@ export function useSpeechRecognition() {
           recognition.interimResults = true;
           recognition.lang = 'en-US';
 
-          let finalTranscript = '';
+          let baseInputText = '';
+
+          recognition.onstart = () => {
+            baseInputText = '';
+          };
 
           recognition.onresult = (event: any) => {
-            let interim = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
+            let finalStr = '';
+            let interimStr = '';
+            for (let i = 0; i < event.results.length; ++i) {
               const res = event.results[i];
               if (res.isFinal) {
-                finalTranscript += res[0].transcript + ' ';
+                finalStr += res[0].transcript + ' ';
               } else {
-                interim += res[0].transcript;
+                interimStr += res[0].transcript;
               }
             }
-            const current = (finalTranscript + interim).trim();
-            if (current) {
-              opts.onTranscript(current);
+            const speechText = (finalStr + interimStr).trim();
+            if (speechText) {
+              opts.onTranscript(speechText);
             }
           };
 

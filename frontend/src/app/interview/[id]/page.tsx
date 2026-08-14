@@ -45,6 +45,7 @@ export default function InterviewRoomPage() {
   const [hintLoading, setHintLoading] = useState(false);
   const [sessionPaused, setSessionPaused] = useState(false);
   const isPausedRef = useRef(false);
+  const speechBaseTextRef = useRef('');
 
   // ── Code editor state ──
   const [language, setLanguage] = useState('python');
@@ -481,11 +482,19 @@ export default function InterviewRoomPage() {
           onInputChange={setInput}
           onSend={handleSend}
           onToggleMute={handleToggleMute}
-          onToggleSpeech={() => speech.toggleSpeechRecognition({
-            isAiTyping: streaming.isAiTyping,
-            onTranscript: (text) => setInput((prev) => (prev && !prev.endsWith(' ') ? prev + ' ' : prev) + text),
-            onError: (msg) => setChatError(msg),
-          })}
+          onToggleSpeech={() => {
+            if (!speech.isListening) {
+              speechBaseTextRef.current = input;
+            }
+            speech.toggleSpeechRecognition({
+              isAiTyping: streaming.isAiTyping,
+              onTranscript: (speechText) => {
+                const base = speechBaseTextRef.current;
+                setInput(base ? `${base} ${speechText}` : speechText);
+              },
+              onError: (msg) => setChatError(msg),
+            });
+          }}
           onRequestHint={handleRequestHint}
           onToggleHints={() => setShowHints((p) => !p)}
           onHideHints={() => setShowHints(false)}
