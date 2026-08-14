@@ -139,7 +139,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION}
       - S3_BUCKET=${S3_BUCKET}
-      - AWS_S3_REPORTS_BUCKET=${AWS_S3_REPORTS_BUCKET:-aakruti-s3}
+      - AWS_S3_REPORTS_BUCKET=${AWS_S3_REPORTS_BUCKET:-devmeet-s3-bucket}
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
     depends_on:

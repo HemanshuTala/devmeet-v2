@@ -18,21 +18,20 @@ DevMeet v2.0 runs entirely on AWS in the **eu-north-1 (Stockholm)** region. The 
 
 ```mermaid
 graph TB
-    subgraph "AWS Account: 067514126471<br/>Region: eu-north-1 (Stockholm)"
+    subgraph "AWS Account: <YOUR_AWS_ACCOUNT_ID><br/>Region: eu-north-1 (Stockholm)"
         subgraph "VPC: default<br/>CIDR: 172.31.0.0/16"
             subgraph "Subnet: eu-north-1c<br/>172.31.0.0/20"
-                EC2[EC2: devmeet-prod<br/>c7i-flex.large<br/>Private: 172.31.1.102<br/>Public: 16.192.160.85<br/>OS: Amazon Linux 2023<br/>Storage: 50 GB gp3 EBS<br/>SG: launch-wizard-2<br/>Inbound: 22, 80, 443, 3000, 8000<br/>Docker Compose: 20 containers<br/>13 svc + 1 frontend + 6 infra]
+                EC2[EC2: devmeet-prod<br/>c7i-flex.large<br/>Private: <YOUR_PRIVATE_IP><br/>Public: <YOUR_SERVER_IP><br/>OS: Amazon Linux 2023<br/>Storage: 50 GB gp3 EBS<br/>SG: launch-wizard-2<br/>Inbound: 22, 80, 443, 3000, 8000<br/>Docker Compose: 20 containers<br/>13 svc + 1 frontend + 6 infra]
             end
         end
         
-        subgraph "AWS Managed Services"
-            S3[AWS S3<br/>eu-north-1<br/>aakruti-s3<br/>Avatars·PDFs·Code snapshots]
-            SES[AWS SES<br/>eu-north-1<br/>Sandbox→Production<br/>Transactional email]
-            ECR[AWS ECR<br/>eu-north-1<br/>067514126471.dkr.ecr<br/>14 repositories]
+        subgraph "Storage & Registry"
+            S3[AWS S3<br/>eu-north-1<br/><YOUR_S3_BUCKET_NAME><br/>Avatars·PDFs·Code snapshots]
+            ECR[AWS ECR<br/>eu-north-1<br/><YOUR_AWS_ACCOUNT_ID>.dkr.ecr<br/>14 repositories]
         end
         
-        subgraph "IAM"
-            IAM[IAM User: hemanshu_tala<br/>ARN: arn:aws:iam::067514126471:user/hemanshu_tala<br/>Policies:<br/>• AmazonEC2ContainerRegistryFullAccess<br/>• AmazonEC2FullAccess<br/>• AmazonS3FullAccess<br/>• AmazonSESFullAccess<br/>• IAMUserChangePassword]
+        subgraph "IAM & Auth"
+            IAM[IAM User: <YOUR_IAM_USERNAME><br/>ARN: arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:user/<YOUR_IAM_USERNAME><br/>Policies:<br/>• AmazonEC2ContainerRegistryFullAccess<br/>• AmazonEC2FullAccess<br/>• AmazonS3FullAccess<br/>• AmazonSESFullAccess<br/>• IAMUserChangePassword]
         end
     end
 ```
@@ -53,11 +52,11 @@ graph TB
 | Architecture | x86_64 |
 | AMI | Amazon Linux 2023 (64-bit x86) |
 | Region / AZ | eu-north-1 / eu-north-1c |
-| Public IP | 16.192.160.85 (changes on stop/start) |
-| Private IP | 172.31.1.102 (static within VPC) |
-| Public DNS | ec2-16-192-160-85.eu-north-1.compute.amazonaws.com |
+| Public IP | <YOUR_SERVER_IP> |
+| Private IP | `<YOUR_PRIVATE_IP>` |
+| Public DNS | <YOUR_EC2_DNS> |
 | Storage | 50 GB gp3 EBS (root volume) |
-| Key Pair | devmeet-key (RSA, .pem) |
+| Key Pair | `<YOUR_KEY_PAIR_NAME>` |
 
 ### 2.2 Security Group: launch-wizard-2
 
@@ -108,7 +107,9 @@ graph TB
 
 | Attribute | Value |
 |-----------|-------|
-| Registry URI | `067514126471.dkr.ecr.eu-north-1.amazonaws.com` |
+| Registry URI | `<YOUR_AWS_ACCOUNT_ID>.dkr.ecr.eu-north-1.amazonaws.com` |
+  `<YOUR_AWS_ACCOUNT_ID>.dkr.ecr.eu-north-1.amazonaws.com`
+| ARN | `arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:user/<YOUR_IAM_USERNAME>` |
 | Region | eu-north-1 |
 | Encryption | AES256 |
 | Image scanning | Enabled (scan on push) |
@@ -177,7 +178,7 @@ graph TB
 # Token expires every 12 hours — must re-authenticate before pull/push
 aws ecr get-login-password --region eu-north-1 | \
   docker login --username AWS --password-stdin \
-  067514126471.dkr.ecr.eu-north-1.amazonaws.com
+  <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.eu-north-1.amazonaws.com
 ```
 
 ---
@@ -188,7 +189,9 @@ aws ecr get-login-password --region eu-north-1 | \
 
 | Attribute | Value |
 |-----------|-------|
-| Bucket Name | `aakruti-s3` |
+| Bucket Name | `<YOUR_S3_BUCKET_NAME>` |
+<YOUR_S3_BUCKET_NAME>/
+S3_BUCKET             = <YOUR_S3_BUCKET_NAME>
 | Region | eu-north-1 |
 | Access | Private (no public access) |
 | Versioning | Disabled |
@@ -197,7 +200,7 @@ aws ecr get-login-password --region eu-north-1 | \
 ### 4.2 Object Key Structure
 
 ```
-aakruti-s3/
+`<YOUR_S3_BUCKET_NAME>/`
 ├── avatars/
 │   └── {user_id}/{timestamp}.webp        ← profile pictures
 ├── reports/
@@ -223,7 +226,7 @@ All services use **boto3** with credentials from environment variables:
 AWS_ACCESS_KEY_ID     = <REDACTED - use IAM role or GitHub Secret>
 AWS_SECRET_ACCESS_KEY = (from .env)
 AWS_REGION            = eu-north-1
-S3_BUCKET             = aakruti-s3
+S3_BUCKET             = <YOUR_S3_BUCKET_NAME>
 ```
 
 Download access uses **presigned URLs** (15-minute TTL) — the browser downloads directly from S3 without the service being in the data path.
@@ -250,7 +253,7 @@ Download access uses **presigned URLs** (15-minute TTL) — the browser download
 | Attribute | Value |
 |-----------|-------|
 | Region | eu-north-1 |
-| From Address | `hemansutala8@gmail.com` |
+| From Address | `<YOUR_EMAIL>` |
 | Status | Sandbox (can only send to verified addresses) |
 | Action Required | Submit production access request to send to anyone |
 
@@ -289,7 +292,7 @@ Currently in sandbox mode — emails can only be sent to **verified email addres
 
 | Attribute | Value |
 |-----------|-------|
-| ARN | `arn:aws:iam::067514126471:user/hemanshu_tala` |
+| ARN | `arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:user/<YOUR_IAM_USERNAME>` |
 | Console Access | Enabled (without MFA — should enable MFA) |
 | Access Key | `<REDACTED>` (rotate immediately — was exposed in git history) |
 
@@ -311,7 +314,8 @@ Currently in sandbox mode — emails can only be sent to **verified email addres
 | No MFA on IAM user | High — account takeover risk | Enable MFA at IAM → Users → Security credentials |
 | Access key 120 days old | Medium — rotate regularly | Rotate every 90 days |
 | `AmazonEC2FullAccess` is broad | Medium | Scope to only required EC2 actions |
-| `AmazonS3FullAccess` is broad | Medium | Scope to `aakruti-s3` bucket only |
+| `AmazonS3FullAccess` is broad | Medium | Scope to `<YOUR_S3_BUCKET_NAME>` bucket only |
+| S3 `<YOUR_S3_BUCKET_NAME>` | ~10 GB + requests | ~$0.023/GB | ~$3 |
 
 ---
 
@@ -337,63 +341,45 @@ graph LR
         end
         
         subgraph "Stage 3: Deploy"
-            DEPLOY[Deploy to EC2<br/>SSH action<br/>16.192.160.85<br/>1. ECR login<br/>2. Pull images<br/>3. docker compose up -d<br/>4. Health check]
+            DEPLOY[Deploy to EC2<br/>SSH action<br/><YOUR_SERVER_IP><br/>1. ECR login<br/>2. Pull images<br/>3. docker compose up -d<br/>4. Health check]
+            HEALTH[Health Check<br/>GET /health<br/><YOUR_SERVER_IP>]
         end
+        
+        EC2[AWS EC2<br/><YOUR_SERVER_IP><br/>Running Stack<br/>20 containers]
     end
     
-    subgraph "AWS ECR"
-        ECR[AWS ECR<br/>eu-north-1<br/>067514126471<br/>15 repos]
-    end
-    
-    subgraph "Production"
-        EC2[AWS EC2<br/>16.192.160.85<br/>Running Stack<br/>20 containers]
-    end
-    
-    GH -->|git push| T1
-    GH -->|git push| T2
-    GH -->|git push| T3
-    T1 --> BUILD
-    T2 --> BUILD
-    T3 --> BUILD
-    BUILD -->|docker push| ECR
-    ECR -->|docker pull| DEPLOY
-    DEPLOY --> EC2
+    ECR -->|pull| DEPLOY
+    DEPLOY -->|start| EC2
+    DEPLOY -->|verify| HEALTH
 ```
 
-### 7.2 GitHub Secrets Required
+### GitHub Actions Secrets Configured
+| Secret | Value / Description |
+|--------|---------------------|
+| `AWS_ACCESS_KEY_ID` | IAM deployment user access key |
+| `AWS_SECRET_ACCESS_KEY` | IAM deployment user secret key |
+| `AWS_ACCOUNT_ID` | `<YOUR_AWS_ACCOUNT_ID>` |
+| `EC2_HOST` | `<YOUR_SERVER_IP>` |
+| `EC2_USERNAME` | `ec2-user` |
+| `EC2_SSH_KEY` | Contents of `<YOUR_KEY_PAIR_NAME>.pem` |
 
-| Secret | Value / Purpose |
-|--------|----------------|
-| `AWS_ACCESS_KEY_ID` | Set in GitHub Secrets (do not hardcode) |
-| `AWS_SECRET_ACCESS_KEY` | Set in GitHub Secrets (do not hardcode) |
-| `AWS_ACCOUNT_ID` | `067514126471` |
-| `EC2_HOST` | `16.192.160.85` |
-| `EC2_SSH_KEY` | Contents of `devmeet-key.pem` |
+### Environment Setup on EC2
+On the EC2 server, `/opt/devmeet/.env` contains runtime environment variables:
 
-### 7.3 Pipeline File
-
-Location: `.github/workflows/ci-cd.yml`
-
-Key configuration:
-```yaml
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
-
-env:
-  AWS_REGION: eu-north-1
-  ECR_REGISTRY: 067514126471.dkr.ecr.eu-north-1.amazonaws.com
+```bash
+EC2_PUBLIC_IP=<YOUR_SERVER_IP>
+NEXT_PUBLIC_GATEWAY_URL=http://<YOUR_SERVER_IP>
+NEXT_PUBLIC_API_URL=http://<YOUR_SERVER_IP>
+NEXT_PUBLIC_NOTIF_WS_URL=ws://<YOUR_SERVER_IP>471.dkr.ecr.eu-north-1.amazonaws.com
 ```
 
 ### 7.4 Build Arguments for Frontend
 
 The frontend Next.js image is built with the EC2 IP baked in at build time:
 ```
-NEXT_PUBLIC_GATEWAY_URL = http://16.192.160.85
-NEXT_PUBLIC_API_URL     = http://16.192.160.85
-NEXT_PUBLIC_NOTIF_WS_URL = ws://16.192.160.85
+NEXT_PUBLIC_GATEWAY_URL = http://<YOUR_SERVER_IP>
+NEXT_PUBLIC_API_URL     = http://<YOUR_SERVER_IP>
+NEXT_PUBLIC_NOTIF_WS_URL = ws://<YOUR_SERVER_IP>
 ```
 
 > **Note:** When the EC2 IP changes (stop/start), update `EC2_HOST` GitHub Secret and re-run the pipeline to rebuild the frontend image with the new IP.
@@ -408,7 +394,7 @@ NEXT_PUBLIC_NOTIF_WS_URL = ws://16.192.160.85
 |----------|------|-----------|-------------|
 | EC2 `c7i-flex.large` | On-Demand Linux | $0.09/hr | ~$66 |
 | EBS 50 GB gp3 | Storage | $0.0952/GB-mo | ~$5 |
-| S3 `aakruti-s3` | ~10 GB + requests | ~$0.023/GB | ~$3 |
+| S3 `<YOUR_S3_BUCKET_NAME>` | ~10 GB + requests | ~$0.023/GB | ~$3 |
 | SES emails | ~1,000/month | $0.10/1000 | ~$0.10 |
 | ECR 15 repos | ~5 GB storage | $0.10/GB-mo | ~$0.50 |
 | Data transfer out | ~20 GB | $0.09/GB | ~$2 |

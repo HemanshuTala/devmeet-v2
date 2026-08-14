@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://16.192.160.85';
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost';
 
 const nextConfig = {
   reactStrictMode: true,

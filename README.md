@@ -2,7 +2,7 @@
 
 > Practice technical interviews with an AI interviewer, get scored feedback, execute code live, and track your progress over time.
 
-**Live:** `http://16.192.160.85` · **Frontend:** `http://16.192.160.85:3000`  
+**Live:** `http://<YOUR_SERVER_IP>` · **Frontend:** `http://<YOUR_SERVER_IP>:3000`  
 **Repo:** `github.com/HemanshuTala/devmeet-v2` · **Region:** AWS eu-north-1
 
 ---
@@ -85,7 +85,7 @@ PostgreSQL   Redis    RabbitMQ  Kafka  Elasticsearch
 | Task Queue | RabbitMQ 3.12 |
 | Event Stream | Kafka 3.6 + Zookeeper |
 | Search | Elasticsearch 8.11 |
-| File Storage | AWS S3 (`aakruti-s3`, eu-north-1) |
+| File Storage | AWS S3 (`<YOUR_S3_BUCKET_NAME>`, eu-north-1) |
 | Email | AWS SES (eu-north-1) |
 | Container Registry | AWS ECR (14 repos, eu-north-1) |
 | Compute | AWS EC2 `c7i-flex.large` (eu-north-1) |
@@ -192,10 +192,10 @@ AWS_SECRET_ACCESS_KEY=
 ## AWS Deployment
 
 ### Production Stack
-- **EC2:** `c7i-flex.large` (2 vCPU, 4 GB) — IP `16.192.160.85`
+- **EC2:** `c7i-flex.large` (2 vCPU, 4 GB) — IP `<YOUR_SERVER_IP>`
 - **ECR:** 14 Docker image repositories in `eu-north-1`
-- **S3:** `aakruti-s3` — avatars, PDF reports, code snapshots
-- **SES:** Transactional email from `hemansutala8@gmail.com`
+- **S3:** `<YOUR_S3_BUCKET_NAME>` — avatars, PDF reports, code snapshots
+- **SES:** Transactional email from `support@example.com`
 
 ### Deploy manually
 
@@ -208,7 +208,7 @@ AWS_REGION=eu-north-1 bash scripts/push-images-ecr.sh
 
 # 3. On EC2 — start the stack
 cd /opt/devmeet
-export AWS_ACCOUNT_ID=067514126471
+export AWS_ACCOUNT_ID=<YOUR_AWS_ACCOUNT_ID>
 export IMAGE_TAG=latest
 docker compose -f docker-compose.prod.yml --env-file .env up -d
 ```
@@ -276,7 +276,7 @@ PDF report generated via WeasyPrint and stored in S3.
 
 ```bash
 # API Gateway
-curl http://16.192.160.85/health
+curl http://<YOUR_SERVER_IP>/health
 
 # All services (run on EC2)
 for port in 8001 8002 8003 8004 8005 8007 8009 8010 8011 8012 8013; do

@@ -14,10 +14,10 @@
 |-----------|-------|
 | System Name | DevMeet v2.0 — AI-Powered Mock Interview Platform |
 | Deployment Region | AWS eu-north-1 (Stockholm) |
-| Production Host | EC2 `c7i-flex.large` — IP `16.192.160.85` |
-| Container Registry | AWS ECR `067514126471.dkr.ecr.eu-north-1.amazonaws.com` |
-| Object Storage | AWS S3 bucket `aakruti-s3` (eu-north-1) |
-| Email | AWS SES eu-north-1 — from `hemansutala8@gmail.com` |
+| Production Host | EC2 `c7i-flex.large` — IP `<YOUR_SERVER_IP>` |
+| Container Registry | AWS ECR `<YOUR_AWS_ACCOUNT_ID>.dkr.ecr.eu-north-1.amazonaws.com` |
+| Object Storage | AWS S3 bucket `<YOUR_S3_BUCKET_NAME>` (eu-north-1) |
+| Email | AWS SES eu-north-1 — from `<YOUR_EMAIL>` |
 | Repository | `github.com/HemanshuTala/devmeet-v2` |
 | CI/CD | GitHub Actions → ECR → EC2 SSH deploy |
 
@@ -41,7 +41,7 @@ graph TB
         RZ[Razorpay<br/>Payments]
     end
     
-    subgraph "AWS EC2 c7i-flex.large<br/>eu-north-1<br/>16.192.160.85"
+    subgraph "AWS EC2 c7i-flex.large<br/>eu-north-1<br/><YOUR_SERVER_IP>"
         subgraph "Presentation Layer"
             FE[Next.js 14 Frontend<br/>:3000<br/>TypeScript·TailwindCSS·Zustand<br/>Monaco Editor·LiveKit SDK·TensorFlow.js]
         end
@@ -76,7 +76,7 @@ graph TB
     end
     
     subgraph "AWS Managed Services"
-        S3[AWS S3<br/>eu-north-1<br/>aakruti-s3<br/>Avatars·PDFs·Code snapshots]
+        S3[AWS S3<br/>eu-north-1<br/><YOUR_S3_BUCKET_NAME><br/>Avatars·PDFs·Code snapshots]
         SES[AWS SES<br/>eu-north-1<br/>Transactional email]
         ECR[AWS ECR<br/>eu-north-1<br/>Container registry<br/>14 repos]
     end
@@ -132,7 +132,7 @@ graph TB
           ▼                 ▼                │                │            │
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                     AWS EC2  c7i-flex.large  (eu-north-1)                       │
-│                     Public IP: 16.192.160.85                                     │
+│                     Public IP: <YOUR_SERVER_IP>                                 │
 │                                                                                  │
 │  ┌──────────────────────────────────────────────────────────────────────────┐   │
 │  │  PRESENTATION LAYER                                                       │   │
@@ -208,9 +208,9 @@ graph TB
 ┌──────────────┐    ┌──────────────────┐   ┌──────────────────┐
 │  AWS S3      │    │  AWS SES         │   │  AWS ECR         │
 │  eu-north-1  │    │  eu-north-1      │   │  eu-north-1      │
-│  aakruti-s3  │    │  from:           │   │  067514126471    │
-│  • avatars   │    │  hemansutala8    │   │  14 repos        │
-│  • PDFs      │    │  @gmail.com      │   │  (one per svc)   │
+│  <YOUR_S3_B..│    │  from:           │   │  <YOUR_AWS_..    │
+│  • avatars   │    │  <YOUR_EMAIL>    │   │  14 repos        │
+│  • PDFs      │    │                  │   │                  │
 │  • code snap │    └──────────────────┘   └──────────────────┘
 └──────────────┘
 ```
@@ -252,9 +252,9 @@ graph TB
 
 **Environment variables (build-time baked in):**
 ```
-NEXT_PUBLIC_GATEWAY_URL = http://16.192.160.85
-NEXT_PUBLIC_API_URL     = http://16.192.160.85
-NEXT_PUBLIC_NOTIF_WS_URL = ws://16.192.160.85
+NEXT_PUBLIC_GATEWAY_URL = http://<YOUR_SERVER_IP>
+NEXT_PUBLIC_API_URL     = http://<YOUR_SERVER_IP>
+NEXT_PUBLIC_NOTIF_WS_URL = ws://<YOUR_SERVER_IP>
 ```
 
 ---
@@ -316,9 +316,9 @@ All 13 services run as Docker containers on the `devmeet_net` bridge network. Th
 
 | Service | Region | Resource | Used by |
 |---------|--------|----------|---------|
-| S3 | eu-north-1 | `aakruti-s3` | file-service (avatars, uploads), feedback-service (PDFs), code-execution-service (snapshots) |
-| SES | eu-north-1 | From: `hemansutala8@gmail.com` | notification-service (welcome emails, feedback ready) |
-| ECR | eu-north-1 | 14 repos under `067514126471` | All Docker image storage and CI/CD pulls |
+| S3 | eu-north-1 | `<YOUR_S3_BUCKET_NAME>` | file-service (avatars, uploads), feedback-service (PDFs), code-execution-service (snapshots) |
+| SES | eu-north-1 | From: `<YOUR_EMAIL>` | notification-service (welcome emails, feedback ready) |
+| ECR | eu-north-1 | 14 repos under `<YOUR_AWS_ACCOUNT_ID>` | All Docker image storage and CI/CD pulls |
 
 ---
 
@@ -367,7 +367,7 @@ User (Browser)
   → Call Groq Cloud for scoring (6 dimensions)
   → Generate HTML via Jinja2
   → Render PDF via WeasyPrint
-  → Upload PDF to S3 aakruti-s3
+  → Upload PDF to S3 `<YOUR_S3_BUCKET_NAME>`
   → INSERT feedback_reports in PostgreSQL
   → Publish feedback.generated → RabbitMQ
 
@@ -382,8 +382,8 @@ User (Browser)
   → POST /api/v1/files/upload  (multipart/form-data)
   → NGINX :80 (10 MB limit)
   → file-service :8011
-  → Upload to S3 aakruti-s3 via boto3
-  → Return {url: "https://aakruti-s3.s3.eu-north-1.amazonaws.com/..."}
+  → Upload to S3 `<YOUR_S3_BUCKET_NAME>` via boto3
+  → Return {url: "https://<YOUR_S3_BUCKET_NAME>.s3.eu-north-1.amazonaws.com/..."}
   → Store URL in PostgreSQL user_profiles.avatar_url
 ```
 
@@ -398,8 +398,7 @@ User (Browser)
            --pids-limit=64 --read-only --timeout=10s
   → Execute code
   → Capture stdout/stderr
-  → Remove container
-  → Upload snapshot to S3 aakruti-s3 (if session_id provided)
+  → Upload snapshot to S3 `<YOUR_S3_BUCKET_NAME>` (if session_id provided)
   → Return {success, output, execution_time, exit_code}
 ```
 
@@ -442,11 +441,11 @@ graph LR
     end
     
     subgraph "AWS ECR"
-        ECR[AWS ECR<br/>eu-north-1<br/>067514126471<br/>15 repos]
+        ECR[AWS ECR<br/>eu-north-1<br/><YOUR_AWS_ACCOUNT_ID><br/>15 repos]
     end
     
     subgraph "Production"
-        EC2[AWS EC2<br/>16.192.160.85<br/>c7i-flex.large]
+        EC2[AWS EC2<br/><YOUR_SERVER_IP><br/>c7i-flex.large]
         STACK[Running Stack<br/>20 containers<br/>13 svc + 1 frontend + 6 infra]
     end
     
@@ -470,6 +469,6 @@ graph LR
 2. **GitHub Actions triggers** CI/CD pipeline
 3. **Parallel testing** of all services (11 Python, 2 Node, 1 Frontend)
 4. **Build and push** 15 Docker images to AWS ECR (eu-north-1)
-5. **SSH deploy** to EC2 instance (16.192.160.85)
+5. **SSH deploy** to EC2 instance (`<YOUR_SERVER_IP>`)
 6. **Pull images** and restart containers via Docker Compose
 7. **Health check** verifies API gateway is responding

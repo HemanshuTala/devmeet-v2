@@ -34,7 +34,7 @@ graph TB
         end
         
         subgraph "Object Storage"
-            S3[AWS S3<br/>aakruti-s3<br/>eu-north-1<br/>External (not containerised)<br/>Avatars·PDF reports<br/>Code snapshots·File uploads]
+            S3[AWS S3<br/><YOUR_S3_BUCKET_NAME><br/>eu-north-1<br/>External (not containerised)<br/>Avatars·PDF reports<br/>Code snapshots·File uploads]
         end
     end
 ```
@@ -203,7 +203,7 @@ CREATE TABLE feedback_reports (
     detailed_feedback    JSONB,
 
     -- PDF stored in S3
-    pdf_url              VARCHAR(500),    -- s3://aakruti-s3/reports/{session_id}.pdf
+    pdf_url              VARCHAR(500),    -- s3://<YOUR_S3_BUCKET_NAME>/reports/{session_id}.pdf
 
     generated_at         TIMESTAMPTZ,
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
@@ -483,7 +483,7 @@ Orchestrator
       "session_id": "uuid",
       "user_id": "uuid",
       "user_email": "user@example.com",
-      "pdf_url": "https://s3.eu-north-1.amazonaws.com/aakruti-s3/reports/..."
+      "pdf_url": "https://s3.eu-north-1.amazonaws.com/<YOUR_S3_BUCKET_NAME>/reports/..."
     }
   → notification.feedback queue
   → Notification Service consumes
@@ -639,8 +639,8 @@ sequenceDiagram
 | Single DB vs per-service | Shared single DB | Acceptable at current scale; logical table ownership per service |
 | Scaling approach | Vertical first | Read replicas at 500 DAU; partitioning at 50M rows |
 | Session cache | Redis | Sub-millisecond JWT validation on every request |
-| Search engine | Elasticsearch | Full-text BM25, fuzzy, filter — PostgreSQL tsvector inadequate |
-| File storage | AWS S3 aakruti-s3 | Cost, streaming, presigned URLs — no benefit to bytea |
+| Search engine | Elasticsearch | Full-text BM25, fuzzy, filter |
+| File storage | AWS S3 `<YOUR_S3_BUCKET_NAME>` | Cost, streaming, presigned URLs — no benefit to bytea |
 | Task queue | RabbitMQ | Exactly-once delivery, DLQ, per-message TTL |
 | Event stream | Kafka | Replayable log, multiple consumer groups, analytics fan-out |
 | Two brokers | RabbitMQ + Kafka | Different guarantees needed for different use cases |

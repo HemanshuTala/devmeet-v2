@@ -2,7 +2,7 @@
 
 Region: **eu-north-1 (Stockholm)**  
 AWS Account: configured in `.env`  
-S3 Bucket: `aakruti-s3`
+S3 Bucket: `<YOUR_S3_BUCKET_NAME>`
 
 ---
 
@@ -26,8 +26,8 @@ Before deploying, confirm these are done:
 
 - [ ] `.env` file is fully filled in (check yours — it already is ✅)
 - [ ] AWS credentials are active and have required permissions
-- [ ] SES email `hemansutala8@gmail.com` is verified in AWS SES eu-north-1
-- [ ] S3 bucket `aakruti-s3` exists in eu-north-1
+- [ ] SES email `<YOUR_EMAIL>` is verified in AWS SES eu-north-1
+- [ ] S3 bucket `<YOUR_S3_BUCKET_NAME>` exists in eu-north-1
 - [ ] ECR repositories created (run `scripts/setup-ecr.sh`)
 - [ ] Docker images built and pushed to ECR (run `scripts/push-images-ecr.sh`)
 
@@ -40,7 +40,7 @@ Your IAM user/role needs these policies:
 ```
 AmazonEC2FullAccess          (or targeted EC2 permissions)
 AmazonECR-FullAccess
-AmazonS3FullAccess           (scoped to aakruti-s3)
+AmazonS3FullAccess           (scoped to <YOUR_S3_BUCKET_NAME>)
 AmazonSESFullAccess          (scoped to eu-north-1)
 AmazonEKSClusterPolicy       (Option B only)
 AmazonEKSWorkerNodePolicy    (Option B only)
@@ -83,7 +83,7 @@ AWS_REGION=eu-north-1 IMAGE_TAG=latest bash scripts/push-images-ecr.sh
 1. Go to EC2 → Launch Instance
 2. **AMI:** Amazon Linux 2023 (x86_64)
 3. **Instance type:** `t3.2xlarge`
-4. **Key pair:** Create new → `devmeet-key` → download `.pem`
+4. **Key pair:** Create new → `<YOUR_KEY_PAIR_NAME>` → download `.pem`
 5. **Security group:** Create new `devmeet-sg` with these inbound rules:
 
    | Port | Protocol | Source | Purpose |
@@ -134,7 +134,7 @@ aws ec2 authorize-security-group-ingress \
 aws ec2 run-instances \
   --image-id ami-0c1ac8728ef7f3767 \
   --instance-type t3.2xlarge \
-  --key-name devmeet-key \
+  --key-name <YOUR_KEY_PAIR_NAME> \
   --security-group-ids $SG_ID \
   --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":50,"VolumeType":"gp3"}}]' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=devmeet-prod}]' \
@@ -194,7 +194,7 @@ Run the deployment script:
 ```bash
 # From E:\AI INTERVIEW (use Git Bash or WSL2 on Windows)
 EC2_HOST=$EC2_IP \
-EC2_KEY=~/.ssh/devmeet-key.pem \
+EC2_KEY=~/.ssh/<YOUR_KEY_PAIR_NAME>.pem \
 AWS_REGION=eu-north-1 \
 IMAGE_TAG=latest \
 bash scripts/deploy-ec2.sh
@@ -211,8 +211,10 @@ This will:
 ### Step 4: Verify
 
 ```bash
-# SSH in and check
-ssh -i ~/.ssh/devmeet-key.pem ec2-user@$EC2_IP
+EC2_KEY=~/.ssh/<YOUR_KEY_PAIR_NAME>.pem \
+EC2_IP=<YOUR_SERVER_IP>
+
+ssh -i ~/.ssh/<YOUR_KEY_PAIR_NAME>.pem ec2-user@$EC2_IP
 
 # On the EC2 instance:
 cd /opt/devmeet
@@ -244,7 +246,7 @@ eksctl create cluster \
   --managed \
   --with-oidc \
   --ssh-access \
-  --ssh-public-key devmeet-key
+  --ssh-public-key <YOUR_KEY_PAIR_NAME>
 ```
 
 ### Step 2: Install EBS CSI Driver (for Postgres PVC with gp3)
@@ -398,7 +400,7 @@ aws ses put-account-sending-attributes \
 
 # Verify your from-address (already should be done)
 aws ses verify-email-identity \
-  --email-address hemansutala8@gmail.com \
+  --email-address <YOUR_EMAIL> \
   --region eu-north-1
 ```
 
@@ -408,7 +410,7 @@ aws ses verify-email-identity \
 
 ```bash
 aws s3api put-bucket-cors \
-  --bucket aakruti-s3 \
+  --bucket <YOUR_S3_BUCKET_NAME> \
   --region eu-north-1 \
   --cors-configuration '{
     "CORSRules": [{
@@ -430,7 +432,7 @@ aws s3api put-bucket-cors \
 |----------|------|---------|
 | EC2 instance | t3.2xlarge | ~$80 |
 | EBS storage | 50 GB gp3 | ~$5 |
-| S3 (aakruti-s3) | ~10 GB + requests | ~$3 |
+| S3 (`<YOUR_S3_BUCKET_NAME>`) | ~10 GB + requests | ~$3 |
 | SES | ~1000 emails | ~$0.10 |
 | Data transfer | ~50 GB out | ~$5 |
 | **Total** | | **~$93/month** |
@@ -469,7 +471,7 @@ aws s3api put-bucket-cors \
 - Run: `kubectl describe pvc postgres-pvc -n devmeet`
 
 **SES emails not sending:**
-- Confirm the from-address `hemansutala8@gmail.com` is verified in SES eu-north-1
+- Confirm the from-address `<YOUR_EMAIL>` is verified in SES eu-north-1
 - Check if SES account is still in sandbox (can only send to verified addresses)
 #   T r i g g e r   C I / C D   w i t h   u p d a t e d   c r e d e n t i a l s   -   0 8 / 0 8 / 2 0 2 6   1 8 : 5 6 : 0 2  
  #   T r i g g e r   C I / C D   t o   r e b u i l d   a p i - g a t e w a y   w i t h   C O R S   f i x   -   0 8 / 0 8 / 2 0 2 6   1 9 : 3 7 : 2 2  

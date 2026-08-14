@@ -57,7 +57,7 @@ graph TB
     subgraph "External Services"
         GROQ[Groq Cloud<br/>LLM API]
         LIVEKIT[LiveKit Cloud<br/>WebRTC]
-        S3[AWS S3<br/>aakruti-s3]
+        S3[AWS S3<br/><YOUR_S3_BUCKET_NAME>]
         SES[AWS SES<br/>Email]
         RAZORPAY[Razorpay<br/>Payments]
     end
@@ -399,7 +399,7 @@ return token.toJwt();
 4. Parse LLM JSON response → structured scores
 5. Render HTML via Jinja2 template
 6. Convert HTML → PDF via WeasyPrint (Cairo/Pango)
-7. Upload PDF to S3: aakruti-s3/reports/{session_id}.pdf
+7. Upload PDF to S3: `<YOUR_S3_BUCKET_NAME>/reports/{session_id}.pdf`
 8. INSERT INTO feedback_reports (session_id, scores, pdf_url, ...)
 9. UPDATE sessions SET feedback_status='completed'
 10. Publish feedback.generated → RabbitMQ
@@ -492,7 +492,7 @@ feedback.generated → Subject: "Your interview feedback is ready"
 ### 3.11 File Service `:8011`
 **Runtime:** Python 3.11 / FastAPI + boto3  
 **Image:** `ECR/devmeet-file-service:latest`  
-**Calls:** AWS S3 bucket `aakruti-s3` (eu-north-1)
+**Calls:** AWS S3 bucket `<YOUR_S3_BUCKET_NAME>` (eu-north-1)
 
 #### APIs Exposed
 
