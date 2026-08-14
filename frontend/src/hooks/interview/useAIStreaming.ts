@@ -84,7 +84,10 @@ export function useAIStreaming(opts: {
             if (!jsonStr) continue;
             try {
               const parsed = JSON.parse(jsonStr);
-              if (parsed.error) throw new Error(parsed.error);
+              if (parsed.error) {
+                opts.onError(parsed.error);
+                return;
+              }
               if (parsed.token) {
                 accumulatedText += parsed.token;
                 const display = extractStreamingQuestion(accumulatedText);
@@ -106,8 +109,11 @@ export function useAIStreaming(opts: {
               }
               parseErrorCount = 0;
             } catch (err) {
-              parseErrorCount++;
-              if (parseErrorCount >= 10) throw new Error('Too many parse errors in stream.');
+              // Only count actual JSON syntax errors
+              if (jsonStr.startsWith('{') && !jsonStr.endsWith('}')) {
+                parseErrorCount++;
+                if (parseErrorCount >= 15) throw new Error('Streaming connection dropped unexpectedly.');
+              }
             }
           }
         }

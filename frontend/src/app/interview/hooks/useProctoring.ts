@@ -100,7 +100,7 @@ export function useProctoring(
 
   // Frame processing loop
   useEffect(() => {
-    if (!isActive || !videoActive || !stream || !modelsLoaded) {
+    if (!isActive || !videoActive || !stream) {
       if (requestRef.current) { cancelAnimationFrame(requestRef.current); requestRef.current = null; }
       setActiveWarning(null);
       return;

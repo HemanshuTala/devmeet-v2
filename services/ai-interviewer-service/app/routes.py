@@ -151,54 +151,72 @@ async def generate_question_stream(
         try:
             key = _get_next_key()
             if not key:
-                fallback = {"token": "", "done": True, "question": "Can you describe your problem-solving approach for complex algorithms?", "hints": []}
-                yield f"data: {json_module.dumps(fallback)}\n\n"
+                fallback_q = "Welcome to your interview! Can you start by introducing yourself and summarizing your technical background?"
+                yield f"data: {json_module.dumps({'token': fallback_q, 'done': True, 'question': fallback_q, 'hints': []})}\n\n"
                 return
 
-            client = Groq(api_key=key)
+            from groq import AsyncGroq
+            client = AsyncGroq(api_key=key)
             full_text = ""
-            try:
-                stream = client.chat.completions.create(
-                    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-                    messages=messages,
-                    stream=True,
-                    temperature=0.7,
-                    max_tokens=600,
-                )
-                for chunk in stream:
-                    delta = chunk.choices[0].delta.content or ""
-                    if delta:
-                        full_text += delta
-                        yield f"data: {json_module.dumps({'token': delta, 'done': False})}\n\n"
-                        await asyncio.sleep(0)  # Yield control to event loop
+            models_to_try = [
+                os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                "llama-3.1-8b-instant",
+                "mixtral-8x7b-32768",
+                "gemma2-9b-it",
+            ]
 
-                # Parse final JSON and emit done event
-                parsed = None
-                start_idx = -1
+            stream_success = False
+            for model in models_to_try:
                 try:
-                    parsed = json_module.loads(full_text)
-                except Exception:
-                    start_idx = full_text.find('{')
-                    end_idx = full_text.rfind('}')
-                    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                        try:
-                            parsed = json_module.loads(full_text[start_idx:end_idx+1])
-                        except Exception:
-                            pass
+                    stream = await client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        stream=True,
+                        temperature=0.7,
+                        max_tokens=600,
+                    )
+                    async for chunk in stream:
+                        delta = chunk.choices[0].delta.content or ""
+                        if delta:
+                            full_text += delta
+                            yield f"data: {json_module.dumps({'token': delta, 'done': False})}\n\n"
+                            await asyncio.sleep(0)
+                    stream_success = True
+                    break
+                except Exception as model_err:
+                    logger.warning(f"Model {model} failed: {model_err}. Trying next fallback...")
+                    continue
 
-                if parsed and isinstance(parsed, dict):
-                    pre_text = full_text[:start_idx].strip() if start_idx != -1 else ""
-                    main_q = parsed.get("question", "")
-                    if pre_text:
-                        final_q = f"{pre_text}\n\n{main_q}"
-                    else:
-                        final_q = main_q
-                    yield f"data: {json_module.dumps({'token': '', 'done': True, 'question': final_q, 'hints': parsed.get('hints', []), 'follow_up_questions': parsed.get('follow_up_questions', [])})}\n\n"
-                else:
-                    yield f"data: {json_module.dumps({'token': '', 'done': True, 'question': full_text.strip(), 'hints': [], 'follow_up_questions': []})}\n\n"
+            if not stream_success or not full_text.strip():
+                fallback_q = "Welcome! Let's get started. Could you walk me through your recent technical projects and core skills?"
+                yield f"data: {json_module.dumps({'token': fallback_q, 'done': True, 'question': fallback_q, 'hints': []})}\n\n"
+                return
 
-            except Exception as e:
-                yield f"data: {json_module.dumps({'error': str(e), 'done': True})}\n\n"
+            # Parse final JSON and emit done event
+            parsed = None
+            start_idx = -1
+            try:
+                parsed = json_module.loads(full_text)
+            except Exception:
+                start_idx = full_text.find('{')
+                end_idx = full_text.rfind('}')
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    try:
+                        parsed = json_module.loads(full_text[start_idx:end_idx+1])
+                    except Exception:
+                        pass
+
+            if parsed and isinstance(parsed, dict):
+                pre_text = full_text[:start_idx].strip() if start_idx != -1 else ""
+                main_q = parsed.get("question", "")
+                final_q = f"{pre_text}\n\n{main_q}".strip() if pre_text else main_q
+                yield f"data: {json_module.dumps({'token': '', 'done': True, 'question': final_q or full_text.strip(), 'hints': parsed.get('hints', []), 'follow_up_questions': parsed.get('follow_up_questions', [])})}\n\n"
+            else:
+                yield f"data: {json_module.dumps({'token': '', 'done': True, 'question': full_text.strip(), 'hints': [], 'follow_up_questions': []})}\n\n"
+
+        except Exception as e:
+            fallback_q = "Let's begin. Can you share an overview of your technical background and experience?"
+            yield f"data: {json_module.dumps({'token': fallback_q, 'done': True, 'question': fallback_q, 'hints': []})}\n\n"
         finally:
             await release_ai_slot(user_id)
 
