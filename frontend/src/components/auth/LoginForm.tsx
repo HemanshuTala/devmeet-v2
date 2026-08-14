@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ErrorAlert } from '@/components/feedback/ErrorAlert';
-import { OAuthButtons } from '@/components/auth/OAuthButtons';
 import { ApiError } from '@/lib/api-errors';
 import { Loader } from '@/components/ui/loader';
 
@@ -248,16 +247,6 @@ export function LoginForm() {
           {isSubmitting ? 'Signing in…' : 'Sign In'}
         </Button>
       </form>
-
-      <div className="relative flex py-2 items-center">
-        <div className="flex-grow border-t border-slate-100" />
-        <span className="flex-shrink mx-4 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-          Or continue with
-        </span>
-        <div className="flex-grow border-t border-slate-100" />
-      </div>
-
-      <OAuthButtons disabled={isSubmitting} />
 
       <p className="text-center text-sm text-slate-500">
         Don&apos;t have an account?{' '}

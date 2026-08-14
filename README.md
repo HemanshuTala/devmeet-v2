@@ -2,28 +2,26 @@
 
 > Practice technical interviews with an AI interviewer, get scored feedback, execute code live, and track your progress over time.
 
-**Live:** `http://16.192.160.85` · **API:** `http://16.192.160.85/health`  
+**Live:** `http://16.192.160.85` · **Frontend:** `http://16.192.160.85:3000`  
 **Repo:** `github.com/HemanshuTala/devmeet-v2` · **Region:** AWS eu-north-1
 
 ---
 
-## What It Does
-
-DevMeet is a full-stack microservices platform that simulates real technical interviews:
+## Features
 
 - **AI Interviewer** — Streams questions in real-time using Groq LLaMA 3 70B / Mixtral 8x7B via SSE
 - **Live Code Execution** — Runs Python, JavaScript, Java, C++, Go, Rust in isolated Docker sandboxes
 - **Video Interviews** — WebRTC video/audio rooms powered by LiveKit
 - **AI Feedback Reports** — Scores 6 dimensions after each session, generates PDF reports stored in S3
-- **Analytics Dashboard** — Score trends, category heatmaps, streak tracking, leaderboard
-- **Payments** — Razorpay subscription billing (Free / Pro / Enterprise)
-- **AI Proctoring** — TensorFlow.js face detection + tab-switch monitoring in browser
+- **Analytics Dashboard** — Score trends, category heatmaps, streak tracking
+- **Payments** — Razorpay subscription billing
+- **AI Proctoring** — TensorFlow.js face detection + tab-switch monitoring
 
 ---
 
 ## Architecture
 
-13 microservices + Next.js frontend, all running as Docker containers on AWS EC2.
+13 microservices + Next.js frontend, running as Docker containers on AWS EC2.
 
 ```
 Browser → NGINX API Gateway :80
@@ -43,8 +41,6 @@ File:8011 ──► S3
     │          │          │
 PostgreSQL   Redis    RabbitMQ  Kafka  Elasticsearch
 ```
-
-**Full architecture docs:** [`Design Architecture/`](./Design%20Architecture/)
 
 ---
 
@@ -118,14 +114,9 @@ devmeet-v2/
 │   └── api-gateway/             # NGINX config
 ├── frontend/                    # Next.js 14 app
 ├── migrations/                  # PostgreSQL schema
-├── k8s/                         # Kubernetes manifests (EKS path)
 ├── monitoring/                  # Prometheus config
 ├── scripts/                     # Deployment scripts
-├── Design Architecture/         # IEEE-style system diagrams
-│   ├── 01-HLD-System-Architecture.md
-│   ├── 02-LLD-Microservices-Interaction.md
-│   ├── 03-AWS-Infrastructure.md
-│   └── 04-Database-Architecture.md
+├── Design Architecture/         # System design documentation
 ├── docker-compose.yml           # Local infra (postgres, redis, etc.)
 ├── docker-compose.services.yml  # Local services
 ├── docker-compose.prod.yml      # Production (pulls from ECR)
@@ -241,50 +232,24 @@ Every `git push` to `main` automatically:
 
 ---
 
-## CI/CD Pipeline
+## Interview Types
 
-```
-git push main
-    │
-    ├── test-python-services  (11 services, parallel)
-    ├── test-node-services    (2 services, parallel)
-    ├── test-frontend         (Next.js build)
-    │
-    └── build-and-push-ecr   (15 images → AWS ECR, parallel)
-            │
-            └── deploy-to-ec2  (SSH → docker compose up -d)
-```
-
-Pipeline file: [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml)
-
----
-
-## System Design Diagrams
-
-All diagrams are in [`Design Architecture/`](./Design%20Architecture/) — IEEE 1016-2009 standard:
-
-| File | Contents |
-|------|---------|
-| [01-HLD-System-Architecture.md](./Design%20Architecture/01-HLD-System-Architecture.md) | Full system overview — all layers, AWS services, key flows |
-| [02-LLD-Microservices-Interaction.md](./Design%20Architecture/02-LLD-Microservices-Interaction.md) | Every service API, data store ownership, async message flows |
-| [03-AWS-Infrastructure.md](./Design%20Architecture/03-AWS-Infrastructure.md) | EC2, ECR, S3, SES, IAM, CI/CD pipeline, cost estimate |
-| [04-Database-Architecture.md](./Design%20Architecture/04-Database-Architecture.md) | Full PostgreSQL schema, Redis keys, Kafka topics, RabbitMQ queues, architectural decisions |
-
----
-
-## Key Features
-
-### Interview Types
 - **DSA** — Data structures & algorithms with live code execution
 - **Behavioral** — STAR-format questions with AI evaluation
 - **System Design** — Architecture questions with diagram discussion
 
-### Code Execution Sandbox
+---
+
+## Code Execution Sandbox
+
 - Supports 7 languages: Python, JavaScript, TypeScript, Java, C++, Go, Rust
 - Isolated Docker container per execution: no network, memory capped at 512 MB, 10s timeout
 - Results uploaded to S3 as code snapshots
 
-### AI Feedback (6 Dimensions)
+---
+
+## AI Feedback (6 Dimensions)
+
 After each session, Groq LLM scores:
 1. Technical Accuracy
 2. Problem Solving Approach
@@ -295,10 +260,12 @@ After each session, Groq LLM scores:
 
 PDF report generated via WeasyPrint and stored in S3.
 
-### Security
+---
+
+## Security
+
 - JWT authentication (HS256, 60 min access / 7 day refresh)
 - TOTP MFA support
-- Google + GitHub OAuth2
 - Rate limiting at NGINX: 30 req/s general, 5 req/min auth, 10 req/min code exec
 - RBAC (user / admin roles)
 - bcrypt password hashing (cost 12)
@@ -310,7 +277,6 @@ PDF report generated via WeasyPrint and stored in S3.
 ```bash
 # API Gateway
 curl http://16.192.160.85/health
-# → {"status":"ok","service":"api-gateway"}
 
 # All services (run on EC2)
 for port in 8001 8002 8003 8004 8005 8007 8009 8010 8011 8012 8013; do

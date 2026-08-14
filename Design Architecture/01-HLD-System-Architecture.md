@@ -25,7 +25,99 @@
 
 ## 2. Architecture Overview
 
+### 2.1 System Description
+
 DevMeet is a **microservices platform** deployed on AWS EC2 using Docker Compose. All 13 backend services run as Docker containers behind an NGINX API gateway. The frontend is a Next.js 14 application running as a separate container on the same host.
+
+### 2.2 Architectural Diagram
+
+```mermaid
+graph TB
+    subgraph "External Actors"
+        EU[End User<br/>Browser]
+        ADM[Admin<br/>Browser]
+        GC[Groq Cloud<br/>LLM API]
+        LK[LiveKit<br/>WebRTC]
+        RZ[Razorpay<br/>Payments]
+    end
+    
+    subgraph "AWS EC2 c7i-flex.large<br/>eu-north-1<br/>16.192.160.85"
+        subgraph "Presentation Layer"
+            FE[Next.js 14 Frontend<br/>:3000<br/>TypeScript·TailwindCSS·Zustand<br/>Monaco Editor·LiveKit SDK·TensorFlow.js]
+        end
+        
+        subgraph "API Gateway Layer"
+            GW[NGINX API Gateway<br/>:80/:8000<br/>Rate limiting·CORS·Routing<br/>Security headers]
+        end
+        
+        subgraph "Microservices Layer"
+            AUTH[Auth Service<br/>:8001<br/>FastAPI/Python]
+            USER[User Service<br/>:8002<br/>FastAPI/Python]
+            ORCH[Orchestrator Service<br/>:8003<br/>FastAPI/Python]
+            AI[AI Interviewer Service<br/>:8004<br/>FastAPI/Python]
+            CODE[Code Execution Service<br/>:8005<br/>FastAPI/Python·Docker-in-Docker]
+            VIDEO[Video Service<br/>:8006<br/>Node.js·LiveKit SDK]
+            FB[Feedback Service<br/>:8007<br/>FastAPI/Python·WeasyPrint]
+            NOTIF[Notification Service<br/>:8008<br/>Node.js·SES·WebSocket]
+            ANALYT[Analytics Service<br/>:8009<br/>FastAPI/Python]
+            ADMIN[Admin Service<br/>:8010<br/>FastAPI/Python]
+            FILE[File Service<br/>:8011<br/>FastAPI/Python·S3]
+            PAY[Payment Service<br/>:8012<br/>FastAPI/Python·Razorpay]
+            SEARCH[Search Service<br/>:8013<br/>FastAPI/Python·Elasticsearch]
+        end
+        
+        subgraph "Data Layer"
+            PG[PostgreSQL 16<br/>:5432<br/>Primary relational store]
+            REDIS[Redis 7.2<br/>:6379<br/>Cache·Pub/Sub]
+            RMQ[RabbitMQ 3.12<br/>:5672<br/>Task queues]
+            KAFKA[Kafka 3.6<br/>:9092<br/>Event streaming]
+            ES[Elasticsearch 8.11<br/>:9200<br/>Full-text search]
+        end
+    end
+    
+    subgraph "AWS Managed Services"
+        S3[AWS S3<br/>eu-north-1<br/>aakruti-s3<br/>Avatars·PDFs·Code snapshots]
+        SES[AWS SES<br/>eu-north-1<br/>Transactional email]
+        ECR[AWS ECR<br/>eu-north-1<br/>Container registry<br/>14 repos]
+    end
+    
+    EU -->|HTTPS:443/:80| GW
+    ADM -->|HTTPS:443/:80| GW
+    GW -->|HTTP| FE
+    GW -->|routes| AUTH
+    GW -->|routes| USER
+    GW -->|routes| ORCH
+    GW -->|routes| AI
+    GW -->|routes| CODE
+    GW -->|routes| VIDEO
+    GW -->|routes| FB
+    GW -->|routes| NOTIF
+    GW -->|routes| ANALYT
+    GW -->|routes| ADMIN
+    GW -->|routes| FILE
+    GW -->|routes| PAY
+    GW -->|routes| SEARCH
+    
+    AUTH --> PG
+    AUTH --> REDIS
+    USER --> PG
+    ORCH --> PG
+    ORCH --> RMQ
+    ORCH --> KAFKA
+    AI --> GC
+    VIDEO --> LK
+    FB --> GC
+    FB --> S3
+    FB --> RMQ
+    NOTIF --> RMQ
+    NOTIF --> SES
+    ANALYT --> KAFKA
+    ANALYT --> PG
+    ADMIN --> PG
+    FILE --> S3
+    PAY --> RZ
+    SEARCH --> ES
+```
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -328,38 +420,56 @@ User (Browser)
 
 ## 6. Deployment Topology
 
+### 6.1 CI/CD Pipeline Diagram
+
+```mermaid
+graph LR
+    subgraph "Development"
+        DEV[Developer Machine<br/>Windows]
+    end
+    
+    subgraph "Source Control"
+        GH[GitHub<br/>HemanshuTala/devmeet-v2]
+    end
+    
+    subgraph "CI/CD Pipeline"
+        GHA[GitHub Actions<br/>.github/workflows/ci-cd.yml]
+        TEST1[Test Python Services<br/>11 services·parallel]
+        TEST2[Test Node Services<br/>2 services·parallel]
+        TEST3[Test Frontend<br/>Next.js build]
+        BUILD[Build & Push ECR<br/>15 images·parallel]
+        DEPLOY[Deploy to EC2<br/>SSH action]
+    end
+    
+    subgraph "AWS ECR"
+        ECR[AWS ECR<br/>eu-north-1<br/>067514126471<br/>15 repos]
+    end
+    
+    subgraph "Production"
+        EC2[AWS EC2<br/>16.192.160.85<br/>c7i-flex.large]
+        STACK[Running Stack<br/>20 containers<br/>13 svc + 1 frontend + 6 infra]
+    end
+    
+    DEV -->|git push main| GH
+    GH -->|trigger| GHA
+    GHA --> TEST1
+    GHA --> TEST2
+    GHA --> TEST3
+    TEST1 --> BUILD
+    TEST2 --> BUILD
+    TEST3 --> BUILD
+    BUILD -->|docker push| ECR
+    ECR -->|docker pull| DEPLOY
+    DEPLOY -->|SSH| EC2
+    EC2 -->|docker compose up -d| STACK
 ```
-Developer Machine (Windows)
-        │
-        │  git push main
-        ▼
-GitHub (HemanshuTala/devmeet-v2)
-        │
-        │  GitHub Actions triggers
-        ▼
-CI/CD Pipeline (.github/workflows/ci-cd.yml)
-  ├── test-python-services  (11 services, parallel)
-  ├── test-node-services    (2 services, parallel)
-  ├── test-frontend         (Next.js build)
-  └── build-and-push-ecr   (15 images, parallel)
-        │
-        │  docker build --platform linux/amd64
-        │  docker push → ECR eu-north-1
-        ▼
-AWS ECR (067514126471.dkr.ecr.eu-north-1.amazonaws.com)
-  ├── devmeet-auth-service:latest
-  ├── devmeet-user-service:latest
-  ├── ... (13 more)
-  └── devmeet-frontend:latest
-        │
-        │  appleboy/ssh-action → SSH to EC2
-        ▼
-AWS EC2 (16.192.160.85, eu-north-1)
-        │
-        │  aws ecr get-login-password | docker login
-        │  docker pull all 15 images
-        │  docker compose -f docker-compose.prod.yml up -d
-        ▼
-Running Stack (20 containers)
-  13 microservices + 1 frontend + 6 infrastructure containers
-```
+
+### 6.2 Deployment Steps
+
+1. **Developer pushes code** to GitHub main branch
+2. **GitHub Actions triggers** CI/CD pipeline
+3. **Parallel testing** of all services (11 Python, 2 Node, 1 Frontend)
+4. **Build and push** 15 Docker images to AWS ECR (eu-north-1)
+5. **SSH deploy** to EC2 instance (16.192.160.85)
+6. **Pull images** and restart containers via Docker Compose
+7. **Health check** verifies API gateway is responding

@@ -28,7 +28,7 @@ export default function TypingIndicator() {
         </motion.div>
         {/* Live status dot */}
         <motion.span
-          className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#13131f]"
+          className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white"
           style={{ background: '#22c55e' }}
           animate={{ scale: [1, 1.4, 1], opacity: [1, 0.6, 1] }}
           transition={{ duration: 1.2, repeat: Infinity }}
@@ -72,7 +72,7 @@ export default function TypingIndicator() {
           </div>
         </div>
         <motion.span
-          className="text-[10px] text-slate-400 font-medium pl-1"
+          className="text-[10px] text-slate-500 font-medium pl-1"
           animate={{ opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 1.8, repeat: Infinity }}
         >

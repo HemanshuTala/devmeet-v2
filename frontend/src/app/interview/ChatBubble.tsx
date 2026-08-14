@@ -32,13 +32,13 @@ export default React.memo(function ChatBubble({ message }: ChatBubbleProps) {
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           isInterviewer
-            ? 'bg-[#252535] border border-white/10 text-slate-200'
+            ? 'bg-white border border-slate-200 text-slate-800 shadow-sm'
             : 'bg-indigo-600 text-white'
         }`}
       >
         <div className="whitespace-pre-wrap break-words">{message.content}</div>
         {message.timestamp && (
-          <div className={`text-[10px] mt-1.5 font-semibold ${isInterviewer ? 'text-slate-500' : 'text-indigo-200'}`}>
+          <div className={`text-[10px] mt-1.5 font-semibold ${isInterviewer ? 'text-slate-400' : 'text-indigo-200'}`}>
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         )}

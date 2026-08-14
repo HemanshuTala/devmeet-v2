@@ -297,27 +297,5 @@ class Database:
         except Exception as e:
             print(f"DB: cleanup_old_login_history error: {e}")
 
-    async def update_user_google_id(self, user_id: str, google_id: str) -> None:
-        try:
-            u_uuid = uuid.UUID(user_id)
-            async with self.pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE user_profiles SET google_id = $1, updated_at = NOW() WHERE id = $2",
-                    google_id, u_uuid
-                )
-        except Exception as e:
-            print(f"DB: update_user_google_id error: {e}")
-
-    async def update_user_github_id(self, user_id: str, github_id: str) -> None:
-        try:
-            u_uuid = uuid.UUID(user_id)
-            async with self.pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE user_profiles SET github_id = $1, updated_at = NOW() WHERE id = $2",
-                    github_id, u_uuid
-                )
-        except Exception as e:
-            print(f"DB: update_user_github_id error: {e}")
-
 
 db = Database()

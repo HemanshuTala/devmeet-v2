@@ -10,59 +10,31 @@
 
 ## 1. Infrastructure Overview
 
+### 1.1 System Description
+
 DevMeet v2.0 runs entirely on AWS in the **eu-north-1 (Stockholm)** region. The deployment uses a single EC2 instance running Docker Compose, with AWS managed services for storage, email, and container registry.
 
-```
-AWS Account: 067514126471
-Region:      eu-north-1 (Stockholm)
+### 1.2 Infrastructure Diagram
 
-┌─────────────────────────────────────────────────────────────────┐
-│                    AWS eu-north-1                                │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  VPC (default)                                           │   │
-│  │  CIDR: 172.31.0.0/16                                     │   │
-│  │                                                          │   │
-│  │  ┌────────────────────────────────────────────────────┐  │   │
-│  │  │  Subnet: eu-north-1c (172.31.0.0/20)               │  │   │
-│  │  │                                                    │  │   │
-│  │  │  ┌──────────────────────────────────────────────┐  │  │   │
-│  │  │  │  EC2: devmeet-prod                           │  │  │   │
-│  │  │  │  Instance: c7i-flex.large                    │  │  │   │
-│  │  │  │  Private IP: 172.31.1.102                    │  │  │   │
-│  │  │  │  Public IP:  16.192.160.85                   │  │  │   │
-│  │  │  │  OS: Amazon Linux 2023                       │  │  │   │
-│  │  │  │  Storage: 50 GB gp3 EBS                      │  │  │   │
-│  │  │  │  Security Group: launch-wizard-2             │  │  │   │
-│  │  │  │    Inbound: 22, 80, 443, 3000, 8000          │  │  │   │
-│  │  │  │                                              │  │  │   │
-│  │  │  │  Docker Compose Stack:                       │  │  │   │
-│  │  │  │    20 containers (13 svc + 1 frontend        │  │  │   │
-│  │  │  │    + 6 infra)                                │  │  │   │
-│  │  │  └──────────────────────────────────────────────┘  │  │   │
-│  │  └────────────────────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │  AWS S3      │  │  AWS SES     │  │  AWS ECR             │  │
-│  │  eu-north-1  │  │  eu-north-1  │  │  eu-north-1          │  │
-│  │  aakruti-s3  │  │  Sandbox→    │  │  067514126471.dkr.   │  │
-│  │              │  │  Production  │  │  ecr.eu-north-1.     │  │
-│  │              │  │  request     │  │  amazonaws.com       │  │
-│  │              │  │  pending     │  │  14 repositories     │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  IAM User: hemanshu_tala                                 │   │
-│  │  ARN: arn:aws:iam::067514126471:user/hemanshu_tala       │   │
-│  │  Policies:                                               │   │
-│  │    • AmazonEC2ContainerRegistryFullAccess                │   │
-│  │    • AmazonEC2FullAccess                                 │   │
-│  │    • AmazonS3FullAccess                                  │   │
-│  │    • AmazonSESFullAccess                                 │   │
-│  │    • IAMUserChangePassword                               │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "AWS Account: 067514126471<br/>Region: eu-north-1 (Stockholm)"
+        subgraph "VPC: default<br/>CIDR: 172.31.0.0/16"
+            subgraph "Subnet: eu-north-1c<br/>172.31.0.0/20"
+                EC2[EC2: devmeet-prod<br/>c7i-flex.large<br/>Private: 172.31.1.102<br/>Public: 16.192.160.85<br/>OS: Amazon Linux 2023<br/>Storage: 50 GB gp3 EBS<br/>SG: launch-wizard-2<br/>Inbound: 22, 80, 443, 3000, 8000<br/>Docker Compose: 20 containers<br/>13 svc + 1 frontend + 6 infra]
+            end
+        end
+        
+        subgraph "AWS Managed Services"
+            S3[AWS S3<br/>eu-north-1<br/>aakruti-s3<br/>Avatars·PDFs·Code snapshots]
+            SES[AWS SES<br/>eu-north-1<br/>Sandbox→Production<br/>Transactional email]
+            ECR[AWS ECR<br/>eu-north-1<br/>067514126471.dkr.ecr<br/>14 repositories]
+        end
+        
+        subgraph "IAM"
+            IAM[IAM User: hemanshu_tala<br/>ARN: arn:aws:iam::067514126471:user/hemanshu_tala<br/>Policies:<br/>• AmazonEC2ContainerRegistryFullAccess<br/>• AmazonEC2FullAccess<br/>• AmazonS3FullAccess<br/>• AmazonSESFullAccess<br/>• IAMUserChangePassword]
+        end
+    end
 ```
 
 ---
@@ -345,40 +317,47 @@ Currently in sandbox mode — emails can only be sent to **verified email addres
 
 ## 7. CI/CD Pipeline
 
-### 7.1 Pipeline Overview
+### 7.1 Pipeline Overview Diagram
 
-```
-Trigger: git push to main branch
-         (github.com/HemanshuTala/devmeet-v2)
-
-Jobs (in order):
-  ┌─────────────────────────────────────────────────────┐
-  │  PARALLEL (all run simultaneously)                   │
-  │                                                      │
-  │  test-python-services (11 services)                  │
-  │  test-node-services   (2 services)                   │
-  │  test-frontend        (Next.js build)                │
-  └─────────────────────┬───────────────────────────────┘
-                        │ all must pass
-                        ▼
-  ┌─────────────────────────────────────────────────────┐
-  │  build-and-push-ecr (15 jobs, parallel)              │
-  │                                                      │
-  │  For each service:                                   │
-  │    docker build --platform linux/amd64               │
-  │    docker push → ECR (latest + git-sha tags)         │
-  └─────────────────────┬───────────────────────────────┘
-                        │
-                        ▼
-  ┌─────────────────────────────────────────────────────┐
-  │  deploy-to-ec2 (SSH deploy)                          │
-  │                                                      │
-  │  SSH into 16.192.160.85 via appleboy/ssh-action     │
-  │  1. aws ecr get-login-password | docker login        │
-  │  2. docker pull all 15 images                        │
-  │  3. docker compose up -d --remove-orphans            │
-  │  4. curl /health → verify gateway                    │
-  └─────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph "Source Control"
+        GH[GitHub<br/>HemanshuTala/devmeet-v2<br/>main branch]
+    end
+    
+    subgraph "CI/CD Pipeline - GitHub Actions"
+        subgraph "Stage 1: Testing (Parallel)"
+            T1[Test Python Services<br/>11 services]
+            T2[Test Node Services<br/>2 services]
+            T3[Test Frontend<br/>Next.js build]
+        end
+        
+        subgraph "Stage 2: Build & Push"
+            BUILD[Build & Push ECR<br/>15 images·parallel<br/>--platform linux/amd64<br/>latest + git-sha tags]
+        end
+        
+        subgraph "Stage 3: Deploy"
+            DEPLOY[Deploy to EC2<br/>SSH action<br/>16.192.160.85<br/>1. ECR login<br/>2. Pull images<br/>3. docker compose up -d<br/>4. Health check]
+        end
+    end
+    
+    subgraph "AWS ECR"
+        ECR[AWS ECR<br/>eu-north-1<br/>067514126471<br/>15 repos]
+    end
+    
+    subgraph "Production"
+        EC2[AWS EC2<br/>16.192.160.85<br/>Running Stack<br/>20 containers]
+    end
+    
+    GH -->|git push| T1
+    GH -->|git push| T2
+    GH -->|git push| T3
+    T1 --> BUILD
+    T2 --> BUILD
+    T3 --> BUILD
+    BUILD -->|docker push| ECR
+    ECR -->|docker pull| DEPLOY
+    DEPLOY --> EC2
 ```
 
 ### 7.2 GitHub Secrets Required

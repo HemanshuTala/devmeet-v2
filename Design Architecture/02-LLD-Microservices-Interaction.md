@@ -16,49 +16,88 @@ This document describes every microservice in DevMeet v2.0 — the APIs each exp
 
 ## 2. Service Interaction Map
 
-```
-                        ┌─────────────────────┐
-                        │   NGINX API Gateway  │
-                        │   :80 (external)     │
-                        │   :8000 (internal)   │
-                        └──────────┬──────────┘
-                                   │ routes /api/v1/* by prefix
-          ┌────────────────────────┼────────────────────────────────────────┐
-          │                        │                                        │
-          ▼                        ▼                                        ▼
-   /api/v1/auth/*          /api/v1/sessions/*                   /api/v1/execute/*
-   /api/v1/users/*         /api/v1/interview/*                  /api/v1/video/*
-   /api/v1/admin/*         /api/v1/feedback/*                   /api/v1/search/*
-   /api/v1/payments/*      /api/v1/analytics/*                  /api/v1/files/*
-   /api/v1/notifications/* /api/v1/admin/*
-          │                        │
-          ▼                        ▼
-  ┌───────────────┐       ┌─────────────────────────────────────────────────┐
-  │ IDENTITY &    │       │              INTERVIEW PIPELINE                  │
-  │ SUPPORT       │       │                                                  │
-  │               │       │  Orchestrator ──────► AI Interviewer ──► Groq   │
-  │ Auth :8001    │       │       │                                          │
-  │ User :8002    │       │       │ session.completed                        │
-  │ Admin :8010   │       │       ▼                                          │
-  │ Payment :8012 │       │   RabbitMQ ──────────► Feedback :8007 ──► S3    │
-  │ Notif :8008   │       │                              │                   │
-  │               │       │                              │ feedback.generated│
-  │               │       │                              ▼                   │
-  │               │◄──────┤                         Notification :8008      │
-  └───────────────┘       │                              │                   │
-          │               │                              ▼                   │
-          ▼               │                    AWS SES (email)               │
-     PostgreSQL           │                    WebSocket (browser)           │
-     Redis                │                                                  │
-                          │  Orchestrator ──► Kafka ──► Analytics :8009      │
-                          └─────────────────────────────────────────────────┘
-                                                    │
-                                                    ▼
-                                  ┌────────────────────────────────────┐
-                                  │         DATA STORES                │
-                                  │  PostgreSQL · Redis · S3           │
-                                  │  Elasticsearch · RabbitMQ · Kafka  │
-                                  └────────────────────────────────────┘
+### 2.1 Service Interaction Diagram
+
+```mermaid
+graph TB
+    subgraph "API Gateway"
+        GW[NGINX API Gateway<br/>:80/:8000<br/>Routes /api/v1/*]
+    end
+    
+    subgraph "Identity & Support Services"
+        AUTH[Auth Service<br/>:8001<br/>JWT·OAuth·MFA]
+        USER[User Service<br/>:8002<br/>Profile·Quota]
+        ADMIN[Admin Service<br/>:8010<br/>User management]
+        PAY[Payment Service<br/>:8012<br/>Razorpay]
+        NOTIF[Notification Service<br/>:8008<br/>Email·WebSocket]
+    end
+    
+    subgraph "Interview Pipeline"
+        ORCH[Orchestrator Service<br/>:8003<br/>Session management]
+        AI[AI Interviewer Service<br/>:8004<br/>Groq LLM]
+        CODE[Code Execution Service<br/>:8005<br/>Docker sandbox]
+        VIDEO[Video Service<br/>:8006<br/>LiveKit WebRTC]
+        FB[Feedback Service<br/>:8007<br/>PDF generation]
+    end
+    
+    subgraph "Data & Analytics"
+        ANALYT[Analytics Service<br/>:8009<br/>Kafka consumer]
+        FILE[File Service<br/>:8011<br/>S3 integration]
+        SEARCH[Search Service<br/>:8013<br/>Elasticsearch]
+    end
+    
+    subgraph "Data Stores"
+        PG[PostgreSQL 16<br/>:5432]
+        REDIS[Redis 7.2<br/>:6379]
+        RMQ[RabbitMQ 3.12<br/>:5672]
+        KAFKA[Kafka 3.6<br/>:9092]
+        ES[Elasticsearch 8.11<br/>:9200]
+    end
+    
+    subgraph "External Services"
+        GROQ[Groq Cloud<br/>LLM API]
+        LIVEKIT[LiveKit Cloud<br/>WebRTC]
+        S3[AWS S3<br/>aakruti-s3]
+        SES[AWS SES<br/>Email]
+        RAZORPAY[Razorpay<br/>Payments]
+    end
+    
+    GW -->|/api/v1/auth/*| AUTH
+    GW -->|/api/v1/users/*| USER
+    GW -->|/api/v1/admin/*| ADMIN
+    GW -->|/api/v1/payments/*| PAY
+    GW -->|/api/v1/notifications/*| NOTIF
+    GW -->|/api/v1/sessions/*| ORCH
+    GW -->|/api/v1/interview/*| AI
+    GW -->|/api/v1/execute| CODE
+    GW -->|/api/v1/video/*| VIDEO
+    GW -->|/api/v1/feedback/*| FB
+    GW -->|/api/v1/analytics/*| ANALYT
+    GW -->|/api/v1/files/*| FILE
+    GW -->|/api/v1/search/*| SEARCH
+    
+    AUTH --> PG
+    AUTH --> REDIS
+    USER --> PG
+    USER --> REDIS
+    ORCH --> PG
+    ORCH --> RMQ
+    ORCH --> KAFKA
+    AI --> GROQ
+    CODE --> S3
+    VIDEO --> LIVEKIT
+    FB --> GROQ
+    FB --> S3
+    FB --> RMQ
+    NOTIF --> RMQ
+    NOTIF --> SES
+    NOTIF --> REDIS
+    ANALYT --> KAFKA
+    ANALYT --> PG
+    ADMIN --> PG
+    FILE --> S3
+    PAY --> RAZORPAY
+    SEARCH --> ES
 ```
 
 ---
@@ -531,7 +570,37 @@ uploads/{user_id}/{timestamp}_{filename}
 
 ## 4. Asynchronous Message Flows
 
-### 4.1 RabbitMQ Queues
+### 4.1 RabbitMQ Message Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Orch as Orchestrator
+    participant RMQ as RabbitMQ
+    participant FB as Feedback Service
+    participant Notif as Notification Service
+    participant SES as AWS SES
+    participant WS as WebSocket
+    
+    User->>Orch: POST /sessions/{id}/complete
+    Orch->>Orch: UPDATE sessions status='completed'
+    Orch->>Orch: INSERT outbox_events
+    Orch->>RMQ: PUBLISH session.completed
+    
+    RMQ->>FB: Consume session.completed
+    FB->>FB: Fetch session data
+    FB->>FB: Call Groq for scoring
+    FB->>FB: Generate PDF via WeasyPrint
+    FB->>S3: Upload PDF
+    FB->>RMQ: PUBLISH feedback.generated
+    
+    RMQ->>Notif: Consume feedback.generated
+    Notif->>SES: Send email
+    Notif->>WS: Push notification
+    WS->>User: Real-time notification
+```
+
+### 4.2 RabbitMQ Queues
 
 | Exchange | Queue | Producer | Consumer | Trigger |
 |----------|-------|---------|---------|---------|
@@ -539,7 +608,41 @@ uploads/{user_id}/{timestamp}_{filename}
 | `devmeet.events` | `notification.feedback` | Feedback Service | Notification Service | Feedback generated |
 | `devmeet.events` | `notification.welcome` | Auth Service | Notification Service | User registered |
 
-### 4.2 Kafka Topics
+### 4.3 Kafka Event Stream Diagram
+
+```mermaid
+graph LR
+    subgraph "Producers"
+        ORCH[Orchestrator Service]
+        AUTH[Auth Service]
+        ADMIN[Admin Service]
+    end
+    
+    subgraph "Kafka Cluster"
+        KAFKA[Kafka 3.6<br/>:9092]
+        ZK[Zookeeper<br/>:2181]
+    end
+    
+    subgraph "Topics"
+        T1[analytics.events<br/>7 days retention]
+        T2[audit.actions<br/>30 days retention]
+    end
+    
+    subgraph "Consumers"
+        ANALYT[Analytics Service]
+    end
+    
+    ORCH -->|session.started<br/>session.completed<br/>turn.saved<br/>code.submitted| KAFKA
+    AUTH -->|login<br/>logout| KAFKA
+    ADMIN -->|admin.block<br/>admin.impersonate| KAFKA
+    KAFKA --> ZK
+    KAFKA --> T1
+    KAFKA --> T2
+    T1 --> ANALYT
+    T2 --> ANALYT
+```
+
+### 4.4 Kafka Topics
 
 | Topic | Producer | Consumer | Event Types |
 |-------|---------|---------|------------|

@@ -10,49 +10,33 @@
 
 ## 1. Database Layer Overview
 
+### 1.1 System Description
+
 DevMeet uses **five distinct storage systems**, each chosen for a specific workload. All run as Docker containers on the EC2 instance within the `devmeet_net` bridge network.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        DevMeet Data Layer                                    │
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  «database» PostgreSQL 16                                             │  │
-│  │  Container: devmeet-postgres-1  :5432                                 │  │
-│  │  Volume: postgres_data                                                │  │
-│  │  Primary relational store — ACID, all business data                   │  │
-│  │                                                                       │  │
-│  │  Owned by:  Auth · User · Orchestrator · Feedback                     │  │
-│  │             Analytics · Admin · Payment                               │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌─────────────────────┐   ┌──────────────────────┐                        │
-│  │  «cache» Redis 7.2  │   │  «search»             │                        │
-│  │  Container: redis-1 │   │  Elasticsearch 8.11   │                        │
-│  │  :6379              │   │  Container: elastic-1 │                        │
-│  │  Volume: redis_data │   │  :9200                │                        │
-│  │                     │   │  Vol: elastic_data    │                        │
-│  │  JWT · rate-limit   │   │  Question bank index  │                        │
-│  │  Pub/Sub · quota    │   │  Full-text search     │                        │
-│  └─────────────────────┘   └──────────────────────┘                        │
-│                                                                              │
-│  ┌─────────────────────┐   ┌──────────────────────┐                        │
-│  │  «broker»           │   │  «stream»             │                        │
-│  │  RabbitMQ 3.12      │   │  Kafka 3.6            │                        │
-│  │  Container: mq-1    │   │  Container: kafka-1   │                        │
-│  │  :5672              │   │  :9092                │                        │
-│  │  Vol: rabbitmq_data │   │  Vol: kafka_data      │                        │
-│  │                     │   │  + Zookeeper :2181    │                        │
-│  │  Task queues        │   │  Analytics events     │                        │
-│  │  Reliable delivery  │   │  Replayable log       │                        │
-│  └─────────────────────┘   └──────────────────────┘                        │
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  «object storage» AWS S3  (external, not containerised)               │  │
-│  │  Bucket: aakruti-s3  Region: eu-north-1                               │  │
-│  │  Avatars · PDF reports · Code snapshots · File uploads                │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
+### 1.2 Data Layer Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "DevMeet Data Layer"
+        subgraph "Relational Database"
+            PG[PostgreSQL 16<br/>devmeet-postgres-1<br/>:5432<br/>Volume: postgres_data<br/>Primary relational store<br/>ACID·Business data<br/>Owned by: Auth·User·Orchestrator<br/>Feedback·Analytics·Admin·Payment]
+        end
+        
+        subgraph "Cache & Search"
+            REDIS[Redis 7.2<br/>redis-1<br/>:6379<br/>Volume: redis_data<br/>JWT·rate-limit<br/>Pub/Sub·quota]
+            ES[Elasticsearch 8.11<br/>elastic-1<br/>:9200<br/>Volume: elastic_data<br/>Question bank index<br/>Full-text search]
+        end
+        
+        subgraph "Message Brokers"
+            RMQ[RabbitMQ 3.12<br/>mq-1<br/>:5672<br/>Volume: rabbitmq_data<br/>Task queues<br/>Reliable delivery]
+            KAFKA[Kafka 3.6<br/>kafka-1<br/>:9092<br/>Volume: kafka_data<br/>+ Zookeeper :2181<br/>Analytics events<br/>Replayable log]
+        end
+        
+        subgraph "Object Storage"
+            S3[AWS S3<br/>aakruti-s3<br/>eu-north-1<br/>External (not containerised)<br/>Avatars·PDF reports<br/>Code snapshots·File uploads]
+        end
+    end
 ```
 
 ---
@@ -584,7 +568,7 @@ Auto-create topics: enabled
 
 ## 8. Transactional Outbox Pattern
 
-### 8.1 Problem
+### 8.1 Problem Statement
 
 ```
 Orchestrator needs to:
@@ -596,52 +580,35 @@ If step 1 succeeds and step 2 fails → feedback never generated.
 If step 2 succeeds and step 1 fails → feedback generated for non-existent session.
 ```
 
-### 8.2 Solution
+### 8.2 Solution Diagram
 
-```sql
--- Single atomic PostgreSQL transaction:
-BEGIN;
-  UPDATE sessions
-    SET status = 'completed', completed_at = NOW()
-    WHERE id = $1;
-
-  INSERT INTO outbox_events (event_type, payload)
-    VALUES (
-      'session.completed',
-      '{"session_id": "...", "user_id": "...", "interview_type": "dsa"}'
-    );
-COMMIT;
--- Both succeed or both fail — atomically
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Orch as Orchestrator
+    participant PG as PostgreSQL
+    participant OB as Outbox Table
+    participant Poller as Background Poller
+    participant RMQ as RabbitMQ
+    participant FB as Feedback Service
+    
+    Client->>Orch: POST /sessions/{id}/complete
+    Orch->>PG: BEGIN TRANSACTION
+    Orch->>PG: UPDATE sessions SET status='completed'
+    Orch->>OB: INSERT INTO outbox_events
+    Orch->>PG: COMMIT
+    Note over PG: Both succeed or both fail atomically
+    
+    loop Every 1 second
+        Poller->>OB: SELECT * FROM outbox_events WHERE status='pending'
+        OB->>Poller: Return pending events
+        Poller->>RMQ: PUBLISH session.completed
+        RMQ->>FB: Consume message
+        Poller->>OB: UPDATE status='processed'
+    end
+    
+    FB->>FB: Process feedback generation
 ```
-
-```python
-# Background poller (runs in Orchestrator pod, every 1 second):
-while True:
-    rows = db.query(
-        "SELECT * FROM outbox_events WHERE status='pending' LIMIT 10"
-    )
-    for row in rows:
-        rabbitmq.publish(
-            exchange='devmeet.events',
-            routing_key=row.event_type,
-            body=row.payload
-        )
-        db.execute(
-            "UPDATE outbox_events SET status='processed', processed_at=NOW() WHERE id=$1",
-            row.id
-        )
-    time.sleep(1)
-```
-
-### 8.3 Idempotency
-
-The Feedback Service is idempotent on `session_id`:
-```sql
-INSERT INTO feedback_reports (session_id, ...)
-ON CONFLICT (session_id) DO NOTHING;
-```
-
-If a message is delivered twice (poller crash after publish but before mark-processed), the second INSERT is a no-op.
 
 ---
 

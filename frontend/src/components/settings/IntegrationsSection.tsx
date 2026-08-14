@@ -136,7 +136,7 @@ export function IntegrationsSection() {
       );
       setActiveConfigId(null);
     } else {
-      // Show config fields if they exist, else connect directly (e.g. OAuth like GCal)
+      // Show config fields if they exist, else connect directly
       if (integration.fields.length > 0) {
         setActiveConfigId(id);
       } else {

@@ -38,6 +38,7 @@ interface ChatPanelProps {
   onHideHints: () => void;
   onToggleVideoFeed: () => void;
   triggerCheatingViolation: (type: 'tab_switch' | 'paste') => void;
+  onRetry: () => void;
 }
 
 export default function ChatPanel({
@@ -65,6 +66,7 @@ export default function ChatPanel({
   onHideHints,
   onToggleVideoFeed,
   triggerCheatingViolation,
+  onRetry,
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -90,9 +92,9 @@ export default function ChatPanel({
   );
 
   return (
-    <section className="flex flex-col border-r border-white/10 bg-[#13131f]" style={{ width: isDSA ? '55%' : '100%' }}>
+    <section className="flex flex-col border-r border-slate-200 bg-[#f8fafc]" style={{ width: isDSA ? '55%' : '100%' }}>
       {/* Chat header bar */}
-      <div className="px-4 py-2.5 bg-[#1a1a2e] border-b border-white/10 flex items-center gap-2 flex-shrink-0">
+      <div className="px-4 py-2.5 bg-white border-b border-slate-200 flex items-center gap-2 flex-shrink-0">
         <div className="flex items-center gap-2">
           <motion.div
             className="w-6 h-6 rounded-lg flex items-center justify-center"
@@ -102,13 +104,13 @@ export default function ChatPanel({
           >
             <Brain className="w-3.5 h-3.5 text-white" />
           </motion.div>
-          <span className="text-slate-300 text-xs font-bold">Interview Conversation</span>
+          <span className="text-slate-700 text-xs font-bold">Interview Conversation</span>
         </div>
 
         <button
           onClick={onToggleMute}
           className={`ml-2 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all ${
-            !isMuted ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25' : 'bg-rose-500/15 border-rose-500/30 text-rose-400 hover:bg-rose-500/25'
+            !isMuted ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
           }`}
           title={isMuted ? 'Unmute AI voice' : 'Mute AI voice'}
         >
@@ -139,7 +141,7 @@ export default function ChatPanel({
           <button
             onClick={onToggleVideoFeed}
             className={`ml-2 text-[10px] font-bold px-2 py-1 rounded-md border flex items-center gap-1 transition-all ${
-              showVideoFeed ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+              showVideoFeed ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
             }`}
           >
             {showVideoFeed ? (
@@ -161,7 +163,7 @@ export default function ChatPanel({
 
       {/* Compact video panel for DSA mode */}
       {isDSA && showVideoFeed && (
-        <div className="h-[160px] flex-shrink-0 border-b border-white/10 bg-[#0d0d1a] overflow-hidden relative">
+        <div className="h-[160px] flex-shrink-0 border-b border-slate-200 bg-slate-50 overflow-hidden relative">
           <VideoPanel
             sessionId={session.id}
             userDisplayName={user?.display_name}
@@ -179,17 +181,17 @@ export default function ChatPanel({
         <div className="px-4 py-4 flex flex-col gap-4 min-h-full">
           {messages.length === 0 && !isAiTyping && (
             <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
-                <MessageSquare className="w-6 h-6 text-indigo-400" />
+              <div className="w-12 h-12 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center mb-3">
+                <MessageSquare className="w-6 h-6 text-indigo-500" />
               </div>
-              <p className="text-slate-400 text-sm font-semibold">Ready to begin</p>
-              <p className="text-slate-600 text-xs mt-1">Your AI interviewer will introduce themselves shortly.</p>
+              <p className="text-slate-500 text-sm font-semibold">Ready to begin</p>
+              <p className="text-slate-400 text-xs mt-1">Your AI interviewer will introduce themselves shortly.</p>
             </div>
           )}
           {/* Virtual window: render only last 100 messages */}
           {messages.length > 100 && (
             <div className="text-center py-2">
-              <span className="text-slate-600 text-[10px] font-semibold">
+              <span className="text-slate-400 text-[10px] font-semibold">
                 {messages.length - 100} earlier messages not shown
               </span>
             </div>
@@ -209,23 +211,31 @@ export default function ChatPanel({
 
       {chatError && (
         <div className="px-4 pb-2">
-          <div className="alert-error text-xs py-2 font-medium">{chatError}</div>
+          <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs py-2 px-3 rounded-xl font-medium">
+            <span className="flex-1">{chatError}</span>
+            <button
+              onClick={onRetry}
+              className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       )}
 
       {/* Hints panel */}
       {isDSA && showHints && hints.length > 0 && (
-        <div className="mx-4 mb-2 bg-amber-500/10 border border-amber-500/25 p-3 rounded-xl animate-fade-in-up">
+        <div className="mx-4 mb-2 bg-amber-50 border border-amber-200 p-3 rounded-xl animate-fade-in-up">
           <div className="flex items-center gap-2 mb-2">
-            <Lightbulb className="w-4 h-4 text-amber-400" />
-            <span className="text-amber-300 text-xs font-bold">Hints</span>
-            <button onClick={onHideHints} className="ml-auto text-slate-500 hover:text-slate-300">
+            <Lightbulb className="w-4 h-4 text-amber-500" />
+            <span className="text-amber-700 text-xs font-bold">Hints</span>
+            <button onClick={onHideHints} className="ml-auto text-slate-400 hover:text-slate-600">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
           <ul className="flex flex-col gap-1.5">
             {hints.map((h, i) => (
-              <li key={i} className="text-amber-200/80 text-xs flex items-start gap-1.5 leading-relaxed">
+              <li key={i} className="text-amber-800 text-xs flex items-start gap-1.5 leading-relaxed">
                 <span className="text-amber-500 mt-0.5 font-bold">•</span>
                 {h}
               </li>
@@ -235,8 +245,8 @@ export default function ChatPanel({
       )}
 
       {/* Input area */}
-      <div className="px-4 pb-4 pt-2 border-t border-white/10 bg-[#1a1a2e] flex-shrink-0">
-        <div className="bg-[#252535] border border-white/10 p-2 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/25 rounded-xl transition-all">
+      <div className="px-4 pb-4 pt-2 border-t border-slate-200 bg-white flex-shrink-0">
+        <div className="bg-white border border-slate-200 p-2 focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-200 rounded-xl transition-all shadow-sm">
           <textarea
             ref={textareaRef}
             value={input}
@@ -246,22 +256,22 @@ export default function ChatPanel({
             placeholder="Type your answer… (Enter to send, Shift+Enter for newline)"
             rows={2}
             disabled={isAiTyping}
-            className="w-full bg-transparent text-slate-200 text-sm placeholder-slate-600 resize-none outline-none scrollbar-thin leading-relaxed disabled:opacity-50"
+            className="w-full bg-transparent text-slate-800 text-sm placeholder-slate-400 resize-none outline-none scrollbar-thin leading-relaxed disabled:opacity-50"
             style={{ maxHeight: '96px' }}
           />
           <div className="flex items-center justify-between mt-1.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-600 font-semibold">{input.length} chars</span>
+              <span className="text-xs text-slate-400 font-semibold">{input.length} chars</span>
               <button
                 type="button"
                 onClick={onToggleSpeech}
                 disabled={isAiTyping || isTranscribing}
                 className={`flex items-center gap-1 text-[10px] md:text-xs px-2 py-0.5 md:py-1 rounded-lg border font-bold transition-all disabled:opacity-50 ${
                   isListening
-                    ? 'bg-rose-500/15 border-rose-500/30 text-rose-400 animate-pulse'
+                    ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse'
                     : isTranscribing
-                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-300'
+                    ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                 }`}
                 title={isListening ? 'Stop listening' : isTranscribing ? 'Transcribing…' : 'Voice input'}
               >
@@ -275,14 +285,14 @@ export default function ChatPanel({
               </button>
               {isDSA &&
                 (userPlan === 'free' ? (
-                  <Link href="/billing" className="flex items-center gap-1.5 text-xs text-amber-400 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 font-bold hover:bg-amber-500/20 transition-colors">
+                  <Link href="/billing" className="flex items-center gap-1.5 text-xs text-amber-700 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 font-bold hover:bg-amber-100 transition-colors">
                     <Lightbulb className="w-3 h-3" /> Hints (Pro)
                   </Link>
                 ) : (
                   <button
                     onClick={hints.length > 0 ? onToggleHints : onRequestHint}
                     disabled={hintLoading}
-                    className="flex items-center gap-1.5 text-xs text-amber-400 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 font-bold disabled:opacity-50 hover:bg-amber-500/20 transition-colors"
+                    className="flex items-center gap-1.5 text-xs text-amber-700 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 font-bold disabled:opacity-50 hover:bg-amber-100 transition-colors"
                   >
                     <Lightbulb className="w-3 h-3" />
                     {hintLoading ? 'Loading…' : hints.length > 0 ? `${hints.length} Hint${hints.length !== 1 ? 's' : ''}` : 'Get Hint'}

@@ -231,19 +231,17 @@ export default function InterviewRoomPage() {
     setIsStarting(true);
     setChatError(null);
     try {
-      // Fire session start and first AI question generation in parallel
-      const startPromise = sessionApi.start(session.id);
-      const questionPromise = streaming.generateQuestion([], session);
-
-      const updated = await startPromise;
+      // Start the session first, then generate the first question
+      const updated = await sessionApi.start(session.id);
       setSession(updated);
       timer.startTimer();
-      enterFullscreen(); // Enter fullscreen when interview begins
+      enterFullscreen();
       timer.startHeartbeat(session.id, {
         onAutoComplete: () => router.push(`/interview/${session.id}/feedback`),
         onAutoCancel: (msg) => setPageError(msg),
       });
-      await questionPromise;
+      // Now the session is in_progress — safe to ask for first question
+      await streaming.generateQuestion([], updated);
     } catch (err: any) {
       setChatError(err?.message || 'Failed to start interview.');
     } finally {
@@ -450,7 +448,7 @@ export default function InterviewRoomPage() {
 
   // ── Render: in progress ──
   return (
-    <div className="h-screen bg-[#141422] flex flex-col overflow-hidden text-slate-100">
+    <div className="h-screen bg-[#f4f6fb] flex flex-col overflow-hidden text-slate-800">
       <InterviewHeader
         session={session}
         elapsedSeconds={timer.elapsedSeconds}
@@ -493,6 +491,7 @@ export default function InterviewRoomPage() {
           onHideHints={() => setShowHints(false)}
           onToggleVideoFeed={() => setShowVideoFeed((p) => !p)}
           triggerCheatingViolation={cheating.triggerCheatingViolation}
+          onRetry={() => { setChatError(null); streaming.generateQuestion(streaming.messages); }}
         />
 
         {isDSA ? (
@@ -510,21 +509,21 @@ export default function InterviewRoomPage() {
             triggerCheatingViolation={cheating.triggerCheatingViolation}
           />
         ) : (
-          <section className="flex flex-col border-l border-white/10 bg-[#1e1e2e]" style={{ width: '45%' }}>
+          <section className="flex flex-col border-l border-slate-200 bg-white" style={{ width: '45%' }}>
             <Tabs value={rightPanelTab} onValueChange={setRightPanelTab} className="flex flex-col flex-1 overflow-hidden">
-              <div className="bg-[#1a1a2e] flex-shrink-0">
-                <TabsList className="w-full h-11 bg-[#1a1a2e] border-b border-white/10 px-4 gap-4 justify-start rounded-none p-0 inline-flex items-center text-slate-500">
+          <div className="bg-white border-b border-slate-200 flex-shrink-0">
+                <TabsList className="w-full h-11 bg-white border-b border-slate-200 px-4 gap-4 justify-start rounded-none p-0 inline-flex items-center text-slate-400">
                   {['video', 'tips'].map((tab) => (
                     <TabsTrigger
                       key={tab}
                       value={tab}
-                      className="relative h-full inline-flex items-center justify-center text-xs font-bold capitalize rounded-none px-1 bg-transparent hover:text-slate-200 data-[state=active]:bg-transparent data-[state=active]:text-indigo-400 data-[state=active]:shadow-none transition-colors border-none outline-none focus-visible:ring-0"
+                    className="relative h-full inline-flex items-center justify-center text-xs font-bold capitalize rounded-none px-1 bg-transparent hover:text-slate-700 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 data-[state=active]:shadow-none transition-colors border-none outline-none focus-visible:ring-0"
                     >
                       <span className="relative z-10 flex items-center gap-1.5 h-full">
                         {tab === 'video' ? (
-                          <><Video className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'video' ? 'text-indigo-400' : 'text-slate-500'}`} /><span>Video Feed</span></>
+                          <><Video className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'video' ? 'text-indigo-600' : 'text-slate-400'}`} /><span>Video Feed</span></>
                         ) : (
-                          <><Lightbulb className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'tips' ? 'text-indigo-400' : 'text-slate-500'}`} /><span>Tips &amp; Guide</span></>
+                          <><Lightbulb className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'tips' ? 'text-indigo-600' : 'text-slate-400'}`} /><span>Tips & Guide</span></>
                         )}
                       </span>
                       {rightPanelTab === tab && <motion.div layoutId="right-tab-underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500" transition={{ type: 'spring', stiffness: 380, damping: 34 }} />}

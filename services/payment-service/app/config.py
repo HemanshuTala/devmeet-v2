@@ -11,9 +11,9 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 def razorpay_enabled() -> bool:
     if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
         return False
-    if RAZORPAY_KEY_ID.startswith("rzp_test_placeholder"):
+    if RAZORPAY_KEY_ID.startswith("rzp_test_placeholder") or RAZORPAY_KEY_ID.startswith("rzp_test_dummy"):
         return False
-    if RAZORPAY_KEY_SECRET == "placeholder_secret":
+    if RAZORPAY_KEY_SECRET in ("placeholder_secret", "dummy_secret"):
         return False
     return RAZORPAY_KEY_ID.startswith("rzp_")
 

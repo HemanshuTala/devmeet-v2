@@ -73,7 +73,9 @@ logs/
 *.sqlite
 *.sqlite3
 
-# Temporary files
+# Temporary files & archives
 tmp/
 temp/
 *.tmp
+*.tar.gz
+.env.production
