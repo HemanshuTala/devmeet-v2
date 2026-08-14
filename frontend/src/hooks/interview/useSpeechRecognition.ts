@@ -2,20 +2,34 @@ import { useState, useCallback, useRef } from 'react';
 import { aiApi } from '@/lib/api';
 import { speak, stopSpeaking } from '@/lib/speech';
 
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 export function useSpeechRecognition() {
   const [isListening, setIsListening] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
+    }
     const rec = mediaRecorderRef.current;
     if (rec && rec.state !== 'inactive') {
-      rec.stop();
+      try { rec.stop(); } catch {}
       rec.stream.getTracks().forEach((t) => t.stop());
     }
     mediaRecorderRef.current = null;
     setIsListening(false);
+    setIsTranscribing(false);
   }, []);
 
   const toggleSpeechRecognition = useCallback(
@@ -26,15 +40,67 @@ export function useSpeechRecognition() {
     }) => {
       if (isTranscribing || opts.isAiTyping) return;
 
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      if (isListening) {
         stopRecording();
         return;
       }
 
-      audioChunksRef.current = [];
+      stopSpeaking();
 
+      // ── Option A: Native Web Speech API (Instant, No API Key, Free) ──
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionClass) {
+        try {
+          const recognition = new SpeechRecognitionClass();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+
+          let finalTranscript = '';
+
+          recognition.onresult = (event: any) => {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              const res = event.results[i];
+              if (res.isFinal) {
+                finalTranscript += res[0].transcript + ' ';
+              } else {
+                interim += res[0].transcript;
+              }
+            }
+            const current = (finalTranscript + interim).trim();
+            if (current) {
+              opts.onTranscript(current);
+            }
+          };
+
+          recognition.onerror = (event: any) => {
+            if (event.error === 'not-allowed') {
+              opts.onError('Microphone access denied. Please allow microphone permissions in your browser.');
+            } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+              // Gracefully fallback to MediaRecorder if native WebSpeech fails
+              console.warn('WebSpeech API notice:', event.error);
+            }
+            setIsListening(false);
+          };
+
+          recognition.onend = () => {
+            setIsListening(false);
+            recognitionRef.current = null;
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+          setIsListening(true);
+          return;
+        } catch (e) {
+          console.warn('Native WebSpeech failed, using MediaRecorder fallback:', e);
+        }
+      }
+
+      // ── Option B: MediaRecorder + Server Endpoint Fallback ──
+      audioChunksRef.current = [];
       try {
-        stopSpeaking();
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         let mimeType = '';
         for (const type of ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav']) {
@@ -70,7 +136,7 @@ export function useSpeechRecognition() {
               }
             }
           } catch (err: any) {
-            opts.onError(`Audio transcription failed: ${err.message || 'Server error'}`);
+            opts.onError(`Audio transcription server error: ${err.message || 'Check microphone or API key'}`);
           } finally {
             setIsTranscribing(false);
           }
@@ -81,14 +147,14 @@ export function useSpeechRecognition() {
         setIsListening(true);
       } catch (err: any) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          opts.onError('Microphone access denied. Please allow microphone access in your browser settings.');
+          opts.onError('Microphone access denied. Please allow microphone access in browser settings.');
         } else {
           opts.onError(`Failed to access microphone: ${err.message || 'unknown error'}`);
         }
         setIsListening(false);
       }
     },
-    [isTranscribing, stopRecording],
+    [isListening, isTranscribing, stopRecording],
   );
 
   return { isListening, isTranscribing, toggleSpeechRecognition, stopRecording, mediaRecorderRef };

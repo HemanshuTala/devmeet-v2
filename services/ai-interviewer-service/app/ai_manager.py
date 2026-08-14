@@ -233,69 +233,61 @@ class AIManager:
         return Groq(api_key=key)
 
     def transcribe_audio(self, audio_file_bytes: bytes, filename: str) -> str:
-        """Transcribe audio bytes using Groq Whisper API (direct HTTP request to avoid SDK version issues)."""
-        key = _get_next_key()
-        if not key:
-            raise ValueError("Groq API key not configured")
+        """Transcribe audio bytes using Groq Whisper API (iterates through available keys)."""
+        if not _GROQ_KEYS:
+            raise ValueError("No Groq API keys configured")
 
-        # Try Groq SDK if audio attribute exists
-        client = self._get_client()
-        if client and hasattr(client, 'audio'):
-            try:
-                translation = client.audio.transcriptions.create(
-                    file=(filename or "audio.webm", audio_file_bytes),
-                    model="whisper-large-v3-turbo",
-                    response_format="json",
-                )
-                if hasattr(translation, 'text'):
-                    return translation.text
-                elif isinstance(translation, dict) and "text" in translation:
-                    return translation["text"]
-            except Exception as sdk_err:
-                logger.warning(f"Groq SDK audio transcription failed: {sdk_err}. Trying direct HTTP fallback...")
-
-        # Direct HTTP request fallback to Groq Audio API
-        import requests
-        headers = {"Authorization": f"Bearer {key}"}
         filename_clean = filename or "audio.webm"
         mime_type = "audio/webm"
         if filename_clean.endswith(".mp3"): mime_type = "audio/mpeg"
         elif filename_clean.endswith(".wav"): mime_type = "audio/wav"
         elif filename_clean.endswith(".ogg"): mime_type = "audio/ogg text/plain"
 
-        files = {"file": (filename_clean, audio_file_bytes, mime_type)}
-        data = {"model": "whisper-large-v3-turbo", "response_format": "json"}
+        import requests
 
-        try:
-            response = requests.post(
-                "https://api.groq.com/openai/v1/audio/transcriptions",
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=30
-            )
+        # Try up to len(_GROQ_KEYS) times to handle expired or rate-limited keys
+        for _ in range(len(_GROQ_KEYS)):
+            key = _get_next_key()
+            if not key: continue
 
-            if response.status_code == 200:
-                res_json = response.json()
-                return res_json.get("text", "")
-            
-            # Model fallback: try whisper-large-v3
-            data["model"] = "whisper-large-v3"
+            headers = {"Authorization": f"Bearer {key}"}
             files = {"file": (filename_clean, audio_file_bytes, mime_type)}
-            response2 = requests.post(
-                "https://api.groq.com/openai/v1/audio/transcriptions",
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=30
-            )
-            if response2.status_code == 200:
-                return response2.json().get("text", "")
-            
-            raise ValueError(f"Groq Audio API returned HTTP {response.status_code}: {response.text}")
-        except Exception as http_err:
-            logger.error(f"Audio transcription HTTP request failed: {http_err}")
-            raise ValueError(f"Transcription service error: {str(http_err)}")
+            data = {"model": "whisper-large-v3-turbo", "response_format": "json"}
+
+            try:
+                response = requests.post(
+                    "https://api.groq.com/openai/v1/audio/transcriptions",
+                    headers=headers,
+                    files=files,
+                    data=data,
+                    timeout=25
+                )
+
+                if response.status_code == 200:
+                    return response.json().get("text", "")
+
+                if response.status_code == 401:
+                    logger.warning(f"Groq API Key {key[:8]}... returned 401 Invalid. Trying next key...")
+                    continue
+
+                # Model fallback: try whisper-large-v3
+                data["model"] = "whisper-large-v3"
+                files = {"file": (filename_clean, audio_file_bytes, mime_type)}
+                response2 = requests.post(
+                    "https://api.groq.com/openai/v1/audio/transcriptions",
+                    headers=headers,
+                    files=files,
+                    data=data,
+                    timeout=25
+                )
+                if response2.status_code == 200:
+                    return response2.json().get("text", "")
+
+            except Exception as err:
+                logger.warning(f"Groq Audio request attempt failed with key {key[:8]}...: {err}")
+                continue
+
+        raise ValueError("Audio transcription service unavailable. Please check your microphone or use WebSpeech mode.")
 
     def check_and_record_injection(self, session_id: str, text: str) -> bool:
         """
