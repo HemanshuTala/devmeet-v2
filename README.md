@@ -1,293 +1,130 @@
-# DevMeet v2.0 — AI-Powered Mock Interview Platform
+# DevMeet v2.0 — AI-Powered Technical Interview Platform
 
-> Practice technical interviews with an AI interviewer, get scored feedback, execute code live, and track your progress over time.
-
-**Live:** `http://<YOUR_SERVER_IP>` · **Frontend:** `http://<YOUR_SERVER_IP>:3000`  
-**Repo:** `github.com/HemanshuTala/devmeet-v2` · **Region:** AWS eu-north-1
+An adaptive, microservices-based AI interviewing platform engineered to simulate technical hiring workflows. DevMeet combines real-time LLM token streaming, client-side AI proctoring, sandboxed multi-language code execution, and automated 6-dimensional feedback evaluation.
 
 ---
 
-## Features
+## Technical Highlights
 
-- **AI Interviewer** — Streams questions in real-time using Groq LLaMA 3 70B / Mixtral 8x7B via SSE
-- **Live Code Execution** — Runs Python, JavaScript, Java, C++, Go, Rust in isolated Docker sandboxes
-- **Video Interviews** — WebRTC video/audio rooms powered by LiveKit
-- **AI Feedback Reports** — Scores 6 dimensions after each session, generates PDF reports stored in S3
-- **Analytics Dashboard** — Score trends, category heatmaps, streak tracking
-- **Payments** — Razorpay subscription billing
-- **AI Proctoring** — TensorFlow.js face detection + tab-switch monitoring
+- **Adaptive AI Interviewer**: Real-time response streaming over Server-Sent Events (SSE) using Groq (LLaMA 3.3 70B & Mixtral). Includes automated multi-key rotation and multi-model fallback routines for zero-downtime streaming.
+- **Dual Speech Recognition**: Browser-native Web Speech API for instant client-side voice-to-text, paired with a Groq Whisper REST fallback.
+- **Edge AI Proctoring**: In-browser computer vision models (MediaPipe + TensorFlow.js) with 0ms camera startup to detect gaze deviation, face count, and device presence without backend GPU overhead.
+- **Sandboxed Code Execution**: Executes solutions in Python, JavaScript, C++, Java, Go, and Rust inside ephemeral Docker containers with CPU/RAM quotas, execution timeouts, and network isolation (`--network none`).
+- **6D Evaluation & PDF Reports**: Scores candidate performance across Problem Solving, Code Quality, System Architecture, STAR Behavioral Framework, Communication, and Edge Case Handling. Generates downloadable PDF reports stored in AWS S3.
+- **Payments & Subscriptions**: Integrated Razorpay checkout workflow for plan management, order creation, and webhooks verification.
 
 ---
 
-## Architecture
+## Microservices Architecture
 
-13 microservices + Next.js frontend, running as Docker containers on AWS EC2.
+DevMeet v2.0 is built on 13 domain microservices orchestrated with Docker Compose on AWS EC2 behind an Nginx Layer 7 API Gateway.
 
 ```
-Browser → NGINX API Gateway :80
-               │
-    ┌──────────┼──────────────────────────────────────┐
-    │          │                                       │
-Auth:8001  Orchestrator:8003 ──► AI Interviewer:8004 ──► Groq Cloud
-User:8002  Code Execution:8005 (Docker sandbox)
-Admin:8010 Video:8006 ──► LiveKit Cloud
-Payment:8012 Feedback:8007 ──► S3 (PDFs)
-Notification:8008 ──► AWS SES
-Analytics:8009 ◄── Kafka
-Search:8013 ──► Elasticsearch
-File:8011 ──► S3
-               │
-    ┌──────────┼──────────┐
-    │          │          │
-PostgreSQL   Redis    RabbitMQ  Kafka  Elasticsearch
+Candidate Browser ──► Nginx API Gateway (:80)
+                             │
+     ┌───────────────────────┼─────────────────────────────────────────┐
+     │                       │                                         │
+Auth (:8001)           Orchestrator (:8003) ──► AI Interviewer (:8004) ──► Groq Cloud
+User (:8002)           Code Execution (:8005, Docker sandbox)
+Admin (:8010)          Video (:8006) ───────► LiveKit Cloud
+Payment (:8012)        Feedback (:8007) ────► AWS S3 (PDFs)
+Notification (:8008)   Analytics (:8009) ───◄ Kafka
+File (:8011)           Search (:8013) ──────► Elasticsearch
 ```
+
+### Microservices Directory
+
+| Service | Port | Tech Stack | Primary Responsibility |
+|---|:---:|---|---|
+| `api-gateway` | 80 | Nginx | Reverse proxy, path routing, rate limiting, CORS management |
+| `auth-service` | 8001 | FastAPI / Python | JWT authentication, RBAC, OAuth, password security |
+| `user-service` | 8002 | FastAPI / Python | Profile management, user state, privacy controls, quotas |
+| `orchestrator-service` | 8003 | FastAPI / Python | Interview state machine, session lifecycle, message bus events |
+| `ai-interviewer-service` | 8004 | FastAPI / Python | Groq LLaMA 3.3 token streaming, key rotation, SSE generator |
+| `code-execution-service` | 8005 | FastAPI / Docker | Isolated multi-language sandbox execution engine |
+| `video-service` | 8006 | Express / Node.js | LiveKit WebRTC room token allocation & coordination |
+| `feedback-service` | 8007 | FastAPI / WeasyPrint | 6D scoring evaluation, PDF report generation, S3 storage |
+| `notification-service` | 8008 | Node.js / WebSockets | Live WebSocket notifications & AWS SES email dispatch |
+| `analytics-service` | 8009 | FastAPI / Kafka | Candidate score trends, category metrics, telemetry stream |
+| `admin-service` | 8010 | FastAPI / Python | System health monitoring, user administration, logs |
+| `file-service` | 8011 | FastAPI / boto3 | Image uploads, avatar processing, AWS S3 presigned URLs |
+| `payment-service` | 8012 | FastAPI / Razorpay | Subscription plans, Razorpay orders & webhook verification |
+| `search-service` | 8013 | FastAPI / Elasticsearch | Question bank fuzzy search & transcript indexing |
 
 ---
 
 ## Tech Stack
 
-### Backend (13 Microservices)
-| Service | Port | Runtime | Key Libraries |
-|---------|------|---------|--------------|
-| auth-service | 8001 | Python 3.11 / FastAPI | PyJWT, passlib, authlib, pyotp |
-| user-service | 8002 | Python 3.11 / FastAPI | asyncpg, redis |
-| orchestrator-service | 8003 | Python 3.11 / FastAPI | pika (RabbitMQ), aiokafka |
-| ai-interviewer-service | 8004 | Python 3.11 / FastAPI | groq, SSE streaming |
-| code-execution-service | 8005 | Python 3.11 / FastAPI | docker SDK, boto3 |
-| video-service | 8006 | Node.js 20 | livekit-server-sdk |
-| feedback-service | 8007 | Python 3.11 / FastAPI | weasyprint, groq, boto3 |
-| notification-service | 8008 | Node.js 20 | ws, aws-sdk (SES) |
-| analytics-service | 8009 | Python 3.11 / FastAPI | aiokafka, asyncpg |
-| admin-service | 8010 | Python 3.11 / FastAPI | asyncpg |
-| file-service | 8011 | Python 3.11 / FastAPI | boto3, Pillow |
-| payment-service | 8012 | Python 3.11 / FastAPI | razorpay |
-| search-service | 8013 | Python 3.11 / FastAPI | elasticsearch-py |
-
-### Frontend
-| Technology | Purpose |
-|-----------|---------|
-| Next.js 14 (TypeScript) | App framework, routing, SSR |
-| TailwindCSS + Radix UI | Styling and components |
-| Zustand | Global state management |
-| TanStack Query | Server state + caching |
-| Monaco Editor | VS Code editor in browser (code interviews) |
-| LiveKit Client SDK | WebRTC video/audio |
-| TensorFlow.js + MediaPipe | AI proctoring (face detection) |
-| Recharts | Analytics charts |
-| Framer Motion + GSAP | Animations |
-
-### Infrastructure
-| Component | Technology |
-|-----------|-----------|
-| API Gateway | NGINX (rate limiting, CORS, routing) |
-| Primary Database | PostgreSQL 16 |
-| Cache + Pub/Sub | Redis 7.2 |
-| Task Queue | RabbitMQ 3.12 |
-| Event Stream | Kafka 3.6 + Zookeeper |
-| Search | Elasticsearch 8.11 |
-| File Storage | AWS S3 (`<YOUR_S3_BUCKET_NAME>`, eu-north-1) |
-| Email | AWS SES (eu-north-1) |
-| Container Registry | AWS ECR (14 repos, eu-north-1) |
-| Compute | AWS EC2 `c7i-flex.large` (eu-north-1) |
-| CI/CD | GitHub Actions → ECR → EC2 SSH deploy |
+- **Frontend**: Next.js 14 (App Router, TypeScript), Tailwind CSS, Monaco Editor, Zustand, TanStack Query, Framer Motion, Web Speech API, MediaPipe, TensorFlow.js.
+- **Backend**: FastAPI (Python 3.11), Express (Node.js 20), Uvicorn, AsyncIO.
+- **Database & Cache**: PostgreSQL 16 (shared instance with per-service logical schemas), Redis 7.2.
+- **Message Bus & Search**: RabbitMQ 3.12 (task queues), Apache Kafka 3.6 (telemetry log stream), Elasticsearch 8.11 (search).
+- **Cloud Infrastructure**: AWS EC2 (`c7i-flex.large`), AWS ECR, AWS S3, AWS SES, Nginx API Gateway.
 
 ---
 
-## Project Structure
+## Repository Layout
 
 ```
 devmeet-v2/
-├── services/                    # 13 microservices
-│   ├── auth-service/
-│   ├── user-service/
-│   ├── orchestrator-service/
-│   ├── ai-interviewer-service/
-│   ├── code-execution-service/
-│   ├── video-service/
-│   ├── feedback-service/
-│   ├── notification-service/
-│   ├── analytics-service/
-│   ├── admin-service/
-│   ├── file-service/
-│   ├── payment-service/
-│   ├── search-service/
-│   └── api-gateway/             # NGINX config
-├── frontend/                    # Next.js 14 app
-├── migrations/                  # PostgreSQL schema
-├── monitoring/                  # Prometheus config
-├── scripts/                     # Deployment scripts
-├── Design Architecture/         # System design documentation
-├── docker-compose.yml           # Local infra (postgres, redis, etc.)
-├── docker-compose.services.yml  # Local services
-├── docker-compose.prod.yml      # Production (pulls from ECR)
-└── .github/workflows/ci-cd.yml  # CI/CD pipeline
+├── services/                    # 13 Independent Microservices
+│   ├── api-gateway/             # Nginx reverse proxy configuration
+│   ├── auth-service/            # Authentication & JWT management
+│   ├── orchestrator-service/    # Interview state engine
+│   ├── ai-interviewer-service/  # Groq SSE token streaming service
+│   ├── code-execution-service/  # Isolated Docker sandbox runner
+│   ├── feedback-service/        # PDF generation & evaluation service
+│   ├── payment-service/         # Razorpay checkout & webhooks
+│   └── ...                      # Additional microservices
+├── frontend/                    # Next.js 14 Web Application
+├── migrations/                  # PostgreSQL schema initialization
+├── Design Architecture/         # LLD / HLD System Design Documentation
+├── docker-compose.yml           # Core infrastructure stack
+├── docker-compose.services.yml  # Microservices stack
+└── docker-compose.prod.yml      # Production stack configuration
 ```
 
 ---
 
-## Running Locally
+## Quick Start (Local Development)
 
 ### Prerequisites
-- Docker Desktop (Windows: move disk image to E: if C: is tight)
-- Node.js 20+
-- Python 3.11+
+- Docker Desktop (v24.0+)
+- Node.js (v20+)
+- Python (v3.11+)
 
-### Quick Start
+### Environment Setup & Launch
 
-```powershell
-# 1. Copy env file and fill in your keys
-copy .env.example .env
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/HemanshuTala/devmeet-v2.git
+   cd devmeet-v2
+   ```
 
-# 2. Start everything with Docker
-docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
+2. **Configure environment variables:**
+   ```bash
+   cp .env.example .env
+   ```
 
-# 3. Start frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
-```
+3. **Start backend services and infrastructure:**
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.services.yml up -d
+   ```
 
-Open **http://localhost:3000**
+4. **Start the Next.js frontend:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
-### Service URLs (local)
-
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:3000 |
-| API Gateway | http://localhost:8000 |
-| Auth | http://localhost:8001 |
-| User | http://localhost:8002 |
-| Orchestrator | http://localhost:8003 |
-| AI Interviewer | http://localhost:8004 |
-| Code Execution | http://localhost:8005 |
-| Video | http://localhost:8006 |
-| Feedback | http://localhost:8007 |
-| Notifications | ws://localhost:8008 |
-| Analytics | http://localhost:8009 |
-| Admin | http://localhost:8010 |
-| Files | http://localhost:8011 |
-| Payments | http://localhost:8012 |
-| Search | http://localhost:8013 |
-| RabbitMQ UI | http://localhost:15672 (guest/guest) |
-
-### Required API Keys (`.env`)
-
-```env
-GROQ_API_KEY=           # https://console.groq.com
-LIVEKIT_URL=            # https://cloud.livekit.io
-LIVEKIT_API_KEY=
-LIVEKIT_API_SECRET=
-RAZORPAY_KEY_ID=        # https://dashboard.razorpay.com
-RAZORPAY_KEY_SECRET=
-GOOGLE_CLIENT_ID=       # https://console.cloud.google.com
-GOOGLE_CLIENT_SECRET=
-GITHUB_CLIENT_ID=       # https://github.com/settings/developers
-GITHUB_CLIENT_SECRET=
-AWS_ACCESS_KEY_ID=      # For S3 and SES
-AWS_SECRET_ACCESS_KEY=
-```
+Access the frontend application at **`http://localhost:3000`**.
 
 ---
 
-## AWS Deployment
+## Deployment & CI/CD
 
-### Production Stack
-- **EC2:** `c7i-flex.large` (2 vCPU, 4 GB) — IP `<YOUR_SERVER_IP>`
-- **ECR:** 14 Docker image repositories in `eu-north-1`
-- **S3:** `<YOUR_S3_BUCKET_NAME>` — avatars, PDF reports, code snapshots
-- **SES:** Transactional email from `support@example.com`
-
-### Deploy manually
-
-```bash
-# 1. Create ECR repos (once)
-bash scripts/setup-ecr.sh
-
-# 2. Build and push images
-AWS_REGION=eu-north-1 bash scripts/push-images-ecr.sh
-
-# 3. On EC2 — start the stack
-cd /opt/devmeet
-export AWS_ACCOUNT_ID=<YOUR_AWS_ACCOUNT_ID>
-export IMAGE_TAG=latest
-docker compose -f docker-compose.prod.yml --env-file .env up -d
-```
-
-### Auto-deploy via CI/CD
-
-Every `git push` to `main` automatically:
-1. Tests all 13 Python services + 2 Node services + frontend build
-2. Builds 15 Docker images and pushes to ECR
-3. SSHes into EC2 and restarts the stack with new images
-
-**Required GitHub Secrets:**
-
-| Secret | Purpose |
-|--------|---------|
-| `AWS_ACCESS_KEY_ID` | ECR push |
-| `AWS_SECRET_ACCESS_KEY` | ECR push |
-| `AWS_ACCOUNT_ID` | ECR registry URL |
-| `EC2_HOST` | SSH deploy target |
-| `EC2_SSH_KEY` | SSH private key |
-
----
-
-## Interview Types
-
-- **DSA** — Data structures & algorithms with live code execution
-- **Behavioral** — STAR-format questions with AI evaluation
-- **System Design** — Architecture questions with diagram discussion
-
----
-
-## Code Execution Sandbox
-
-- Supports 7 languages: Python, JavaScript, TypeScript, Java, C++, Go, Rust
-- Isolated Docker container per execution: no network, memory capped at 512 MB, 10s timeout
-- Results uploaded to S3 as code snapshots
-
----
-
-## AI Feedback (6 Dimensions)
-
-After each session, Groq LLM scores:
-1. Technical Accuracy
-2. Problem Solving Approach
-3. Code Quality
-4. Communication Clarity
-5. Time Management
-6. Overall Performance
-
-PDF report generated via WeasyPrint and stored in S3.
-
----
-
-## Security
-
-- JWT authentication (HS256, 60 min access / 7 day refresh)
-- TOTP MFA support
-- Rate limiting at NGINX: 30 req/s general, 5 req/min auth, 10 req/min code exec
-- RBAC (user / admin roles)
-- bcrypt password hashing (cost 12)
-
----
-
-## Health Checks
-
-```bash
-# API Gateway
-curl http://<YOUR_SERVER_IP>/health
-
-# All services (run on EC2)
-for port in 8001 8002 8003 8004 8005 8007 8009 8010 8011 8012 8013; do
-  echo -n "Port $port: "
-  curl -s -o /dev/null -w "%{http_code}" http://localhost:$port/health
-  echo ""
-done
-```
-
----
-
-## License
-
-Private — DevMeet v2.0 © 2026 HemanshuTala
+Production deployment is automated via GitHub Actions (`.github/workflows/ci-cd.yml`):
+1. Builds Docker container images for all microservices and the Next.js application.
+2. Pushes container images to **AWS ECR** (`eu-north-1`).
+3. Connects to **AWS EC2** via SSH to pull updated images and restart containers via Docker Compose.
