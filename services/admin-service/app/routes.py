@@ -414,14 +414,14 @@ async def impersonate_user(
             f"{AUTH_SERVICE_URL}/api/v1/auth/impersonate-token?target_user_id={user_id}",
             headers={"Authorization": f"Bearer {token}"}
         )
-            if response.status_code != 200:
-                detail = "Failed to generate impersonation token"
-                try:
-                    detail = response.json().get("detail", detail)
-                except Exception:
-                    pass
-                raise HTTPException(status_code=response.status_code, detail=detail)
-            tokens_data = response.json()
+        if response.status_code != 200:
+            detail = "Failed to generate impersonation token"
+            try:
+                detail = response.json().get("detail", detail)
+            except Exception:
+                pass
+            raise HTTPException(status_code=response.status_code, detail=detail)
+        tokens_data = response.json()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Auth service unavailable: {str(e)}")
 
