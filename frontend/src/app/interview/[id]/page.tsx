@@ -238,8 +238,12 @@ export default function InterviewRoomPage() {
         cheating.setTabSwitchCount(s.tab_switch_count || 0);
         cheating.setPasteCount(s.paste_count || 0);
 
-        // Redirect already-finished sessions away from studio
-        if (s.status === 'completed' || s.status === 'cancelled') {
+        // Redirect already-finished sessions to feedback; cancelled to dashboard
+        if (s.status === 'completed') {
+          router.replace(`/interview/${sessionId}/feedback`);
+          return;
+        }
+        if (s.status === 'cancelled') {
           router.replace('/dashboard');
           return;
         }
@@ -357,16 +361,29 @@ export default function InterviewRoomPage() {
     setIsEnding(true);
     try {
       await sessionApi.complete(session.id, timer.elapsedSeconds);
-      analyticsApi.track('session_completed', user?.id, session.id, { interview_type: session.interview_type, difficulty: session.difficulty, duration_seconds: timer.elapsedSeconds }).catch(() => {});
-      timer.stopTimer();
-      timer.stopHeartbeat();
-      exitFullscreen();
-      router.push(`/interview/${session.id}/feedback`);
     } catch (err: any) {
-      setChatError(err?.message || 'Failed to end interview.');
-      setIsEnding(false);
-      setShowEndConfirm(false);
+      // If already completed (idempotent), treat as success and redirect to feedback
+      const alreadyDone =
+        session.status === 'completed' ||
+        (err?.status === 400 && typeof err?.message === 'string' &&
+          err.message.toLowerCase().includes('invalid state'));
+      if (!alreadyDone) {
+        setChatError(err?.message || 'Failed to end interview.');
+        setIsEnding(false);
+        setShowEndConfirm(false);
+        return;
+      }
     }
+    // Success or already-completed — navigate to feedback
+    analyticsApi.track('session_completed', user?.id, session.id, {
+      interview_type: session.interview_type,
+      difficulty: session.difficulty,
+      duration_seconds: timer.elapsedSeconds,
+    }).catch(() => {});
+    timer.stopTimer();
+    timer.stopHeartbeat();
+    exitFullscreen();
+    router.push(`/interview/${session.id}/feedback`);
   }, [session, router, timer, user?.id, exitFullscreen]);
 
   /**
