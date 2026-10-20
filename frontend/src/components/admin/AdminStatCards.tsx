@@ -39,7 +39,7 @@ export function AdminStatCards({ stats, loading }: AdminStatCardsProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {/* Total Users */}
-      <div className="relative overflow-hidden rounded-2xl p-5 text-white bg-gradient-to-br from-blue-600 to-indigo-700 shadow-md">
+      <div className="relative overflow-hidden rounded-2xl p-5 text-white bg-gradient-to-br from-blue-600 to-blue-800 shadow-md">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Total Users</p>

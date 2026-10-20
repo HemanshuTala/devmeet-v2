@@ -406,15 +406,15 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
         {/* Header card */}
         <section className="bg-white border border-blue-100 p-6 rounded-2xl flex flex-col md:flex-row items-start md:items-center gap-6 justify-between relative overflow-hidden shadow-sm">
           <div className="absolute top-0 right-0 w-72 h-72 bg-blue-50/50 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-40 h-40 bg-indigo-50/30 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-50/30 rounded-full blur-2xl pointer-events-none" />
           <div className="flex items-center gap-4 relative">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
               <Award className="w-8 h-8 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold text-slate-900 tracking-tight">Interview Evaluation</h1>
-                <span className="badge-indigo text-[10px] px-2 py-0.5 rounded-full uppercase font-bold">
+                <span className="badge-blue text-[10px] px-2 py-0.5 rounded-full uppercase font-bold">
                   {session.interview_type === 'dsa' ? 'Algorithms' : session.interview_type === 'behavioral' ? 'STAR Behavioral' : 'System Design'}
                 </span>
                 <span className="text-xs bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full text-slate-600 font-semibold capitalize">
@@ -461,7 +461,7 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
           </div>
           <div className="lg:col-span-2 bg-white border border-blue-100 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
-              <Zap className="w-5 h-5 text-indigo-600" />
+              <Zap className="w-5 h-5 text-blue-600" />
               <h2 className="font-bold text-slate-800">Skill Breakdown</h2>
             </div>
             {radarData.length > 0 ? (
@@ -485,13 +485,13 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
 
         {/* Percentile */}
         {feedback.percentile && (
-          <section className="bg-gradient-to-r from-indigo-50/80 to-blue-50/60 border border-indigo-200 p-5 rounded-2xl flex items-start gap-3 shadow-sm">
-            <TrendingUp className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+          <section className="bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-200 p-5 rounded-2xl flex items-start gap-3 shadow-sm">
+            <TrendingUp className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-bold text-indigo-900">
+              <h3 className="text-sm font-bold text-blue-900">
                 Peer percentile: top {100 - feedback.percentile.percentile}%
               </h3>
-              <p className="text-xs text-indigo-800 mt-1 leading-relaxed">{feedback.percentile.message}</p>
+              <p className="text-xs text-slate-700 mt-1 leading-relaxed">{feedback.percentile.message}</p>
             </div>
           </section>
         )}

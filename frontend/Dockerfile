@@ -19,9 +19,9 @@ COPY . .
 # and the runner stage COPYs from this builder stage's filesystem
 RUN mkdir -p public
 
-ARG NEXT_PUBLIC_GATEWAY_URL=http://localhost
-ARG NEXT_PUBLIC_API_URL=http://localhost
-ARG NEXT_PUBLIC_NOTIF_WS_URL=ws://localhost
+ARG NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_NOTIF_WS_URL=ws://localhost:8008
 
 ENV NEXT_PUBLIC_GATEWAY_URL=$NEXT_PUBLIC_GATEWAY_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL

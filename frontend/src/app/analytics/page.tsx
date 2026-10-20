@@ -160,7 +160,7 @@ export default function AnalyticsPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total Sessions"  value={d.total_sessions ?? 0}                          icon={Activity}    color="blue"   />
           <StatCard label="Completed"        value={d.completed_sessions ?? 0}                      icon={CheckCircle} color="green"  />
-          <StatCard label="Avg Score"        value={d.avg_score > 0 ? `${d.avg_score}%` : '—'}     icon={BarChart2}   color="purple" />
+          <StatCard label="Avg Score"        value={d.avg_score > 0 ? `${d.avg_score}%` : '—'}     icon={BarChart2}   color="blue" />
           <StatCard label="Completion Rate"  value={`${completionRate}%`}                           icon={Target}      color="orange" />
         </div>
 
@@ -229,7 +229,7 @@ export default function AnalyticsPage() {
           </p>
           <div className="flex flex-wrap gap-3">
             {[
-              { label: 'DSA',           value: d.dsa_sessions ?? 0,           color: '#4f46e5', bg: '#eef2ff', border: '#c7d2fe' },
+              { label: 'DSA',           value: d.dsa_sessions ?? 0,           color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
               { label: 'Behavioral',    value: d.behavioral_sessions ?? 0,    color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
               { label: 'System Design', value: d.system_design_sessions ?? 0, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
             ].map(({ label, value, color, bg, border }) => {
@@ -316,11 +316,11 @@ export default function AnalyticsPage() {
                       {points.slice(-20).map((point, i) => {
                         const score = Number(point.score ?? 0);
                         const barH = Math.max(2, Math.min(100, score));
-                        // Brand-purple gradient based on score
+                        // Brand-blue gradient based on score
                         const barColor =
                           score >= 70 ? 'var(--color-brand)' :
-                          score >= 50 ? '#7c3aed' :
-                          '#a78bfa';
+                          score >= 50 ? '#3b82f6' :
+                          '#93c5fd';
                         return (
                           <div
                             key={`${point.date}-${i}`}

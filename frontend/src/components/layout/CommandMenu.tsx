@@ -80,7 +80,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
           <Command.Group heading="Navigation" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2">
             <Command.Item
               onSelect={() => navigate('/dashboard')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <Home className="w-4.5 h-4.5" />
               <span>Dashboard Home</span>
@@ -88,7 +88,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
             
             <Command.Item
               onSelect={() => navigate('/dashboard/create-session')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <Plus className="w-4.5 h-4.5" />
               <span>Start New Interview Session</span>
@@ -96,7 +96,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/dashboard/questions')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <BookOpen className="w-4.5 h-4.5" />
               <span>Browse Question Bank</span>
@@ -104,7 +104,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/dashboard/history')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <History className="w-4.5 h-4.5" />
               <span>View Interview History</span>
@@ -112,7 +112,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/dashboard/leaderboard')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <Trophy className="w-4.5 h-4.5" />
               <span>Leaderboard Standings</span>
@@ -120,7 +120,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/analytics')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <BarChart2 className="w-4.5 h-4.5" />
               <span>Performance Analytics</span>
@@ -130,7 +130,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
           <Command.Group heading="Interview Types" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-2">
             <Command.Item
               onSelect={() => navigate('/dashboard/create-session?type=dsa')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <Code2 className="w-4.5 h-4.5 text-blue-500" />
               <span>Start DSA / Coding Mock Round</span>
@@ -138,7 +138,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/dashboard/create-session?type=system_design')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <Layout className="w-4.5 h-4.5 text-emerald-500" />
               <span>Start System Design Mock Round</span>
@@ -146,7 +146,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/dashboard/create-session?type=behavioral')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <MessageSquare className="w-4.5 h-4.5 text-amber-500" />
               <span>Start Behavioral / STAR Mock Round</span>
@@ -156,7 +156,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
           <Command.Group heading="Account Settings" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-2">
             <Command.Item
               onSelect={() => navigate('/profile')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <User className="w-4.5 h-4.5" />
               <span>My Profile Settings</span>
@@ -164,7 +164,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/billing')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <CreditCard className="w-4.5 h-4.5" />
               <span>Subscription & Billing</span>
@@ -172,7 +172,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
 
             <Command.Item
               onSelect={() => navigate('/settings')}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-indigo-50/70 aria-selected:text-indigo-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer aria-selected:bg-blue-50 aria-selected:text-blue-600 transition-colors text-slate-600 text-sm font-semibold outline-none"
             >
               <Settings className="w-4.5 h-4.5" />
               <span>Configure System Preferences</span>

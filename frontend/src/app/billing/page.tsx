@@ -335,7 +335,7 @@ function BillingPageContent() {
               <span>UPI, Cards, NetBanking &amp; Wallets</span>
             </div>
             <div className="flex items-center gap-2.5">
-              <Lock className="w-5 h-5 text-indigo-500" />
+              <Lock className="w-5 h-5 text-blue-500" />
               <span>Instant Activation &amp; Cancel Anytime</span>
             </div>
           </div>

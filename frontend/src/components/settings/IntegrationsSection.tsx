@@ -57,7 +57,7 @@ const INITIAL_INTEGRATIONS: Integration[] = [
     name: 'Lever',
     category: 'ats',
     description: 'Sync candidate pipelines. Create mock interviews automatically when a candidate reaches a technical stage.',
-    logoColor: 'bg-indigo-650',
+    logoColor: 'bg-blue-600',
     connected: false,
     fields: [
       { name: 'clientId', label: 'Lever Client ID', placeholder: 'lv_...', type: 'text', value: '' },

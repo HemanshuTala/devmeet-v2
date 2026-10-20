@@ -16,7 +16,7 @@ import { ErrorAlert } from '@/components/feedback/ErrorAlert';
 
 const STATS = [
   { icon: <Zap className="w-4 h-4 text-yellow-300" />, label: '98% Success Rate' },
-  { icon: <Brain className="w-4 h-4 text-purple-300" />, label: 'AI-Powered Evaluations' },
+  { icon: <Brain className="w-4 h-4 text-blue-300" />, label: 'AI-Powered Evaluations' },
   { icon: <ShieldCheck className="w-4 h-4 text-emerald-300" />, label: 'Enterprise Security' },
 ];
 

@@ -14,6 +14,7 @@ import DeviceCheckScreen from '@/components/interview/DeviceCheckScreen';
 import { LANGUAGE_OPTIONS } from '../constants';
 import { turnsToMessages, type ChatMessage } from '../utils';
 import InterviewStartScreen from '../InterviewStartScreen';
+import StudioLaunchingScreen from '../StudioLaunchingScreen';
 import InterviewHeader from '../InterviewHeader';
 import ChatPanel from '../ChatPanel';
 import CodeEditorPanel from '../CodeEditorPanel';
@@ -406,24 +407,35 @@ export default function InterviewRoomPage() {
     return <DeviceCheckScreen onProceed={() => setDeviceCheckDone(true)} sessionMode={session?.interview_type} />;
   }
 
-  // ── Render: loading ──
-  if (pageLoading || isStarting) {
+  // ── Render: interview studio launching transition ──
+  if (isStarting) {
+    return <StudioLaunchingScreen session={session} />;
+  }
+
+  // ── Render: initial page loading ──
+  if (pageLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#fafafa]">
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] relative overflow-hidden px-4">
+        <div
+          className="absolute inset-0 opacity-40 pointer-events-none -z-10"
+          style={{
+            backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
+            backgroundSize: '20px 20px',
+          }}
+        />
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="relative z-10 rounded-2xl border border-[#e5e5e5] bg-white px-12 py-10 flex flex-col items-center"
-          style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
+          className="relative z-10 rounded-3xl border border-slate-200/80 bg-white px-10 py-8 flex flex-col items-center shadow-xl shadow-slate-200/50"
         >
-          <div className="flex items-center gap-2.5 mb-6">
-            <div className="w-7 h-7 rounded-lg bg-[#4f46e5] flex items-center justify-center">
-              <Brain className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-blue-700 flex items-center justify-center shadow-md shadow-blue-500/20">
+              <Brain className="w-4.5 h-4.5 text-white" />
             </div>
-            <span className="text-[#111] font-bold text-lg tracking-tight">DevMeet</span>
+            <span className="text-slate-900 font-bold text-lg tracking-tight">DevMeet</span>
           </div>
-          <Loader size="md" text={isStarting ? 'Setting up your interview room...' : 'Loading session...'} />
+          <Loader size="md" text="Loading session..." />
         </motion.div>
       </div>
     );
@@ -526,16 +538,16 @@ export default function InterviewRoomPage() {
                     <TabsTrigger
                       key={tab}
                       value={tab}
-                    className="relative h-full inline-flex items-center justify-center text-xs font-bold capitalize rounded-none px-1 bg-transparent hover:text-slate-700 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 data-[state=active]:shadow-none transition-colors border-none outline-none focus-visible:ring-0"
+                    className="relative h-full inline-flex items-center justify-center text-xs font-bold capitalize rounded-none px-1 bg-transparent hover:text-slate-700 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none transition-colors border-none outline-none focus-visible:ring-0"
                     >
                       <span className="relative z-10 flex items-center gap-1.5 h-full">
                         {tab === 'video' ? (
-                          <><Video className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'video' ? 'text-indigo-600' : 'text-slate-400'}`} /><span>Video Feed</span></>
+                          <><Video className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'video' ? 'text-blue-600' : 'text-slate-400'}`} /><span>Video Feed</span></>
                         ) : (
-                          <><Lightbulb className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'tips' ? 'text-indigo-600' : 'text-slate-400'}`} /><span>Tips & Guide</span></>
+                          <><Lightbulb className={`w-3.5 h-3.5 transition-colors ${rightPanelTab === 'tips' ? 'text-blue-600' : 'text-slate-400'}`} /><span>Tips & Guide</span></>
                         )}
                       </span>
-                      {rightPanelTab === tab && <motion.div layoutId="right-tab-underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500" transition={{ type: 'spring', stiffness: 380, damping: 34 }} />}
+                      {rightPanelTab === tab && <motion.div layoutId="right-tab-underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-600" transition={{ type: 'spring', stiffness: 380, damping: 34 }} />}
                     </TabsTrigger>
                   ))}
                 </TabsList>

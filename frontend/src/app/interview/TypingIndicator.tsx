@@ -40,8 +40,8 @@ export default function TypingIndicator() {
         <div
           className="px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm border"
           style={{
-            background: 'linear-gradient(135deg, rgba(37,99,235,0.06) 0%, rgba(124,58,237,0.04) 100%)',
-            borderColor: 'rgba(99,102,241,0.15)',
+            background: 'rgba(37, 99, 235, 0.04)',
+            borderColor: 'rgba(37, 99, 235, 0.12)',
           }}
         >
           {/* Animated wave bars */}
@@ -53,8 +53,8 @@ export default function TypingIndicator() {
                 style={{
                   width: 3,
                   background: i === 2
-                    ? 'linear-gradient(to top, #2563eb, #7c3aed)'
-                    : '#6366f1',
+                    ? '#2563eb'
+                    : '#3b82f6',
                 }}
                 animate={{
                   height: [4, i === 2 ? 18 : i % 2 === 0 ? 14 : 10, 4],

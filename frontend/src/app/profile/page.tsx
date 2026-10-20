@@ -381,7 +381,7 @@ export default function ProfilePage() {
                     </span>
                   ))}
                   {(profile.skills ?? []).length > 6 && (
-                    <span className="badge-indigo text-xs">
+                    <span className="badge-blue text-xs">
                       +{(profile.skills ?? []).length - 6} more
                     </span>
                   )}

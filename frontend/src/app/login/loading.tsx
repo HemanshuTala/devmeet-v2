@@ -27,7 +27,7 @@ export default function AuthLoading() {
           </div>
 
           {/* Button */}
-          <div className="h-10 w-full bg-indigo-200 rounded-lg animate-pulse mt-6" />
+          <div className="h-10 w-full bg-blue-200 rounded-lg animate-pulse mt-6" />
 
           {/* Divider */}
           <div className="h-px bg-slate-200 my-6" />

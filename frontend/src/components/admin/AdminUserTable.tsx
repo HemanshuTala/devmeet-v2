@@ -44,7 +44,7 @@ interface AdminUserTableProps {
 
 function PlanBadge({ plan }: { plan: string }) {
   const styles: Record<string, string> = {
-    enterprise: 'bg-purple-50 text-purple-700 border-purple-200',
+    enterprise: 'bg-slate-100 text-slate-800 border-slate-200',
     pro: 'bg-blue-50 text-blue-700 border-blue-200',
     free: 'bg-slate-100 text-slate-600 border-slate-200',
   };

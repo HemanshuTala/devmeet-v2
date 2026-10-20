@@ -17,7 +17,7 @@ export default React.memo(function ChatBubble({ message }: ChatBubbleProps) {
       <div
         className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
           isInterviewer
-            ? 'bg-gradient-to-br from-blue-500 to-violet-600'
+            ? 'bg-gradient-to-br from-blue-600 to-blue-700'
             : 'bg-gradient-to-br from-emerald-500 to-teal-600'
         }`}
       >
@@ -33,12 +33,12 @@ export default React.memo(function ChatBubble({ message }: ChatBubbleProps) {
         className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           isInterviewer
             ? 'bg-white border border-slate-200 text-slate-800 shadow-sm'
-            : 'bg-indigo-600 text-white'
+            : 'bg-blue-600 text-white'
         }`}
       >
         <div className="whitespace-pre-wrap break-words">{message.content}</div>
         {message.timestamp && (
-          <div className={`text-[10px] mt-1.5 font-semibold ${isInterviewer ? 'text-slate-400' : 'text-indigo-200'}`}>
+          <div className={`text-[10px] mt-1.5 font-semibold ${isInterviewer ? 'text-slate-400' : 'text-blue-100'}`}>
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         )}

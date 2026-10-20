@@ -52,7 +52,7 @@ export function AdminSystemHealth({ stats }: AdminSystemHealthProps) {
       {/* Plan Distribution */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-          <BarChart2 className="w-4 h-4 text-indigo-600" />
+          <BarChart2 className="w-4 h-4 text-blue-600" />
           <h3 className="text-sm font-bold text-slate-900">Subscription Tier Distribution</h3>
         </div>
         {stats && (
@@ -60,7 +60,7 @@ export function AdminSystemHealth({ stats }: AdminSystemHealthProps) {
             {[
               { label: 'Free Tier', count: stats.free_users, color: 'bg-slate-300' },
               { label: 'Pro Tier', count: stats.pro_users, color: 'bg-blue-600' },
-              { label: 'Enterprise', count: stats.enterprise_users, color: 'bg-purple-600' },
+              { label: 'Enterprise', count: stats.enterprise_users, color: 'bg-blue-800' },
             ].map((item) => {
               const pct = stats.total_users > 0 ? Math.round((item.count / stats.total_users) * 100) : 0;
               return (

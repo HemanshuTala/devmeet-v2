@@ -13,7 +13,7 @@ export function ProctoringShowcaseSection() {
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-xs font-bold text-indigo-600 mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-600 mb-4">
               <Shield className="w-3.5 h-3.5" />
               <span>Edge AI & Anti-Cheating Technology</span>
             </div>
@@ -50,7 +50,7 @@ export function ProctoringShowcaseSection() {
               </div>
 
               <div className="flex items-start gap-3.5">
-                <div className="p-2 rounded-xl bg-purple-50 border border-purple-100 text-purple-600 shrink-0 mt-0.5">
+                <div className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 shrink-0 mt-0.5">
                   <Eye className="w-5 h-5" />
                 </div>
                 <div>
@@ -89,7 +89,7 @@ export function ProctoringShowcaseSection() {
               </div>
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                 <span className="text-slate-600">WINDOW STATE:</span>
-                <span className="font-bold text-purple-600">FULLSCREEN LOCKED</span>
+                <span className="font-bold text-blue-600">FULLSCREEN LOCKED</span>
               </div>
             </div>
           </div>

@@ -8,7 +8,7 @@ interface SessionBadgeProps {
 }
 
 const typeClass: Record<string, string> = {
-  dsa:           'badge-indigo',
+  dsa:           'badge-blue',
   behavioral:    'badge-cyan',
   system_design: 'badge-green',
 };
@@ -23,7 +23,7 @@ const diffClass: Record<string, string> = {
   hard:   'badge-red',
 };
 const statusClass: Record<string, string> = {
-  created:     'badge-indigo',
+  created:     'badge-blue',
   active:      'badge-yellow',
   in_progress: 'badge-yellow',
   completed:   'badge-green',
@@ -32,17 +32,17 @@ const statusClass: Record<string, string> = {
 };
 
 export default function SessionBadge({ variant, value }: SessionBadgeProps) {
-  let cls = 'badge-indigo';
+  let cls = 'badge-blue';
   let label = value;
 
   if (variant === 'type') {
-    cls   = typeClass[value] ?? 'badge-indigo';
+    cls   = typeClass[value] ?? 'badge-blue';
     label = typeLabel[value] ?? value;
   } else if (variant === 'difficulty') {
-    cls   = diffClass[value] ?? 'badge-indigo';
+    cls   = diffClass[value] ?? 'badge-blue';
     label = value.charAt(0).toUpperCase() + value.slice(1);
   } else if (variant === 'status') {
-    cls   = statusClass[value] ?? 'badge-indigo';
+    cls   = statusClass[value] ?? 'badge-blue';
     label = value.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 

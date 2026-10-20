@@ -171,10 +171,10 @@ export default function DashboardPage() {
           animate={{ opacity: 1, y: 0 }}
           className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-6 md:p-8 shadow-md"
         >
-          <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-indigo-500/20 to-transparent pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-blue-500/20 to-transparent pointer-events-none" />
           <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold border border-indigo-500/30">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold border border-blue-500/30">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>AI Mock Interview Platform</span>
               </div>
@@ -189,7 +189,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
               <Link
                 href="/dashboard/create-session"
-                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-2xl font-semibold text-sm transition-all shadow-sm hover:shadow-indigo-500/20 cursor-pointer"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold text-sm transition-all shadow-sm hover:shadow-blue-500/20 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>New Interview</span>
@@ -315,7 +315,7 @@ export default function DashboardPage() {
               <h3 className="text-base font-bold text-slate-900 tracking-tight">Recent Interviews</h3>
               <Link
                 href="/dashboard/history"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
               >
                 <span>View All History</span>
                 <ArrowRight className="w-3.5 h-3.5" />

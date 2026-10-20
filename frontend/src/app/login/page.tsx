@@ -6,7 +6,7 @@ import { LoginForm } from '@/components/auth/LoginForm';
 
 const STATS = [
   { icon: <Zap className="w-4 h-4 text-yellow-300" />, label: '98% Success Rate' },
-  { icon: <Brain className="w-4 h-4 text-purple-300" />, label: 'AI-Powered' },
+  { icon: <Brain className="w-4 h-4 text-blue-300" />, label: 'AI-Powered' },
   { icon: <Code2 className="w-4 h-4 text-cyan-300" />, label: '10K+ Users' },
 ];
 

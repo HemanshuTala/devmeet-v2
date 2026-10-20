@@ -17,9 +17,9 @@ const TYPES = [
     description: 'Coding problems, algorithmic thinking, and time & space complexity analysis.',
     icon: Code2,
     skills: ['Arrays & Trees', 'DP & Graphs', 'Big O Analysis', 'Optimizations'],
-    accent: '#4f46e5',
-    accentBg: '#eef2ff',
-    accentBorder: '#c7d2fe',
+    accent: '#2563eb',
+    accentBg: '#eff6ff',
+    accentBorder: '#bfdbfe',
   },
   {
     value: 'behavioral',
@@ -102,7 +102,7 @@ function Spinner() {
         width: 28,
         height: 28,
         border: '2.5px solid #e5e5e5',
-        borderTopColor: '#4f46e5',
+        borderTopColor: '#2563eb',
         borderRadius: '50%',
         animation: 'spin 0.75s linear infinite',
       }}
@@ -119,7 +119,7 @@ function StepHeader({ n, title, sub }: { n: number; title: string; sub: string }
             width: 22,
             height: 22,
             borderRadius: '50%',
-            background: '#4f46e5',
+            background: '#2563eb',
             color: '#fff',
             fontSize: 11,
             fontWeight: 800,
@@ -215,20 +215,20 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
         @keyframes launchStepIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes launchCheckScale { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
         @keyframes launchPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-        @keyframes launchProgressGlow { 0%, 100% { box-shadow: 0 0 8px rgba(79,70,229,0.3); } 50% { box-shadow: 0 0 16px rgba(79,70,229,0.5); } }
+        @keyframes launchProgressGlow { 0%, 100% { box-shadow: 0 0 8px rgba(37, 99, 235,0.3); } 50% { box-shadow: 0 0 16px rgba(37, 99, 235,0.5); } }
       `}</style>
 
       {/* Spinner */}
       <div style={{ marginBottom: 32, position: 'relative' }}>
         <svg width="56" height="56" viewBox="0 0 56 56" style={{ animation: 'launchSpin 1.2s linear infinite' }}>
           <circle cx="28" cy="28" r="24" fill="none" stroke="#e5e5e5" strokeWidth="3" />
-          <circle cx="28" cy="28" r="24" fill="none" stroke="#4f46e5" strokeWidth="3"
+          <circle cx="28" cy="28" r="24" fill="none" stroke="#2563eb" strokeWidth="3"
             strokeDasharray="120 150" strokeLinecap="round" />
         </svg>
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Target style={{ width: 20, height: 20, color: '#4f46e5' }} />
+          <Target style={{ width: 20, height: 20, color: '#2563eb' }} />
         </div>
       </div>
 
@@ -268,14 +268,14 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: done ? '#f0fdf4' : active ? '#eef2ff' : '#f5f5f5',
-                  border: done ? '1.5px solid #bbf7d0' : active ? '1.5px solid #c7d2fe' : '1.5px solid #e5e5e5',
+                  background: done ? '#f0fdf4' : active ? '#eff6ff' : '#f5f5f5',
+                  border: done ? '1.5px solid #bbf7d0' : active ? '1.5px solid #bfdbfe' : '1.5px solid #e5e5e5',
                   transition: 'all 0.3s ease',
                   animation: done ? 'launchCheckScale 0.35s ease' : 'none',
                 }}>
                   {done
                     ? <Check style={{ width: 14, height: 14, color: '#16a34a' }} />
-                    : <StepIcon style={{ width: 14, height: 14, color: active ? '#4f46e5' : '#999' }} />
+                    : <StepIcon style={{ width: 14, height: 14, color: active ? '#2563eb' : '#999' }} />
                   }
                 </div>
 
@@ -290,7 +290,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
                   </span>
                   {active && (
                     <span style={{
-                      display: 'block', fontSize: 11, color: '#4f46e5', fontWeight: 500, marginTop: 1,
+                      display: 'block', fontSize: 11, color: '#2563eb', fontWeight: 500, marginTop: 1,
                       animation: 'launchPulse 1.5s ease infinite',
                     }}>
                       In progress…
@@ -301,7 +301,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
                 {/* Status dot */}
                 {done && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />}
                 {active && <div style={{
-                  width: 6, height: 6, borderRadius: '50%', background: '#4f46e5',
+                  width: 6, height: 6, borderRadius: '50%', background: '#2563eb',
                   animation: 'launchPulse 1s ease infinite',
                 }} />}
               </div>
@@ -322,7 +322,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
         <div style={{
           height: '100%',
           width: `${progress}%`,
-          background: '#4f46e5',
+          background: '#2563eb',
           borderRadius: 4,
           transition: 'width 0.5s ease',
           animation: 'launchProgressGlow 2s ease infinite',
@@ -555,9 +555,9 @@ function CreateSessionForm() {
                         style={{
                           padding: '8px 4px',
                           borderRadius: 8,
-                          border: duration === m ? '1.5px solid #4f46e5' : '1px solid #e8e8e8',
-                          background: duration === m ? '#eef2ff' : '#fafafa',
-                          color: duration === m ? '#4f46e5' : '#666',
+                          border: duration === m ? '1.5px solid #2563eb' : '1px solid #e8e8e8',
+                          background: duration === m ? '#eff6ff' : '#fafafa',
+                          color: duration === m ? '#2563eb' : '#666',
                           fontSize: 12,
                           fontWeight: duration === m ? 700 : 500,
                           cursor: 'pointer',
@@ -691,7 +691,7 @@ function CreateSessionForm() {
                 <button
                   onClick={handleStart}
                   disabled={createSession.isPending}
-                  className="hover:bg-[#3730a3]"
+                  className="hover:bg-[#1d4ed8]"
                   style={{
                     width: '100%',
                     display: 'flex',
@@ -700,7 +700,7 @@ function CreateSessionForm() {
                     gap: 8,
                     padding: '13px 20px',
                     borderRadius: 10,
-                    background: '#4f46e5',
+                    background: '#2563eb',
                     color: '#fff',
                     border: 'none',
                     fontSize: 14,
@@ -710,7 +710,7 @@ function CreateSessionForm() {
                     transition: 'all 0.15s',
                     fontFamily: 'inherit',
                     letterSpacing: '-0.01em',
-                    boxShadow: '0 2px 8px rgba(79,70,229,0.3)',
+                    boxShadow: '0 2px 8px rgba(37, 99, 235,0.3)',
                   }}
                 >
                   {createSession.isPending ? (

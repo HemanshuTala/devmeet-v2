@@ -14,7 +14,7 @@ const MODES = [
     features: ['LeetCode style test cases', 'Memory & execution timing', 'Dynamic hints when stuck'],
   },
   {
-    icon: <Layout className="w-6 h-6 text-indigo-600" />,
+    icon: <Layout className="w-6 h-6 text-blue-600" />,
     badge: 'Architecture & Scale',
     title: 'System Design Interviews',
     description:

@@ -14,7 +14,7 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full bg-[#1e1e1e]">
-      <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
+      <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
     </div>
   ),
 });
@@ -212,7 +212,7 @@ export default function CodeEditorPanel({
     >
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3c3c3c] shrink-0 flex-wrap">
-        <Code2 className="w-4 h-4 text-indigo-400 shrink-0" />
+        <Code2 className="w-4 h-4 text-blue-400 shrink-0" />
         <span className="text-slate-300 text-xs font-bold">Code Editor</span>
 
         {/* Language */}
@@ -310,7 +310,7 @@ export default function CodeEditorPanel({
           <button
             onClick={onSubmitCode}
             disabled={isRunning || isSubmittingCode}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all disabled:opacity-50 shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all disabled:opacity-50 shadow-sm"
           >
             {isSubmittingCode
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -340,13 +340,13 @@ export default function CodeEditorPanel({
         <div className="flex border-b border-[#3c3c3c]">
           <button
             onClick={() => setActiveResultTab('testcases')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${activeResultTab === 'testcases' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${activeResultTab === 'testcases' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
           >
             <FlaskConical className="w-3.5 h-3.5" /> Test Cases
           </button>
           <button
             onClick={() => setActiveResultTab('output')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${activeResultTab === 'output' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${activeResultTab === 'output' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
           >
             <Terminal className="w-3.5 h-3.5" /> Output
           </button>

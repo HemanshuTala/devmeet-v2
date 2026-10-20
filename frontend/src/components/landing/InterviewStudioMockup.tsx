@@ -156,10 +156,10 @@ export function InterviewStudioMockup() {
                 <div>
                   <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
                     <span>System Design</span>
-                    <span className="text-indigo-600 font-bold">90%</span>
+                    <span className="text-blue-600 font-bold">90%</span>
                   </div>
                   <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-600 rounded-full" style={{ width: '90%' }} />
+                    <div className="h-full bg-blue-600 rounded-full" style={{ width: '90%' }} />
                   </div>
                 </div>
               </div>

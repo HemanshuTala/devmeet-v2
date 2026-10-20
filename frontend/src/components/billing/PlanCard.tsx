@@ -48,7 +48,7 @@ export function PlanCard({
       transition={{ duration: 0.3 }}
       className={`relative rounded-3xl p-8 flex flex-col justify-between transition-all duration-300 ${
         isPro
-          ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 text-white shadow-2xl border-2 border-blue-500/50 transform hover:-translate-y-1'
+          ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-900 text-white shadow-2xl border-2 border-blue-500/50 transform hover:-translate-y-1'
           : 'bg-white text-slate-800 border border-slate-200/80 shadow-md hover:shadow-xl hover:border-blue-200 transform hover:-translate-y-1'
       }`}
     >
@@ -67,15 +67,15 @@ export function PlanCard({
           <div
             className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
               isPro
-                ? 'bg-indigo-500/20 border border-indigo-400/30'
+                ? 'bg-blue-500/20 border border-blue-400/30'
                 : isFree
                 ? 'bg-blue-50 border border-blue-100'
-                : 'bg-purple-50 border border-purple-100'
+                : 'bg-slate-100 border border-slate-200'
             }`}
           >
             {isFree && <Zap className="w-6 h-6 text-blue-600" />}
             {isPro && <Crown className="w-6 h-6 text-amber-300" />}
-            {isEnterprise && <Building2 className="w-6 h-6 text-purple-600" />}
+            {isEnterprise && <Building2 className="w-6 h-6 text-slate-700" />}
           </div>
           {isCurrentPlan && (
             <span
@@ -93,7 +93,7 @@ export function PlanCard({
 
         {/* Title & Description */}
         <h3 className={`text-2xl font-black ${isPro ? 'text-white' : 'text-slate-900'}`}>{plan.name}</h3>
-        <p className={`text-xs mt-1 leading-relaxed ${isPro ? 'text-indigo-200/80' : 'text-slate-500'}`}>
+        <p className={`text-xs mt-1 leading-relaxed ${isPro ? 'text-slate-300' : 'text-slate-500'}`}>
           {isFree
             ? 'Perfect for trying out basic interview sessions'
             : isPro
@@ -108,7 +108,7 @@ export function PlanCard({
               <span className={`text-4xl font-extrabold tracking-tight ${isPro ? 'text-white' : 'text-slate-900'}`}>
                 &#8377;{(displayPaise / 100).toLocaleString('en-IN')}
               </span>
-              <span className={`text-xs font-semibold ${isPro ? 'text-indigo-300' : 'text-slate-500'}`}>
+              <span className={`text-xs font-semibold ${isPro ? 'text-blue-300' : 'text-slate-500'}`}>
                 / month {isAnnual ? '(billed annually)' : ''}
               </span>
             </>
@@ -121,7 +121,7 @@ export function PlanCard({
 
         {/* Feature List */}
         <div className="space-y-3 mb-8">
-          <p className={`text-xs font-bold uppercase tracking-wider ${isPro ? 'text-indigo-300' : 'text-slate-400'}`}>
+          <p className={`text-xs font-bold uppercase tracking-wider ${isPro ? 'text-blue-300' : 'text-slate-400'}`}>
             What&apos;s Included
           </p>
           <ul className="space-y-2.5">
@@ -129,12 +129,12 @@ export function PlanCard({
               <li key={i} className="flex items-start gap-2.5 text-xs font-medium">
                 <div
                   className={`p-0.5 rounded-full mt-0.5 shrink-0 ${
-                    isPro ? 'bg-indigo-400/20 text-indigo-300' : 'bg-emerald-100 text-emerald-700'
+                    isPro ? 'bg-blue-400/20 text-blue-300' : 'bg-emerald-100 text-emerald-700'
                   }`}
                 >
                   <Check className="w-3.5 h-3.5" />
                 </div>
-                <span className={isPro ? 'text-indigo-100' : 'text-slate-700'}>{feature}</span>
+                <span className={isPro ? 'text-slate-100' : 'text-slate-700'}>{feature}</span>
               </li>
             ))}
           </ul>
@@ -155,7 +155,7 @@ export function PlanCard({
         ) : isEnterprise ? (
           <a
             href="mailto:sales@devmeet.com"
-            className="w-full py-3.5 rounded-xl text-center text-xs font-bold flex items-center justify-center gap-2 border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors"
+            className="w-full py-3.5 rounded-xl text-center text-xs font-bold flex items-center justify-center gap-2 border border-slate-300 text-slate-800 bg-slate-50 hover:bg-slate-100 transition-colors"
           >
             <ArrowRight className="w-4 h-4" />
             Contact Enterprise Sales

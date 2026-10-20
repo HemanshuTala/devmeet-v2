@@ -191,19 +191,19 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
     {
       key: 'camera' as const,
       label: 'Camera',
-      icon: checks.camera === 'pass' ? <Video className="w-4 h-4 text-[#4f46e5]" /> : <VideoOff className="w-4 h-4 text-[#999]" />,
+      icon: checks.camera === 'pass' ? <Video className="w-4 h-4 text-[#2563eb]" /> : <VideoOff className="w-4 h-4 text-[#999]" />,
       detail: checks.camera === 'fail' ? getPermissionInstructions('camera') : checks.camera === 'warn' ? 'No camera found — you can continue in audio-only mode.' : 'Camera is ready and working.',
     },
     {
       key: 'microphone' as const,
       label: 'Microphone',
-      icon: checks.microphone === 'pass' ? <Mic className="w-4 h-4 text-[#4f46e5]" /> : <MicOff className="w-4 h-4 text-[#999]" />,
+      icon: checks.microphone === 'pass' ? <Mic className="w-4 h-4 text-[#2563eb]" /> : <MicOff className="w-4 h-4 text-[#999]" />,
       detail: checks.microphone === 'fail' ? getPermissionInstructions('microphone') : checks.microphone === 'warn' ? 'No microphone found. A microphone is required.' : 'Microphone is ready. Speak to test.',
     },
     {
       key: 'network' as const,
       label: 'Network',
-      icon: checks.network === 'fail' ? <WifiOff className="w-4 h-4 text-[#dc2626]" /> : <Wifi className="w-4 h-4 text-[#4f46e5]" />,
+      icon: checks.network === 'fail' ? <WifiOff className="w-4 h-4 text-[#dc2626]" /> : <Wifi className="w-4 h-4 text-[#2563eb]" />,
       detail: serverResult?.network_quality === 'poor' ? 'Low bandwidth detected. Consider audio-only mode.' : serverResult?.network_quality === 'fair' ? 'Moderate speed. Close other apps for best results.' : 'Network connection looks good.',
     },
   ];
@@ -221,8 +221,8 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
         {/* Header */}
         <div className="px-7 pt-7 pb-5 border-b border-[#e5e5e5]">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-[#eef2ff] border border-[#c7d2fe]">
-              <Shield className="w-4.5 h-4.5 text-[#4f46e5]" />
+            <div className="p-2 rounded-xl bg-[#eff6ff] border border-[#bfdbfe]">
+              <Shield className="w-4.5 h-4.5 text-[#2563eb]" />
             </div>
             <div>
               <h1 className="text-[#111] font-bold text-lg tracking-tight">Device Check</h1>
@@ -251,7 +251,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
               {checks.camera !== 'pass' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                   {checks.camera === 'checking' ? (
-                    <div className="w-7 h-7 border-2 border-[#4f46e5] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-7 h-7 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin" />
                   ) : checks.camera === 'fail' ? (
                     <>
                       <VideoOff className="w-8 h-8 text-[#dc2626] opacity-60" />
@@ -299,7 +299,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
                       className="flex-1 rounded-sm transition-all duration-100"
                       style={{
                         height: `${height}%`,
-                        backgroundColor: active && audioLevel > 15 ? '#4f46e5' : '#d0d0d0',
+                        backgroundColor: active && audioLevel > 15 ? '#2563eb' : '#d0d0d0',
                       }}
                     />
                   );
@@ -335,7 +335,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
                     {checks[key] === 'pass' && <CheckCircle className="w-4 h-4 text-[#16a34a]" />}
                     {checks[key] === 'fail' && <XCircle className="w-4 h-4 text-[#dc2626]" />}
                     {checks[key] === 'warn' && <AlertTriangle className="w-4 h-4 text-[#d97706]" />}
-                    {checks[key] === 'checking' && <div className="w-4 h-4 border-2 border-[#4f46e5] border-t-transparent rounded-full animate-spin" />}
+                    {checks[key] === 'checking' && <div className="w-4 h-4 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin" />}
                   </div>
                   <p className={`text-[11px] mt-1 leading-relaxed ${
                     checks[key] === 'fail' ? 'text-[#dc2626]' : checks[key] === 'warn' ? 'text-[#d97706]' : 'text-[#999]'
@@ -408,7 +408,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
               disabled={!canProceed}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
                 canProceed
-                  ? 'bg-[#4f46e5] hover:bg-[#3730a3] text-white shadow-sm'
+                  ? 'bg-[#2563eb] hover:bg-[#1d4ed8] text-white shadow-sm'
                   : 'bg-[#f5f5f5] text-[#999] border border-[#e5e5e5] cursor-not-allowed'
               }`}
             >

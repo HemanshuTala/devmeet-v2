@@ -1,4 +1,5 @@
 services:
+  # ── Infrastructure ─────────────────────────────────────────────────────────
   postgres:
     image: postgres:16
     command: postgres -c max_connections=200 -c shared_buffers=256MB
@@ -29,22 +30,6 @@ services:
       timeout: 5s
       retries: 5
 
-  elasticsearch:
-    image: elasticsearch:8.11.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
   rabbitmq:
     image: rabbitmq:3.12-management
     environment:
@@ -61,64 +46,266 @@ services:
       timeout: 10s
       retries: 5
 
-  # ── Monitoring Stack (Prometheus + Grafana) ───────────────────────────────
-  prometheus:
-    image: prom/prometheus:v2.49.1
-    container_name: devmeet_prometheus
+  # ── Backend Microservices ──────────────────────────────────────────────────
+  auth-service:
+    build: ./services/auth-service
     ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=7d'
-      - '--web.enable-lifecycle'
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:10.2.3
-    container_name: devmeet_grafana
-    ports:
-      - "3001:3000"
+      - "8001:8001"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=devmeet_grafana
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/devmeet.json
-    volumes:
-      - grafana_data:/var/lib/grafana
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-devmeet_jwt_secret_change_in_prod}
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
-      - prometheus
-    restart: unless-stopped
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  user-service:
+    build: ./services/user-service
     ports:
-      - "9092:9092"
+      - "8002:8002"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - FILE_SERVICE_URL=http://file-service:8011
     depends_on:
-      - zookeeper
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+  orchestrator-service:
+    build: ./services/orchestrator-service
     ports:
-      - "2181:2181"
+      - "8003:8003"
+    volumes:
+      - ./services/orchestrator-service/app:/app/app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - USER_SERVICE_URL=http://user-service:8002
+      - AI_INTERVIEWER_URL=http://ai-interviewer-service:8004
+      - SEARCH_SERVICE_URL=http://search-service:8013
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  ai-interviewer-service:
+    build: ./services/ai-interviewer-service
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./services/ai-interviewer-service/app:/app/app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  code-execution-service:
+    build: ./services/code-execution-service
+    ports:
+      - "8005:8005"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  video-service:
+    build: ./services/video-service
+    ports:
+      - "8006:8006"
+    environment:
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+
+  feedback-service:
+    build: ./services/feedback-service
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./services/feedback-service/app:/app/app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - FILE_SERVICE_URL=http://file-service:8011
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET=${S3_BUCKET}
+      - AWS_S3_REPORTS_BUCKET=${AWS_S3_REPORTS_BUCKET:-devmeet-s3-bucket}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+
+  analytics-service:
+    build: ./services/analytics-service
+    ports:
+      - "8009:8009"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+
+  admin-service:
+    build: ./services/admin-service
+    ports:
+      - "8010:8010"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+
+  file-service:
+    build: ./services/file-service
+    ports:
+      - "8011:8011"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET=${S3_BUCKET}
+      - BASE_URL=http://localhost:8011
+
+  payment-service:
+    build: ./services/payment-service
+    ports:
+      - "8012:8012"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=devmeet
+      - POSTGRES_USER=devmeet
+      - POSTGRES_PASSWORD=devmeet_password
+      - USER_SERVICE_URL=http://user-service:8002
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    depends_on:
+      - postgres
+
+  search-service:
+    build: ./services/search-service
+    ports:
+      - "8013:8013"
+    volumes:
+      - ./services/search-service/app:/app/app
+
+  # ── Next.js Frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        - NEXT_PUBLIC_NOTIF_WS_URL=ws://localhost:8008
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+
+  # ── Nginx API Gateway ──────────────────────────────────────────────────────
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth-service
+      - user-service
+      - orchestrator-service
+      - ai-interviewer-service
+      - code-execution-service
+      - video-service
+      - feedback-service
+      - analytics-service
+      - admin-service
+      - file-service
+      - payment-service
+      - search-service
+      - frontend
 
 volumes:
   postgres_data:
   redis_data:
-  elasticsearch_data:
   rabbitmq_data:
-  prometheus_data:
-  grafana_data:

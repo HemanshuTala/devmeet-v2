@@ -37,7 +37,7 @@ function FancyBrainLoader({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' })
       {[0, 1, 2].map((i) => (
         <motion.div
           key={i}
-          className="absolute inset-0 rounded-full bg-indigo-500/10 border border-indigo-500/25"
+          className="absolute inset-0 rounded-full bg-blue-500/10 border border-blue-500/25"
           initial={{ opacity: 0.8, scale: 0.2 }}
           animate={{
             opacity: 0,
@@ -54,7 +54,7 @@ function FancyBrainLoader({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' })
 
       {/* Central brain/AI node gradient with pulse scale animation */}
       <motion.div
-        className="relative z-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20"
+        className="relative z-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20"
         style={{
           width: size === 'sm' ? 24 : size === 'md' ? 38 : size === 'lg' ? 54 : 72,
           height: size === 'sm' ? 24 : size === 'md' ? 38 : size === 'lg' ? 54 : 72,
@@ -97,7 +97,7 @@ function BouncingDots() {
       {[0, 1, 2].map((i) => (
         <motion.div
           key={i}
-          className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 shadow-sm shadow-indigo-500/10"
+          className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-sm shadow-blue-500/10"
           animate={{
             y: [0, -6, 0],
           }}

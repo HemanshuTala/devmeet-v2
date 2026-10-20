@@ -1,20 +1,37 @@
 'use client';
 
 /**
- * speech.ts — Browser Text-to-Speech (TTS) utilities
+ * ============================================================================
+ * DevMeet Frontend - Browser Text-to-Speech (TTS) Voice Synthesizer
+ * ============================================================================
+ * Coordinates client-side voice synthesis for the AI interviewer using the native
+ * HTML5 Web Speech API (`window.speechSynthesis`).
  *
- * Uses the Web Speech API (SpeechSynthesis) which is available in all
- * modern browsers. Falls back gracefully when the API is unavailable
- * (e.g., SSR, older browsers, automated tests).
+ * Key Architectural Responsibilities:
+ * 1. Autoplay Policy Bypassing (`unlockAudio`):
+ *    - Modern browsers (Chrome, Safari) restrict audio playback before user gestures.
+ *    - Synthesizes a 0-volume silent utterance on first user click to unlock AudioContext.
+ * 2. Voice Selection Heuristics:
+ *    - Queries available client voices via `getVoices()`.
+ *    - Prioritizes modern "Natural" or "Neural" high-fidelity English voices over mechanical fallbacks.
+ * 3. Graceful Degradation:
+ *    - Safely checks for SSR/Node environments (`typeof window !== 'undefined'`).
+ *    - Catches synthesis errors to guarantee voice failures never crash the interview session.
+ * ============================================================================
  */
 
-// ─── Internal state ──────────────────────────────────────────────────────────
+// ─── Module State ────────────────────────────────────────────────────────────
 
 let _utterance: SpeechSynthesisUtterance | null = null;
 let _audioUnlocked = false;
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Internal Helpers ────────────────────────────────────────────────────────
 
+/**
+ * Checks whether the browser runtime supports Web Speech API synthesis.
+ *
+ * @returns True if running in browser with speechSynthesis support.
+ */
 function isSpeechAvailable(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -23,27 +40,26 @@ function isSpeechAvailable(): boolean {
 }
 
 /**
- * unlockAudio
- * Must be called inside a user-gesture handler (click / keydown) before the
- * first call to speak(), to satisfy browser autoplay policies.
+ * Unlocks the browser audio context to permit subsequent programmatic speech synthesis.
+ * Must be triggered inside a trusted user event (e.g. "Start Interview" button click).
  */
 export function unlockAudio(): void {
   if (!isSpeechAvailable() || _audioUnlocked) return;
 
   try {
-    // Speak an empty string silently — wakes up the audio context.
+    // Speak an empty string silently — satisfies browser user gesture requirement
     const silent = new SpeechSynthesisUtterance('');
     silent.volume = 0;
     window.speechSynthesis.speak(silent);
     _audioUnlocked = true;
   } catch {
-    // Ignore — not critical
+    // Ignore non-fatal audio context initialization failures
   }
 }
 
 /**
- * stopSpeaking
- * Cancels any currently playing TTS utterance immediately.
+ * Immediately cancels any active or queued speech utterance.
+ * Used when the candidate interrupts the AI or clicks "Next Question".
  */
 export function stopSpeaking(): void {
   if (!isSpeechAvailable()) return;
@@ -52,25 +68,24 @@ export function stopSpeaking(): void {
     window.speechSynthesis.cancel();
     _utterance = null;
   } catch {
-    // Ignore
+    // Ignore cancellation errors
   }
 }
 
 /**
- * speak
- * Reads the given text aloud using TTS.
- * Cancels any in-progress utterance before starting a new one.
+ * Synthesizes and reads text aloud using the best available browser voice.
+ * Cancels any existing playback before starting.
  *
- * @param text     - The text to speak.
- * @param options  - Optional overrides for voice properties.
+ * @param text - Plain text message for the AI interviewer to speak.
+ * @param options - Optional speech rate, pitch, volume, and BCP-47 language tag.
  */
 export function speak(
   text: string,
   options?: {
-    rate?: number;   // 0.1 – 10,  default 1
-    pitch?: number;  // 0   – 2,   default 1
-    volume?: number; // 0   – 1,   default 1
-    lang?: string;   // BCP 47 language tag, default 'en-US'
+    rate?: number;   // Speed: 0.1 to 10 (default 1)
+    pitch?: number;  // Pitch: 0 to 2 (default 1)
+    volume?: number; // Volume: 0 to 1 (default 1)
+    lang?: string;   // Language code (default 'en-US')
   }
 ): void {
   if (!isSpeechAvailable()) return;
@@ -86,10 +101,10 @@ export function speak(
     utterance.volume = options?.volume ?? 1;
     utterance.lang   = options?.lang   ?? 'en-US';
 
-    // Pick a natural-sounding voice when available
+    // Query installed voices and select optimal natural voice
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
-      // Prefer an English voice with "Natural" or "Neural" in the name
+      // Prefer an English voice with "Natural" or "Neural" in the title
       const preferred =
         voices.find((v) => v.lang.startsWith('en') && /natural|neural/i.test(v.name)) ??
         voices.find((v) => v.lang.startsWith('en')) ??

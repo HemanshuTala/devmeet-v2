@@ -67,7 +67,7 @@ export function MobileBlocker() {
               width: 36,
               height: 36,
               borderRadius: 10,
-              background: '#4f46e5',
+              background: '#2563eb',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -93,14 +93,14 @@ export function MobileBlocker() {
             width: 68,
             height: 68,
             borderRadius: 18,
-            background: '#eef2ff',
-            border: '1px solid #c7d2fe',
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Monitor style={{ width: 30, height: 30, color: '#4f46e5' }} />
+          <Monitor style={{ width: 30, height: 30, color: '#2563eb' }} />
         </div>
 
         {/* Heading */}
@@ -172,7 +172,7 @@ export function MobileBlocker() {
           }}
         >
           Already on a large screen?{' '}
-          <span style={{ color: '#4f46e5', fontWeight: 600 }}>
+          <span style={{ color: '#2563eb', fontWeight: 600 }}>
             Try rotating to landscape
           </span>{' '}
           or zooming out your browser.

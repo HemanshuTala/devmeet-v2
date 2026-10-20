@@ -76,7 +76,7 @@ function PodiumCard({ entry, rank, isMe }: { entry: LeaderboardEntry; rank: numb
       <div className="text-center">
         <p className="font-bold text-slate-900 text-sm leading-tight max-w-[100px] truncate">
           {entry.display_name}
-          {isMe && <span className="ml-1 text-[9px] text-indigo-600 font-black uppercase bg-indigo-50 border border-indigo-100 px-1 rounded-sm">YOU</span>}
+          {isMe && <span className="ml-1 text-[9px] text-blue-600 font-black uppercase bg-blue-50 border border-blue-100 px-1 rounded-sm">YOU</span>}
         </p>
         <p className={`text-2xl font-black mt-0.5 tracking-tight ${c.text}`}>{entry.avg_score}%</p>
         <p className="text-[10px] text-slate-400 font-semibold">{entry.sessions_count} sessions</p>
@@ -195,10 +195,10 @@ export default function LeaderboardPage() {
           </div>
 
           {myRank > 0 && (
-            <div className="flex items-center gap-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-2.5 shadow-sm self-start sm:self-auto">
-              <Star className="w-4 h-4 text-indigo-600 fill-indigo-400" />
-              <span className="text-xs font-bold text-indigo-900">
-                Your Rank: <span className="text-indigo-600 font-extrabold text-sm">#{myRank}</span>
+            <div className="flex items-center gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-2.5 shadow-sm self-start sm:self-auto">
+              <Star className="w-4 h-4 text-blue-600 fill-blue-400" />
+              <span className="text-xs font-bold text-blue-900">
+                Your Rank: <span className="text-blue-600 font-extrabold text-sm">#{myRank}</span>
               </span>
             </div>
           )}
@@ -236,7 +236,7 @@ export default function LeaderboardPage() {
             className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all shrink-0 flex items-center gap-2 justify-center shadow-sm border ${
               user.profile_public
                 ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-indigo-500/20'
+                : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-blue-500/20'
             }`}
           >
             {updatingPublic ? (
@@ -273,7 +273,7 @@ export default function LeaderboardPage() {
               <button
                 onClick={handleTogglePublic}
                 disabled={updatingPublic}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 px-6 py-3 rounded-xl font-extrabold text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 px-6 py-3 rounded-xl font-extrabold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
               >
                 {updatingPublic ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Opt In to Leaderboard
@@ -281,7 +281,7 @@ export default function LeaderboardPage() {
             ) : (
               <button
                 onClick={() => router.push('/dashboard/create-session')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 px-6 py-3 rounded-xl font-extrabold text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 px-6 py-3 rounded-xl font-extrabold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
               >
                 Start First Session
                 <ArrowRight className="w-4 h-4" />
@@ -306,7 +306,7 @@ export default function LeaderboardPage() {
               <div className="bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-sm">
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-wider">
-                    <TrendingUp className="w-4 h-4 text-indigo-600" />
+                    <TrendingUp className="w-4 h-4 text-blue-600" />
                     Rankings 4 – {entries.length}
                   </div>
                 </div>
@@ -318,7 +318,7 @@ export default function LeaderboardPage() {
                       <li
                         key={entry.user_id}
                         className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-slate-50 ${
-                          isMe ? 'bg-indigo-50/50' : ''
+                          isMe ? 'bg-blue-50/50' : ''
                         }`}
                       >
                         <span className="w-8 text-center text-xs font-black text-slate-400">#{rank}</span>
@@ -331,7 +331,7 @@ export default function LeaderboardPage() {
                           <p className="font-bold text-slate-900 truncate text-sm">
                             {entry.display_name}
                             {isMe && (
-                              <span className="ml-2 text-[9px] uppercase font-black text-indigo-700 bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full">
+                              <span className="ml-2 text-[9px] uppercase font-black text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">
                                 You
                               </span>
                             )}

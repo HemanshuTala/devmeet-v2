@@ -73,8 +73,8 @@ export default function RecordingConsentModal({
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 text-center"
             >
-              <div className="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center mx-auto mb-5">
-                <Video className="w-7 h-7 text-purple-500" />
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto mb-5">
+                <Video className="w-7 h-7 text-blue-600" />
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">Pro Feature</h2>
               <p className="text-slate-500 text-sm mb-6">
@@ -90,7 +90,7 @@ export default function RecordingConsentModal({
                 </button>
                 <a
                   href="/billing"
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 text-white font-semibold text-sm hover:bg-purple-500 transition-colors text-center"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors text-center"
                 >
                   Upgrade to Pro
                 </a>
@@ -181,12 +181,12 @@ export default function RecordingConsentModal({
                 onClick={() => setAgreed((a) => !a)}
                 className="w-full flex items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 text-left mt-2"
                 style={{
-                  borderColor: agreed ? '#4f46e5' : '#e2e8f0',
-                  backgroundColor: agreed ? '#eef2ff' : '#f8fafc',
+                  borderColor: agreed ? '#2563eb' : '#e2e8f0',
+                  backgroundColor: agreed ? '#eff6ff' : '#f8fafc',
                 }}
               >
                 {agreed
-                  ? <CheckSquare className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                  ? <CheckSquare className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                   : <Square className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
                 }
                 <p className="text-sm text-slate-700">

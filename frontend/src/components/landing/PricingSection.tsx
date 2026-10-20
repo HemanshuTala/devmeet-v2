@@ -40,7 +40,7 @@ const PLANS = [
   },
   {
     name: 'Enterprise',
-    icon: <Building2 className="w-5 h-5 text-purple-600" />,
+    icon: <Building2 className="w-5 h-5 text-blue-600" />,
     price: 'Custom',
     period: '',
     description: 'Custom solutions for universities, engineering teams, and coding bootcamps.',
@@ -80,7 +80,7 @@ export function PricingSection() {
             key={i}
             className={`rounded-2xl p-8 flex flex-col justify-between transition-all duration-300 relative ${
               plan.popular
-                ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 text-white shadow-2xl border-2 border-blue-500/50'
+                ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-900 text-white shadow-2xl border-2 border-blue-500/50'
                 : 'bg-white text-slate-900 border border-slate-200/80 shadow-sm hover:shadow-lg'
             }`}
           >

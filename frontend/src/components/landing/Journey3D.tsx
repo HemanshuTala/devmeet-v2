@@ -46,13 +46,13 @@ const STAGES: Stage[] = [
     badge: "SECURITY HANDSHAKE",
     description: "System runs checks for active tab visibility, clipboard usage, camera/mic checks, and background voice levels.",
     icon: ShieldCheck,
-    accentColor: "from-indigo-500 to-purple-500",
-    borderColor: "border-indigo-200/50 hover:border-indigo-400",
+    accentColor: "from-blue-600 to-cyan-500",
+    borderColor: "border-blue-200/50 hover:border-blue-400",
     details: ["Tab visibility hooks", "Suspicious object block", "Audio level waveform meter"],
     mockData: (
       <div className="bg-slate-900 rounded-xl p-3 text-[10px] font-mono text-slate-300 space-y-2 border border-slate-800 shadow-inner">
         <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-          <span className="text-indigo-400 font-bold">Proctor Hub</span>
+          <span className="text-blue-400 font-bold">Proctor Hub</span>
           <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[8px] font-bold">MONITORING</span>
         </div>
         <div className="flex items-center gap-2">

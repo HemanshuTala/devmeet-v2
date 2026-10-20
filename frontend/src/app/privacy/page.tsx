@@ -66,7 +66,7 @@ export default function PrivacyPage() {
                 </div>
               </div>
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex gap-3 items-start">
-                <Database className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                <Database className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-bold text-slate-800 text-sm">Strict Consent Control</h4>
                   <p className="text-xs text-slate-500 mt-1">

@@ -138,7 +138,7 @@ export default function HistoryPage() {
                 Back to Dashboard
               </Link>
               <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-                <History className="w-7 h-7 text-indigo-600" />
+                <History className="w-7 h-7 text-blue-600" />
                 Interview History
               </h1>
               <p className="text-xs text-slate-500 font-medium">Review your past mock sessions, AI feedback, and code submissions</p>
@@ -146,7 +146,7 @@ export default function HistoryPage() {
 
             <Button
               onClick={() => router.push('/dashboard/create-session')}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-indigo-500/20 flex items-center gap-2"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               New Session
@@ -160,7 +160,7 @@ export default function HistoryPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Sessions</p>
                 <p className="text-2xl font-black text-slate-900 mt-1">{totalSessions}</p>
               </div>
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
                 <History className="w-5 h-5" />
               </div>
             </div>
@@ -190,7 +190,7 @@ export default function HistoryPage() {
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
-                <Filter className="w-4 h-4 text-indigo-600" />
+                <Filter className="w-4 h-4 text-blue-600" />
                 Filter &amp; Search Sessions
               </div>
               {hasActiveFilters && (
@@ -203,7 +203,7 @@ export default function HistoryPage() {
                     setDateFrom(undefined);
                     setDateTo(undefined);
                   }}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
                 >
                   <RotateCcw className="w-3 h-3" />
                   Reset Filters
@@ -220,7 +220,7 @@ export default function HistoryPage() {
                   placeholder="Search company or focus area..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-10 pr-4 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-10 pr-4 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all"
                 />
               </div>
 
@@ -277,7 +277,7 @@ export default function HistoryPage() {
                 <AlertCircle className="w-10 h-10 text-rose-500 mb-3" />
                 <h3 className="text-slate-900 font-bold text-sm mb-1">Failed to load history</h3>
                 <p className="text-slate-400 text-xs max-w-sm mb-4">{error?.message ?? 'Failed to load sessions'}</p>
-                <Button size="sm" onClick={() => refetch()} className="bg-indigo-600 text-white text-xs font-bold">
+                <Button size="sm" onClick={() => refetch()} className="bg-blue-600 text-white text-xs font-bold">
                   Retry
                 </Button>
               </div>
@@ -304,14 +304,14 @@ export default function HistoryPage() {
                       setDateFrom(undefined);
                       setDateTo(undefined);
                     }}
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl transition-colors"
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 border border-blue-100 px-4 py-2 rounded-xl transition-colors"
                   >
                     Clear All Filters
                   </button>
                 ) : (
                   <Button
                     onClick={() => router.push('/dashboard/create-session')}
-                    className="bg-indigo-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md shadow-indigo-500/20"
+                    className="bg-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md shadow-blue-500/20"
                   >
                     Start First Interview
                   </Button>
@@ -380,7 +380,7 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-3">
                           <Link
                             href={`/interview/${session.id}/feedback`}
-                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
+                            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
                           >
                             Feedback <ExternalLink className="w-3 h-3" />
                           </Link>

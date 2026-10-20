@@ -162,11 +162,11 @@ export default function ProfileTab({ isEditing, displayName, setDisplayName, bio
                                 onChange: setTargetCompanies,
                                 placeholder: "e.g. Google, Meta, Stripe…",
                                 disabled: false,
-                                colorClass: "badge-indigo"
+                                colorClass: "badge-blue"
                             }) : /*#__PURE__*/ _jsx("div", {
                                 className: "flex flex-wrap gap-2 min-h-[36px]",
                                 children: targetCompanies.length > 0 ? targetCompanies.map((c)=>/*#__PURE__*/ _jsx("span", {
-                                        className: "badge-indigo text-xs",
+                                        className: "badge-blue text-xs",
                                         children: c
                                     }, c)) : /*#__PURE__*/ _jsx("span", {
                                     className: "text-sm text-slate-400 italic font-medium",

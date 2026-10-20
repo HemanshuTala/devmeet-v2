@@ -91,7 +91,7 @@ export default function FeedbackCards({ strengths, weaknesses, recommendations }
             {recommendations.map((rec, idx) => (
               <div
                 key={idx}
-                className="bg-gradient-to-br from-blue-50/60 to-indigo-50/30 border border-blue-100 p-4 rounded-xl hover:border-blue-300 hover:shadow-md transition-all flex items-start gap-3 group"
+                className="bg-gradient-to-br from-blue-50/60 to-slate-50/40 border border-blue-100 p-4 rounded-xl hover:border-blue-300 hover:shadow-md transition-all flex items-start gap-3 group"
               >
                 <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm group-hover:scale-110 transition-transform">
                   {idx + 1}

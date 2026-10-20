@@ -1,12 +1,47 @@
 'use client';
 
+/**
+ * ============================================================================
+ * DevMeet Frontend - Centralized HTTP API Client & Microservice SDK
+ * ============================================================================
+ * This module is the single authoritative networking client for all frontend API
+ * interactions across DevMeet's 10 microservices.
+ *
+ * Core Capabilities & Architectural Patterns:
+ * 1. Automatic JWT Bearer Authentication & Token Storage:
+ *    - Automatically injects `Authorization: Bearer <token>` from localStorage.
+ * 2. Self-Healing Token Refresh (401 Interceptor):
+ *    - On encountering HTTP 401 Unauthorized, automatically triggers a silent refresh
+ *      cycle (`/api/v1/auth/refresh`), updates tokens, and retries the original request.
+ * 3. Standardized Error Normalization:
+ *    - Parses FastAPI validation errors (422) into clean human-readable error messages.
+ *    - Throws strongly-typed `ApiError` instances containing status codes and payload details.
+ * 4. Microservice Domain Namespaces:
+ *    - `apiClient`: Core session, token storage, and authentication.
+ *    - `authApi`: Multi-factor auth (MFA/TOTP), email verification, and password resets.
+ *    - `userApi`: Profile management, avatar upload, and leaderboard queries.
+ *    - `sessionApi`: Interview session state machine, code submissions, and proctoring.
+ *    - `aiApi`: Speech-to-text audio transcription and AI hint requests.
+ *    - `executionApi`: Code execution sandbox submissions (sync and async).
+ *    - `analyticsApi`: User dashboard telemetry and score trend charts.
+ *    - `adminApi`: Platform statistics, user moderation, and support impersonation.
+ *    - `paymentApi`: Razorpay orders, subscription billing, and webhook simulations.
+ *    - `searchApi`: Question bank discovery and random problem dispatch.
+ *    - `videoApi`: WebRTC LiveKit tokens, pre-flight device diagnostics, and recordings.
+ *    - `feedbackApi`: Session scoring rubrics, radar metrics, and PDF exports.
+ * ============================================================================
+ */
+
 import { ApiError } from './api-errors';
 
+// Base Gateway URL resolved from environment variables with local fallback
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_GATEWAY_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:8000';
 
+
+// ─── Domain Interface Declarations ───────────────────────────────────────────
 
 export interface TokenResponse {
   access_token: string;
@@ -100,19 +135,22 @@ type RequestOptions = RequestInit & {
   retryOnUnauthorized?: boolean;
 };
 
-function isBrowser() {
+
+// ─── Token & Environment Helpers ─────────────────────────────────────────────
+
+function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }
 
-function getAccessToken() {
+function getAccessToken(): string | null {
   return isBrowser() ? localStorage.getItem('access_token') : null;
 }
 
-function getRefreshToken() {
+function getRefreshToken(): string | null {
   return isBrowser() ? localStorage.getItem('refresh_token') : null;
 }
 
-function storeTokens(tokens: TokenResponse) {
+function storeTokens(tokens: TokenResponse): void {
   if (!isBrowser()) return;
   localStorage.setItem('access_token', tokens.access_token);
   if (tokens.refresh_token) {
@@ -128,21 +166,29 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return response.text() as Promise<T>;
 }
 
+
+// ─── Core Request Dispatcher ─────────────────────────────────────────────────
+
 /**
- * Core HTTP client function that sends requests to the backend API Gateway.
- * Features:
- * 1. Automatically attaches the Bearer JWT token if user is signed in.
- * 2. On 401 Unauthorized, automatically attempts to refresh the access token once and retries the request.
- * 3. Normalizes FastAPI 422 validation errors into readable English messages.
+ * Core HTTP dispatcher that executes requests against the API Gateway with
+ * automated authentication injection, retry handling, and error formatting.
+ *
+ * @param path - API endpoint route path (e.g. `/api/v1/auth/login`).
+ * @param options - Request options including authorization and retry flags.
+ * @returns Parsed JSON response body.
+ * @throws ApiError on non-2xx status code.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, retryOnUnauthorized = true, headers, ...init } = options;
   const token = getAccessToken();
   const requestHeaders = new Headers(headers);
 
+  // Set default JSON content type unless sending binary multipart form data
   if (!requestHeaders.has('Content-Type') && !(init.body instanceof FormData)) {
     requestHeaders.set('Content-Type', 'application/json');
   }
+
+  // Inject Bearer JWT authorization header
   if (auth && token) {
     requestHeaders.set('Authorization', `Bearer ${token}`);
   }
@@ -153,20 +199,29 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     credentials: 'include',
   });
 
+  // Handle token expiration via automatic silent refresh
   if (response.status === 401 && retryOnUnauthorized && auth) {
     const refreshed = await apiClient.refreshToken().catch(() => null);
     if (refreshed) {
+      // Retry original request once with fresh access token
       return request<T>(path, { ...options, retryOnUnauthorized: false });
     }
   }
 
+  // Handle HTTP error responses
   if (!response.ok) {
     const payload = await parseResponse<any>(response).catch(() => null);
     let message = payload?.detail || payload?.message || response.statusText;
+    
+    // Normalize FastAPI 422 Unprocessable Entity array payloads
     if (response.status === 422 && Array.isArray(payload?.detail)) {
       message = payload.detail.map((err: any) => err.msg).join(', ');
     }
-    throw new ApiError(response.status, typeof message === 'string' ? message : JSON.stringify(message), payload);
+    throw new ApiError(
+      response.status,
+      typeof message === 'string' ? message : JSON.stringify(message),
+      payload
+    );
   }
 
   return parseResponse<T>(response);
@@ -179,6 +234,12 @@ function json(method: string, body?: unknown): RequestInit {
   };
 }
 
+
+// ─── Domain API Modules ──────────────────────────────────────────────────────
+
+/**
+ * Core Authentication and Session Identity Client
+ */
 export const apiClient = {
   getTokens() {
     return {
@@ -226,6 +287,9 @@ export const apiClient = {
   },
 };
 
+/**
+ * Security, MFA, and Credential Recovery Endpoints
+ */
 export const authApi = {
   changePassword: (current_password: string, new_password: string) =>
     request('/api/v1/auth/change-password', json('POST', { current_password, new_password })),
@@ -252,6 +316,9 @@ export const authApi = {
   },
 };
 
+/**
+ * Candidate Profile and Entitlement Endpoints
+ */
 export const userApi = {
   getProfile: () => request<UserProfile>('/api/v1/users/me'),
   updateProfile: (updates: UserProfileUpdate) => request<UserProfile>('/api/v1/users/me', json('PUT', updates)),
@@ -267,6 +334,9 @@ export const userApi = {
   getLeaderboard: (limit = 25) => request<any[]>(`/api/v1/users/leaderboard?limit=${limit}`),
 };
 
+/**
+ * Interview Session Lifecycle and Execution Operations
+ */
 export const sessionApi = {
   list: () => request<any[]>('/api/v1/sessions'),
   get: (id: string) => request<any>(`/api/v1/sessions/${id}`),
@@ -287,17 +357,26 @@ export const sessionApi = {
     request<any>(`/api/v1/sessions/${id}/code`, json('POST', { session_id: id, language, code })),
 };
 
+/**
+ * AI Interviewer Audio and Question Generation
+ */
 export const aiApi = {
   streamQuestionUrl: () => `${API_BASE_URL}/api/v1/interview/question/stream`,
   transcribeAudio: (formData: FormData) => request<any>('/api/v1/interview/transcribe', { method: 'POST', body: formData }),
   getHint: (payload: unknown) => request<any>('/api/v1/interview/hint', json('POST', payload)),
 };
 
+/**
+ * Remote Code Execution Sandbox Runner
+ */
 export const executionApi = {
   execute: (payload: unknown) => request<any>('/api/v1/execute', json('POST', payload)),
   executeAsync: (payload: unknown) => request<any>('/api/v1/execute/submit-async', json('POST', payload)),
 };
 
+/**
+ * Performance Analytics and Telemetry
+ */
 export const analyticsApi = {
   track: (event_type: string, user_id?: string, session_id?: string, metadata?: Record<string, unknown>) =>
     request('/api/v1/analytics/event', json('POST', { event_type, user_id, session_id, properties: metadata })).catch(() => null),
@@ -307,6 +386,9 @@ export const analyticsApi = {
     request<any>(`/api/v1/analytics/user/${userId}/score-trend?days=${days}`),
 };
 
+/**
+ * Administrative Platform Management
+ */
 export const adminApi = {
   getStats: () => request<any>('/api/v1/admin/stats'),
   listUsers: (q?: string, limit = 50, offset = 0) =>
@@ -320,6 +402,9 @@ export const adminApi = {
   impersonateUser: (id: string) => request<TokenResponse>(`/api/v1/admin/users/${id}/impersonate`, json('POST')),
 };
 
+/**
+ * Subscription Checkout and Billing Gateway
+ */
 export const paymentApi = {
   getConfig: () => request<{ provider: string; razorpay_enabled: boolean; razorpay_key_id?: string; currency: string }>('/api/v1/payments/config'),
   getPlans: () => request<any>('/api/v1/payments/plans'),
@@ -337,6 +422,9 @@ export const paymentApi = {
   cancelSubscription: () => request('/api/v1/payments/cancel', json('POST')),
 };
 
+/**
+ * Question Bank Search and Problem Discovery
+ */
 export const searchApi = {
   search: (params: Record<string, unknown>) => {
     const qs = new URLSearchParams();
@@ -353,6 +441,9 @@ export const searchApi = {
   },
 };
 
+/**
+ * WebRTC Video, Audio Diagnostics, and Session Recording
+ */
 export const videoApi = {
   getToken: (room_name: string, participant_identity: string, participant_name?: string) =>
     request<any>('/api/v1/video/token', json('POST', { room_name, participant_identity, participant_name })),
@@ -365,11 +456,12 @@ export const videoApi = {
     request(`/api/v1/video/room/${room_name}/quality`, json('POST', { participant_identity: user_id, metrics: quality })),
 };
 
+/**
+ * AI Feedback Evaluation and Scorecard Export
+ */
 export const feedbackApi = {
   get: (sessionId: string) => request<any>(`/api/v1/feedback/${sessionId}`),
   generate: (sessionId: string, payload?: Record<string, unknown>) =>
-    request<any>('/api/v1/feedback/generate', json('POST', { session_id: sessionId, ...payload })),
+    request<any>(`/api/v1/feedback/generate', json('POST', { session_id: sessionId, ...payload })),
   downloadPdf: (sessionId: string) => request<Blob>(`/api/v1/feedback/${sessionId}/pdf`, { headers: { Accept: 'application/pdf' } }),
 };
-
-

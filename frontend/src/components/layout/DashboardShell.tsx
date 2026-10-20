@@ -70,7 +70,7 @@ function NavLink({
       <Icon
         className={cn(
           'w-4 h-4 flex-shrink-0 transition-colors',
-          isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-900'
+          isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-900'
         )}
       />
       {!collapsed && (
@@ -79,7 +79,7 @@ function NavLink({
       {isActive && !collapsed && (
         <motion.div
           layoutId="activeTabIndicator"
-          className="absolute right-2 w-1.5 h-1.5 rounded-full bg-indigo-400"
+          className="absolute right-2 w-1.5 h-1.5 rounded-full bg-blue-400"
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
         />
       )}
@@ -148,12 +148,12 @@ export default function DashboardShell({
         {/* Brand Logo Header */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-slate-100">
           <Link href="/dashboard" className="flex items-center gap-2.5 text-slate-900 text-decoration-none">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm flex-shrink-0">
               <Zap className="w-4.5 h-4.5 text-white fill-white" />
             </div>
             {!sidebarCollapsed && (
               <span className="font-bold tracking-tight text-base text-slate-900 font-display">
-                Dev<span className="text-indigo-600">Meet</span>
+                Dev<span className="text-blue-600">Meet</span>
               </span>
             )}
           </Link>
@@ -179,19 +179,19 @@ export default function DashboardShell({
           <div className="mx-3 mb-3 p-3.5 rounded-xl bg-slate-900 text-white shadow-sm space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-slate-300">Free Tier</span>
-              <span className="font-semibold text-indigo-300">
+              <span className="font-semibold text-blue-300">
                 {quota.interviewCount ?? 0} / {quota.limit ?? 5} Interviews
               </span>
             </div>
             <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
                 style={{ width: `${Math.min(((quota.interviewCount ?? 0) / (quota.limit ?? 5)) * 100, 100)}%` }}
               />
             </div>
             <Link
               href="/billing"
-              className="block text-center text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 pt-0.5"
+              className="block text-center text-[11px] font-semibold text-blue-400 hover:text-blue-300 pt-0.5"
             >
               Upgrade to Pro →
             </Link>
@@ -225,7 +225,7 @@ export default function DashboardShell({
         <div className="p-3 border-t border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <Avatar className="w-8 h-8 rounded-lg flex-shrink-0">
-              <AvatarFallback className="bg-indigo-600 text-white text-xs font-bold">
+              <AvatarFallback className="bg-blue-600 text-white text-xs font-bold">
                 {getInitials(displayName)}
               </AvatarFallback>
             </Avatar>
@@ -285,7 +285,7 @@ export default function DashboardShell({
             {/* Quick User Profile Shortcut */}
             <Link href="/profile">
               <Avatar className="w-7 h-7 hover:opacity-80 transition-opacity cursor-pointer">
-                <AvatarFallback className="bg-indigo-600 text-white text-[11px] font-bold">
+                <AvatarFallback className="bg-blue-600 text-white text-[11px] font-bold">
                   {getInitials(displayName)}
                 </AvatarFallback>
               </Avatar>

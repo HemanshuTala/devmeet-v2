@@ -1,5 +1,28 @@
+/**
+ * ============================================================================
+ * DevMeet Frontend - Client-Side Authentication Form Validation Schemas
+ * ============================================================================
+ * Provides runtime input validation using Zod for login, registration,
+ * and credential rotation forms.
+ *
+ * Security & Validation Rules:
+ * 1. Email Format: Asserts standard RFC email format and non-empty string.
+ * 2. Enterprise Password Complexity:
+ *    - Minimum length: 8 characters.
+ *    - At least one uppercase letter ([A-Z]).
+ *    - At least one lowercase letter ([a-z]).
+ *    - At least one digit ([0-9]).
+ *    - At least one special symbol.
+ * 3. Cross-Field Confirmation:
+ *    - Enforces `.refine()` match between password and confirmPassword fields.
+ * ============================================================================
+ */
+
 import { z } from 'zod';
 
+/**
+ * Validation schema for the candidate login form.
+ */
 export const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
   password: z.string().min(1, 'Password is required'),
@@ -7,6 +30,9 @@ export const loginSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
 
+/**
+ * Common reusable password complexity schema enforcing entropy and character diversity.
+ */
 const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
@@ -15,6 +41,9 @@ const passwordSchema = z
   .regex(/[0-9]/, 'Include at least one number')
   .regex(/[!@#$%^&*(),.?":{}|<>]/, 'Include at least one special character');
 
+/**
+ * Validation schema for new candidate account registration.
+ */
 export const registerSchema = z
   .object({
     display_name: z
@@ -32,6 +61,9 @@ export const registerSchema = z
 
 export type RegisterFormValues = z.infer<typeof registerSchema>;
 
+/**
+ * Validation schema for authenticated user password change dialogs.
+ */
 export const changePasswordSchema = z
   .object({
     current_password: z.string().min(1, 'Current password is required'),

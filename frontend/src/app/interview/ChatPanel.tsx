@@ -110,7 +110,7 @@ export default function ChatPanel({
         <button
           onClick={onToggleMute}
           className={`ml-2 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all ${
-            !isMuted ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+            !isMuted ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
           }`}
           title={isMuted ? 'Unmute AI voice' : 'Mute AI voice'}
         >
@@ -141,7 +141,7 @@ export default function ChatPanel({
           <button
             onClick={onToggleVideoFeed}
             className={`ml-2 text-[10px] font-bold px-2 py-1 rounded-md border flex items-center gap-1 transition-all ${
-              showVideoFeed ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+              showVideoFeed ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
             }`}
           >
             {showVideoFeed ? (
@@ -181,8 +181,8 @@ export default function ChatPanel({
         <div className="px-4 py-4 flex flex-col gap-4 min-h-full">
           {messages.length === 0 && !isAiTyping && (
             <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="w-12 h-12 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center mb-3">
-                <MessageSquare className="w-6 h-6 text-indigo-500" />
+              <div className="w-12 h-12 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center mb-3">
+                <MessageSquare className="w-6 h-6 text-blue-500" />
               </div>
               <p className="text-slate-500 text-sm font-semibold">Ready to begin</p>
               <p className="text-slate-400 text-xs mt-1">Your AI interviewer will introduce themselves shortly.</p>
@@ -246,7 +246,7 @@ export default function ChatPanel({
 
       {/* Input area */}
       <div className="px-4 pb-4 pt-2 border-t border-slate-200 bg-white flex-shrink-0">
-        <div className="bg-white border border-slate-200 p-2 focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-200 rounded-xl transition-all shadow-sm">
+        <div className="bg-white border border-slate-200 p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-200 rounded-xl transition-all shadow-sm">
           <textarea
             ref={textareaRef}
             value={input}
