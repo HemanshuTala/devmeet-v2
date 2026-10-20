@@ -343,7 +343,7 @@ Return a single valid JSON object with this EXACT structure (no markdown, no ext
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Here is the transcript to evaluate:\n\n{transcript_text}"},
             ],
-            model="llama-3.1-8b-instant",
+            model=os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
             temperature=0.2,
             response_format={"type": "json_object"},
         )

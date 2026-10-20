@@ -460,10 +460,10 @@ async def generate_question_stream(
             client = AsyncGroq(api_key=key)
             full_text = ""
             models_to_try = [
-                os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-                "llama-3.1-8b-instant",
-                "mixtral-8x7b-32768",
-                "gemma2-9b-it",
+                os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
+                "qwen/qwen3.8-27b",
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
             ]
 
             stream_success = False
@@ -721,7 +721,7 @@ async def get_hint(
 
         try:
             response = client.chat.completions.create(
-                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                model=os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
                 messages=[
                     {"role": "system", "content": "You are a helpful interview coach giving a single progressive hint. Respond only with JSON."},
                     {"role": "user", "content": f"Question: {request_data.question}{code_context}\n\nGive one specific, progressive hint without giving away the solution. JSON: {{\"hint\": \"...\", \"level\": 1}}"},

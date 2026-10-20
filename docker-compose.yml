@@ -134,6 +134,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-qwen/qwen3.8-27b}
       - AUTH_SERVICE_URL=http://auth-service:8001
     depends_on:
       postgres:
@@ -184,6 +185,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-qwen/qwen3.8-27b}
       - AUTH_SERVICE_URL=http://auth-service:8001
       - FILE_SERVICE_URL=http://file-service:8011
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}

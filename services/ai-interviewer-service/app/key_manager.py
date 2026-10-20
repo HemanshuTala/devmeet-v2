@@ -65,10 +65,10 @@ def _get_next_key() -> Optional[str]:
 # Model fallback hierarchy: if the primary model fails or is rate-limited,
 # requests degrade down the chain to ensure the interview continues uninterrupted
 _MODEL_FALLBACKS = [
-    os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),  # Flagship model
-    "llama-3.1-8b-instant",                              # Fast backup
-    "mixtral-8x7b-32768",                                # Large context backup
-    "gemma2-9b-it",                                      # Alternative architecture backup
+    os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),  # Primary high-capacity model
+    "qwen/qwen3.8-27b",                          # Fast backup
+    "openai/gpt-oss-120b",                       # High reasoning backup
+    "openai/gpt-oss-20b",                        # Emergency compact backup
 ]
 _model_index = 0
 
