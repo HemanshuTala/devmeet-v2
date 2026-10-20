@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { apiClient, notificationApi, UserProfile, LoginCredentials, RegisterData, TokenResponse, MfaLoginChallenge, authApi } from '@/lib/api';
+import { apiClient, UserProfile, LoginCredentials, RegisterData, TokenResponse, MfaLoginChallenge, authApi } from '@/lib/api';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -62,56 +62,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
-
-  // WebSocket push notifications
-  useEffect(() => {
-    if (!user) return;
-
-    const userId = user.id;
-    let ws: WebSocket | null = null;
-    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-    let reconnectDelay = 1000;
-
-    function connect() {
-      try {
-        const wsUrl = notificationApi.getWebSocketUrl(userId);
-        ws = new WebSocket(wsUrl);
-
-        ws.onopen = () => {
-          reconnectDelay = 1000;
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            toast(data.title, {
-              description: data.message,
-              ...(data.type === 'error' ? { type: 'error' as const } : {}),
-            });
-          } catch (err) {
-            console.error('Failed to parse WS notification:', err);
-          }
-        };
-
-        ws.onclose = (e) => {
-          if (e.code === 1000 || e.code === 1001) return;
-          reconnectTimeout = setTimeout(() => {
-            reconnectDelay = Math.min(reconnectDelay * 2, 30000);
-            connect();
-          }, reconnectDelay);
-        };
-      } catch (err) {
-        console.error('Failed to initialize Notification WS:', err);
-      }
-    }
-
-    connect();
-
-    return () => {
-      ws?.close(1000, 'User logged out or context unmounted');
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-    };
-  }, [user]);
 
   const login = async (credentials: LoginCredentials) => {
     const result = await apiClient.login(credentials);

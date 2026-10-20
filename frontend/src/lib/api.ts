@@ -7,7 +7,6 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:8000';
 
-const NOTIF_WS_URL = process.env.NEXT_PUBLIC_NOTIF_WS_URL || 'ws://localhost:8008';
 
 export interface TokenResponse {
   access_token: string;
@@ -129,6 +128,13 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return response.text() as Promise<T>;
 }
 
+/**
+ * Core HTTP client function that sends requests to the backend API Gateway.
+ * Features:
+ * 1. Automatically attaches the Bearer JWT token if user is signed in.
+ * 2. On 401 Unauthorized, automatically attempts to refresh the access token once and retries the request.
+ * 3. Normalizes FastAPI 422 validation errors into readable English messages.
+ */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, retryOnUnauthorized = true, headers, ...init } = options;
   const token = getAccessToken();
@@ -366,7 +372,4 @@ export const feedbackApi = {
   downloadPdf: (sessionId: string) => request<Blob>(`/api/v1/feedback/${sessionId}/pdf`, { headers: { Accept: 'application/pdf' } }),
 };
 
-export const notificationApi = {
-  getWebSocketUrl: (userId: string) => `${NOTIF_WS_URL}/ws?user_id=${userId}`,
-};
 

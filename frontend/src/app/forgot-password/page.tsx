@@ -37,12 +37,12 @@ export default function ForgotPasswordPage() {
           Back to sign in
         </Link>
 
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_4px_24px_rgba(79,70,229,0.08)] p-8">
+        <div className="bg-white border border-blue-100/80 rounded-2xl shadow-2xl shadow-blue-500/5 p-8 md:p-10">
           <div className="flex items-center gap-2.5 mb-6">
-            <div className="w-9 h-9 rounded-lg bg-[#4f46e5] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
               <Brain className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-[#4f46e5]">DevMeet</span>
+            <span className="text-xl font-bold text-slate-900">DevMeet</span>
           </div>
 
           {sent ? (

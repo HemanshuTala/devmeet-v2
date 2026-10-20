@@ -1,15 +1,14 @@
 import React from 'react';
-import { Sparkles, CheckCircle, Zap, CreditCard } from 'lucide-react';
+import Link from 'next/link';
+import { Sparkles, CheckCircle, Zap, CreditCard, ArrowRight } from 'lucide-react';
 
 interface BillingTabProps {
   plan: 'free' | 'pro' | 'enterprise';
-  setShowStripeModal: (v: boolean) => void;
   showToast: (type: 'success' | 'error', message: string) => void;
 }
 
 export default function BillingTab({
   plan,
-  setShowStripeModal,
   showToast,
 }: BillingTabProps) {
   return (
@@ -114,13 +113,14 @@ export default function BillingTab({
               Active Plan
             </button>
           ) : (
-            <button
-              onClick={() => setShowStripeModal(true)}
-              className="btn-primary w-full py-2 text-xs font-bold flex items-center justify-center gap-1 shadow-md shadow-blue-200 hover:scale-[1.02] active:scale-[0.98]"
+            <Link
+              href="/billing"
+              className="btn-primary w-full py-2 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-blue-200 hover:scale-[1.02] active:scale-[0.98]"
             >
               <CreditCard className="w-3.5 h-3.5" />
               Upgrade to Pro
-            </button>
+              <ArrowRight className="w-3 h-3 ml-0.5" />
+            </Link>
           )}
         </div>
 
