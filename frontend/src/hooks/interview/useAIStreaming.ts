@@ -115,6 +115,7 @@ export function useAIStreaming(opts: {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Request-ID': crypto.randomUUID(),
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify(payload),

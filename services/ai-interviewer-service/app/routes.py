@@ -35,9 +35,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 import asyncio
 import json as json_module
 import httpx
+import logging
 import os
 from typing import Optional, List
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from .models import InterviewRequest, InterviewResponse, FeedbackRequest, FeedbackResponse
 from .ai_manager import ai_manager
