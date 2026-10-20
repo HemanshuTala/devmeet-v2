@@ -66,7 +66,6 @@ def _get_next_key() -> Optional[str]:
 # requests degrade down the chain to ensure the interview continues uninterrupted
 _MODEL_FALLBACKS = [
     os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),  # Primary high-capacity model
-    "qwen/qwen3.8-27b",                          # Fast backup
     "openai/gpt-oss-120b",                       # High reasoning backup
     "openai/gpt-oss-20b",                        # Emergency compact backup
 ]

@@ -285,41 +285,37 @@ export default function InterviewRoomPage() {
 
   /**
    * Starts the interview session from the lobby start screen.
-   * Requests fullscreen, triggers API status change, and kicks off AI question generation.
+   * Requests fullscreen, triggers API status change, and kicks off AI question generation with zero artificial latency.
    */
   const handleStart = useCallback(async () => {
-    if (!session || isStarting) return;
-    setIsStarting(true);
+    if (!session) return;
     setChatError(null);
     enterFullscreen(); // User gesture required for browser fullscreen
 
-    try {
-      // 1. Transition backend session to in_progress
-      const updated = await sessionApi.start(session.id);
-      setSession(updated);
+    // Optimistically update session status to in_progress to open studio instantly
+    const optimisticallyUpdated = { ...session, status: 'in_progress' };
+    setSession(optimisticallyUpdated);
+    setIsStarting(false);
 
-      // 2. Start session timer and keepalive heartbeat
-      timer.startTimer();
-      timer.startHeartbeat(session.id, {
-        onAutoComplete: () => router.push(`/interview/${session.id}/feedback`),
-        onAutoCancel: (msg) => setPageError(msg),
-      });
+    // Start timer and keepalive heartbeat immediately
+    timer.startTimer();
+    timer.startHeartbeat(session.id, {
+      onAutoComplete: () => router.push(`/interview/${session.id}/feedback`),
+      onAutoCancel: (msg) => setPageError(msg),
+    });
 
-      // 3. Smooth visual studio launch transition (900ms)
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    // Fire question generation immediately in parallel with backend state transition
+    streaming.generateQuestion([], optimisticallyUpdated).catch((err: any) => {
+      setChatError(err?.message || 'Failed to generate initial question. Click Retry.');
+    });
 
-      // 4. Enter active interview studio immediately
-      setIsStarting(false);
-
-      // 5. Fire initial question generation inside the studio (non-blocking)
-      streaming.generateQuestion([], updated).catch((err: any) => {
-        setChatError(err?.message || 'Failed to generate initial question. Click Retry.');
-      });
-    } catch (err: any) {
-      setChatError(err?.message || 'Failed to start interview. Please try again.');
-      setIsStarting(false);
-    }
-  }, [session, isStarting, timer, streaming, router, enterFullscreen]);
+    // Confirm state transition on backend asynchronously
+    sessionApi.start(session.id).then((confirmed) => {
+      setSession(confirmed);
+    }).catch((err: any) => {
+      setChatError(err?.message || 'Failed to sync session start with server.');
+    });
+  }, [session, timer, streaming, router, enterFullscreen]);
 
   /**
    * Sends candidate's typed or spoken message to the AI interviewer.

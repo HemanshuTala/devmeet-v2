@@ -461,7 +461,6 @@ async def generate_question_stream(
             full_text = ""
             models_to_try = [
                 os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
-                "qwen/qwen3.8-27b",
                 "openai/gpt-oss-120b",
                 "openai/gpt-oss-20b",
             ]

@@ -11,6 +11,7 @@
 import React from 'react';
 import { Brain } from 'lucide-react';
 import { type ChatMessage } from './utils';
+import FormattedMessage from './FormattedMessage';
 
 /**
  * Props passed to the ChatBubble component.
@@ -32,8 +33,8 @@ export default React.memo(function ChatBubble({ message }: ChatBubbleProps) {
       <div
         className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
           isInterviewer
-            ? 'bg-gradient-to-br from-blue-600 to-blue-700'
-            : 'bg-gradient-to-br from-emerald-500 to-teal-600'
+            ? 'bg-gradient-to-br from-indigo-600 to-blue-700 ring-2 ring-indigo-100'
+            : 'bg-gradient-to-br from-emerald-500 to-teal-600 ring-2 ring-emerald-100'
         }`}
       >
         {isInterviewer ? (
@@ -45,18 +46,17 @@ export default React.memo(function ChatBubble({ message }: ChatBubbleProps) {
 
       {/* Message Bubble container */}
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+        className={`max-w-[85%] rounded-2xl px-4 py-3.5 text-sm leading-relaxed ${
           isInterviewer
-            ? 'bg-white border border-slate-200 text-slate-800 shadow-sm'
-            : 'bg-blue-600 text-white'
+            ? 'bg-white border border-slate-200/90 text-slate-800 shadow-xs'
+            : 'bg-indigo-600 text-white shadow-xs'
         }`}
       >
-        {/* Preserves line breaks and code formatting */}
-        <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        <FormattedMessage content={message.content} isInterviewer={isInterviewer} />
 
         {/* Timestamp */}
         {message.timestamp && (
-          <div className={`text-[10px] mt-1.5 font-semibold ${isInterviewer ? 'text-slate-400' : 'text-blue-100'}`}>
+          <div className={`text-[10px] mt-2 font-medium ${isInterviewer ? 'text-slate-400' : 'text-indigo-200'}`}>
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         )}
