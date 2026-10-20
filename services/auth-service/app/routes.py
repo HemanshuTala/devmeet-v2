@@ -374,14 +374,7 @@ async def login(user_data: UserLogin, request: Request, background_tasks: Backgr
     # Successful password check: clear lockout counter
     await db.reset_failed_login_attempts(user_data.email)
 
-    # 3. Require email verification
-    if user.get("email_verified") is False:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email before signing in. Check your inbox or request a new code in Settings.",
-        )
-
-    # 4. GeoIP Risk Assessment
+    # 3. GeoIP Risk Assessment
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     recent_history = await db.get_recent_login_history(str(user["id"]), limit=5)

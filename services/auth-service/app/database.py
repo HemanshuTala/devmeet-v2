@@ -126,7 +126,7 @@ class Database:
             row = await conn.fetchrow(
                 """
                 INSERT INTO user_profiles (email, password_hash, display_name, email_verified)
-                VALUES ($1, $2, $3, false)
+                VALUES ($1, $2, $3, true)
                 RETURNING id, email, display_name, avatar_url, bio, created_at, email_verified
                 """,
                 email.lower(), password_hash, display_name,
