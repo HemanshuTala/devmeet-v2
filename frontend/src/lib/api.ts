@@ -331,7 +331,7 @@ export const videoApi = {
 export const feedbackApi = {
   get: (sessionId: string) => request<any>(`/api/v1/feedback/${sessionId}`),
   generate: (sessionId: string, payload?: Record<string, unknown>) =>
-    request<any>('/api/v1/feedback/generate', json('POST', { ...payload, session_id: sessionId })),
+    request<any>('/api/v1/feedback/generate', json('POST', { session_id: sessionId, ...payload })),
   downloadPdf: (sessionId: string) => request<Blob>(`/api/v1/feedback/${sessionId}/pdf`, { headers: { Accept: 'application/pdf' } }),
 };
 

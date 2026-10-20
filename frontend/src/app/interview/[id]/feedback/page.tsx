@@ -53,30 +53,56 @@ export default function InterviewFeedbackPage() {
         setSession(s);
 
         let conversationTurns: any[] = [];
+        // Helper: extract plain question text from a turn (AI turns may be JSON-encoded when hints are present)
+        const extractTurnContent = (turn: any): string => {
+          const raw = turn.content || '';
+          if (raw.startsWith('{') && turn.role !== 'candidate') {
+            try {
+              const parsed = JSON.parse(raw);
+              return parsed.question || raw;
+            } catch {
+              return raw;
+            }
+          }
+          return raw;
+        };
+
         try {
-          const turnsData = await sessionApi.getTurns(sessionId);
+          const turnsData: any = await sessionApi.getTurns(sessionId);
           conversationTurns = Array.isArray(turnsData) ? turnsData : turnsData?.turns || [];
         } catch {
           conversationTurns = [];
         }
         setTurns(conversationTurns);
 
+        // Step 1: Try fetching an already-generated report from the DB.
+        // If it doesn't exist yet (404 throws ApiError), generate it fresh.
+        let fb: any = null;
         try {
-          let fb = await feedbackApi.get(sessionId);
-          if (!fb || !fb.overall_score) {
+          fb = await feedbackApi.get(sessionId);
+        } catch {
+          // 404 or network error — report not generated yet, proceed to generate below
+        }
+
+        if (!fb || !fb.overall_score) {
+          try {
             fb = await feedbackApi.generate(sessionId, {
-              session_id: sessionId,
               interview_type: s.interview_type,
               difficulty: s.difficulty,
+              language: s.language ?? 'python',
+              target_company: s.target_company ?? undefined,
               transcript: conversationTurns.map((t: any) => ({
                 role: t.role,
-                content: t.content,
+                content: extractTurnContent(t),
               })),
-            });
+            });          } catch (generateErr) {
+            console.warn('Feedback Service generate failed, using local fallback:', generateErr);
+            fb = null;
           }
+        }
+
+        if (fb && fb.overall_score != null) {
           // Normalize API response → flat Feedback interface
-          // API returns: { overall_score, scores: { problem_solving_score, communication_score, ... },
-          //               detailed_feedback: { strengths, weaknesses, recommendations }, pdf_url, percentile }
           const normalized: Feedback = {
             overall_score: fb.overall_score ?? 0,
             technical_score: fb.scores?.problem_solving_score ?? fb.technical_score ?? 0,
@@ -89,8 +115,12 @@ export default function InterviewFeedbackPage() {
           };
           setFeedback(normalized);
           if (normalized.overall_score >= 70) setTimeout(() => setShowConfetti(true), 600);
-        } catch (apiErr) {
-          console.warn('Feedback Service failed. Using local fallback:', apiErr);
+          return; // done — skip local fallback
+        }
+
+        // Step 2: Both API calls failed — run fully client-side scoring fallback
+        {
+          console.warn('Feedback API unavailable. Running local client-side scoring fallback.');
           setUsingFallback(true);
           await new Promise((r) => setTimeout(r, 1500));
 
