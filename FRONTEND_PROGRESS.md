@@ -21,6 +21,12 @@
   - Created `src/components/ui/modal.tsx` with escape-key handling and scroll lock.
   - Standardized `Button`, `Input`, `Label`, `Card`, `Badge`, `SessionBadge`, and `StatCard`.
   - Fixed typo `border-rose-250` -> `border-rose-200` in `ConfirmModal.tsx`.
+  - Decomposed oversized monolithic pages into small, focused, maintainable components:
+    - `components/landing/`: `LandingHeader`, `FloatingCodeBlock`, `InterviewStudioMockup`, `InterviewModesSection`, `ProctoringShowcaseSection`, `PricingSection`, `FaqSection`, `LandingFooter`.
+    - `components/billing/`: `PlanCard`, `BillingHistoryTable`, `BillingFaq`.
+    - `components/admin/`: `AdminStatCards`, `AdminUserTable`, `AdminAuditLogsTable`, `AdminSystemHealth`.
+    - `interview/video/`: `AudioLevelMeter`, `DeviceSettingsOverlay`, `ProctorOverlays`, `AIAvatarState`, `NetworkStatsCard`, `LiveKitStatusBadge`.
+  - Created `FRONTEND_COMPONENT_GUIDE.md`.
 
 - [x] **Phase 4: Inspect Every Page Individually**
   - Harmonized `LoginPage`, `RegisterPage`, `ForgotPasswordPage`, and `ResetPasswordPage`.
@@ -32,6 +38,7 @@
   - Fixed token key discrepancy in `LoginForm.tsx` (`devmeet_access_token` -> `access_token`).
   - Verified all endpoints in `src/lib/api.ts` across 9 backend microservices.
   - Authored `FRONTEND_API_INTEGRATION.md`.
+  - Audited and verified LiveKit WebRTC video integration across `video-service` backend and `useWebRTC.ts` frontend; authored `LIVEKIT_INTEGRATION_AUDIT.md`.
 
 - [x] **Phase 6: Fix Forms & User Interactions**
   - Added password visibility toggles (`Eye` / `EyeOff`) with accessible aria labels.

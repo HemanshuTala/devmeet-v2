@@ -29,6 +29,8 @@ This audit represents an exhaustive evaluation of the DevMeet Next.js 14 (App Ro
 | **6** | **Medium** | Reusable Components | No shared modal dialog component existed; several components wrote ad-hoc absolute fixed backdrops without accessibility or escape-key listeners. | Created `src/components/ui/modal.tsx` with escape-key handling, scroll locking, and accessible ARIA attributes. |
 | **7** | **Medium** | Interview Replay | `src/app/interview/[id]/replay/page.tsx` used unstyled raw text rows with low visual hierarchy. | Refactored with distinct AI Interviewer vs. Candidate avatar chips, timestamps, and card containers. |
 | **8** | **Low** | Code Documentation | Key API functions lacked simple-English comments explaining retry loops, 401 token refreshing, and error handling. | Added JSDoc comments to `src/lib/api.ts` explaining token refresh logic and error normalization. |
+| **9** | **High** | Component Architecture | `VideoPanel.tsx` (584 lines), `page.tsx` (1302 lines), `billing/page.tsx` (652 lines), and `admin/page.tsx` (675 lines) were oversized monoliths with duplicated JSX. | Modularized into 16 focused subcomponents in `components/landing/`, `components/billing/`, `components/admin/`, and `interview/video/`. |
+| **10** | **High** | LiveKit WebRTC Verification | LiveKit client integration in `useWebRTC.ts` and `VideoPanel.tsx` needed end-to-end token flow, connection handling, and hardware permission validation. | Audited and verified token generation, dynamic SDK loading for SSR safety, connection event handling, device switching, and created `LIVEKIT_INTEGRATION_AUDIT.md`. |
 
 ---
 
