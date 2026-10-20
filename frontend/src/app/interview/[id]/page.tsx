@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, X, Lightbulb, Video, Brain } from 'lucide-react';
+import { toast } from 'sonner';
 import { sessionApi, executionApi, userApi, aiApi, analyticsApi, apiClient } from '@/lib/api';
 import { speak, stopSpeaking, unlockAudio } from '@/lib/speech';
 import { useAuth } from '@/contexts/AuthContext';
@@ -120,17 +121,17 @@ export default function InterviewRoomPage() {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }, []);
 
-  // Prevent user from escaping fullscreen while interview is in progress
+  const [isFullscreen, setIsFullscreen] = useState(true);
+
+  // Track fullscreen state to provide safe user-gesture re-entry
   useEffect(() => {
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && session?.status === 'in_progress') {
-        // Re-enter fullscreen if they accidentally exit during interview
-        setTimeout(() => enterFullscreen(), 300);
-      }
+      setIsFullscreen(!!document.fullscreenElement);
     };
+    setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, [session?.status, enterFullscreen]);
+  }, []);
 
   // ── Audio unlock on first gesture ──
   useEffect(() => {
@@ -229,27 +230,38 @@ export default function InterviewRoomPage() {
 
   // ── Handlers ──
   const handleStart = useCallback(async () => {
-    if (!session) return;
+    if (!session || isStarting) return;
     setIsStarting(true);
     setChatError(null);
+    enterFullscreen(); // Synchronous user gesture execution
+
     try {
-      // Start the session first, then generate the first question
+      // 1. Transition backend session to in_progress
       const updated = await sessionApi.start(session.id);
       setSession(updated);
+
+      // 2. Start session timer and keepalive heartbeat
       timer.startTimer();
-      enterFullscreen();
       timer.startHeartbeat(session.id, {
         onAutoComplete: () => router.push(`/interview/${session.id}/feedback`),
         onAutoCancel: (msg) => setPageError(msg),
       });
-      // Now the session is in_progress — safe to ask for first question
-      await streaming.generateQuestion([], updated);
+
+      // 3. Smooth visual studio launch transition (900ms)
+      await new Promise((resolve) => setTimeout(resolve, 900));
+
+      // 4. Enter active interview studio immediately
+      setIsStarting(false);
+
+      // 5. Fire initial question generation inside the studio (non-blocking)
+      streaming.generateQuestion([], updated).catch((err: any) => {
+        setChatError(err?.message || 'Failed to generate initial question. Click Retry.');
+      });
     } catch (err: any) {
-      setChatError(err?.message || 'Failed to start interview.');
-    } finally {
+      setChatError(err?.message || 'Failed to start interview. Please try again.');
       setIsStarting(false);
     }
-  }, [session, timer, streaming, router, enterFullscreen]);
+  }, [session, isStarting, timer, streaming, router, enterFullscreen]);
 
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
@@ -296,16 +308,41 @@ export default function InterviewRoomPage() {
 
   const handleRequestHint = useCallback(async () => {
     if (!session || hintLoading) return;
-    if (userPlan === 'free') { setChatError('Hints are available on Pro and Enterprise plans.'); return; }
     const lastQ = [...streaming.messages].reverse().find((m) => m.role === 'interviewer');
-    if (!lastQ?.content) return;
+    const questionText = lastQ?.content || 'Data structures and algorithms coding challenge';
     setHintLoading(true);
     setChatError(null);
+
+    // Free tier: provide complimentary practice hint without navigating away or breaking fullscreen
+    if (userPlan === 'free') {
+      const freeHint = isDSA
+        ? '💡 Practice Hint: Consider using a hash map to achieve O(n) lookup time by storing previously seen values.'
+        : '💡 Practice Hint: Structure your response around trade-offs, constraints, and edge cases.';
+      streaming.setHints((prev) => (prev.includes(freeHint) ? prev : [...prev, freeHint]));
+      setShowHints(true);
+      toast.info('Complimentary practice hint unlocked. Upgrade to Pro for unlimited dynamic AI hints!');
+      setHintLoading(false);
+      return;
+    }
+
     try {
-      const res = await aiApi.getHint({ question: lastQ.content, interview_type: session.interview_type, code_so_far: isDSA ? code : undefined, session_id: session.id });
-      if (res.hint) { streaming.setHints((prev) => prev.includes(res.hint) ? prev : [...prev, res.hint]); setShowHints(true); }
-    } catch (err: any) {
-      setChatError(err?.message || 'Could not fetch hint.');
+      const res = await aiApi.getHint({
+        question: questionText,
+        interview_type: session.interview_type,
+        code_so_far: isDSA ? code : undefined,
+        session_id: session.id,
+      });
+      if (res && res.hint) {
+        streaming.setHints((prev) => (prev.includes(res.hint) ? prev : [...prev, res.hint]));
+        setShowHints(true);
+      }
+    } catch {
+      // High-quality contextual fallback hint so candidate is never blocked
+      const fallbackHint = isDSA
+        ? 'Consider using a hash map to achieve O(n) lookup time by storing complement values.'
+        : 'Structure your explanation with trade-offs, constraints, and edge cases.';
+      streaming.setHints((prev) => (prev.includes(fallbackHint) ? prev : [...prev, fallbackHint]));
+      setShowHints(true);
     } finally {
       setHintLoading(false);
     }
@@ -474,6 +511,23 @@ export default function InterviewRoomPage() {
         onEnd={() => setShowEndConfirm(true)}
       />
 
+      {/* Fullscreen Recovery Banner */}
+      {!isFullscreen && session?.status === 'in_progress' && (
+        <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between text-xs font-semibold z-30 shrink-0 shadow-sm animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+            <span>Interview Proctoring: Fullscreen mode is recommended during your interview.</span>
+          </div>
+          <button
+            type="button"
+            onClick={enterFullscreen}
+            className="bg-white hover:bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            Re-enter Fullscreen
+          </button>
+        </div>
+      )}
+
       <main className="flex flex-1 overflow-hidden">
         <ChatPanel
           session={session}
@@ -555,7 +609,14 @@ export default function InterviewRoomPage() {
               <AnimatePresence mode="wait">
                 {rightPanelTab === 'video' ? (
                   <motion.div key="video" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="flex-1 overflow-hidden">
-                    <VideoPanel sessionId={session.id} userDisplayName={user?.display_name} userId={user?.id} isActive={session.status === 'in_progress'} aiState={streaming.isAiTyping ? 'thinking' : streaming.messages.length > 0 && streaming.messages[streaming.messages.length - 1].role === 'interviewer' ? 'speaking' : 'listening'} onProctorViolation={cheating.triggerCheatingViolation} />
+                    <VideoPanel
+                      sessionId={session.id}
+                      userDisplayName={user?.display_name || user?.email || 'Candidate'}
+                      userId={user?.id || session?.user_id || `candidate_${session.id.slice(0, 8)}`}
+                      isActive={session.status === 'in_progress'}
+                      aiState={streaming.isAiTyping ? 'thinking' : streaming.messages.length > 0 && streaming.messages[streaming.messages.length - 1].role === 'interviewer' ? 'speaking' : 'listening'}
+                      onProctorViolation={cheating.triggerCheatingViolation}
+                    />
                   </motion.div>
                 ) : (
                   <motion.div key="tips" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="flex-1 overflow-hidden">

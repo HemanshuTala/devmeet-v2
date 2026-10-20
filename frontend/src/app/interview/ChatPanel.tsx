@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useCallback, useRef, useMemo } from 'react';
+/**
+ * @file ChatPanel.tsx (Interview Conversational Workspace)
+ * @description Core conversational interface for the live interview session.
+ * Handles bidirectional communication with the AI interviewer, auto-scrolling message streams,
+ * speech recognition input (STT), text-to-speech toggling (TTS), hint generation & display,
+ * anti-cheating clipboard paste prevention, and compact video proctoring in coding mode.
+ */
 
+import React, { useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { MessageSquare, Send, Lightbulb, X, Brain, Volume2, VolumeX, Mic, MicOff, Video, VideoOff } from 'lucide-react';
+import { MessageSquare, Send, Lightbulb, X, Brain, Volume2, VolumeX, Mic, MicOff, Video, VideoOff, Sparkles } from 'lucide-react';
 import { speak, stopSpeaking } from '@/lib/speech';
 import { type ChatMessage } from './utils';
 import ChatBubble from './ChatBubble';
@@ -13,34 +20,66 @@ import VideoPanel from './VideoPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 
+/**
+ * Interface defining all props passed down from the parent Interview Studio page.
+ */
 interface ChatPanelProps {
+  /** The active session model object */
   session: any;
+  /** Full list of conversational dialogue turns */
   messages: ChatMessage[];
+  /** Controlled candidate text input value */
   input: string;
+  /** Whether the AI model is actively generating or thinking */
   isAiTyping: boolean;
+  /** Error message string if WebSocket or API failure occurred */
   chatError: string | null;
+  /** Progressive hints generated for the active problem */
   hints: string[];
+  /** Whether hints drawer is currently visible */
   showHints: boolean;
+  /** True while requesting an algorithmic hint from the AI interviewer */
   hintLoading: boolean;
+  /** Whether speech synthesis playback is muted */
   isMuted: boolean;
+  /** Whether microphone speech recognition is currently recording */
   isListening: boolean;
+  /** Whether audio transcription is in-flight */
   isTranscribing: boolean;
+  /** Current candidate subscription plan */
   userPlan: string;
+  /** Flag toggling compact video proctoring feed in DSA mode */
   showVideoFeed: boolean;
+  /** Authenticated user profile */
   user: any;
+  /** True if current interview category is DSA / coding */
   isDSA: boolean;
+  /** Input change callback */
   onInputChange: (value: string) => void;
+  /** Message submission callback */
   onSend: () => void;
+  /** Mute/unmute speech synthesis toggle callback */
   onToggleMute: () => void;
+  /** Voice transcription toggle callback */
   onToggleSpeech: () => void;
+  /** AI hint request callback */
   onRequestHint: () => void;
+  /** Hint panel visibility toggle */
   onToggleHints: () => void;
+  /** Hint panel hide callback */
   onHideHints: () => void;
+  /** Video panel feed toggle in split-screen mode */
   onToggleVideoFeed: () => void;
+  /** Anti-cheating violation handler (paste, tab switch) */
   triggerCheatingViolation: (type: 'tab_switch' | 'paste') => void;
+  /** Retry handler if initial question generation failed */
   onRetry: () => void;
 }
 
+/**
+ * ChatPanel Component.
+ * Orchestrates text message exchange, voice input/output controls, and proctoring feed.
+ */
 export default function ChatPanel({
   session,
   messages,
@@ -71,6 +110,9 @@ export default function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  /**
+   * Keyboard handler: Submits message on Enter (Shift+Enter inserts a newline).
+   */
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -81,6 +123,9 @@ export default function ChatPanel({
     [onSend],
   );
 
+  /**
+   * Auto-resizing textarea change handler: Expands up to max 96px height.
+   */
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       onInputChange(e.target.value);
@@ -93,9 +138,10 @@ export default function ChatPanel({
 
   return (
     <section className="flex flex-col border-r border-slate-200 bg-[#f8fafc]" style={{ width: isDSA ? '55%' : '100%' }}>
-      {/* Chat header bar */}
+      {/* Chat header bar: Mode indicators, Voice synthesis toggle, Video toggle */}
       <div className="px-4 py-2.5 bg-white border-b border-slate-200 flex items-center gap-2 flex-shrink-0">
         <div className="flex items-center gap-2">
+          {/* Animated AI Brain pulsing when AI is generating responses */}
           <motion.div
             className="w-6 h-6 rounded-lg flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}
@@ -107,6 +153,7 @@ export default function ChatPanel({
           <span className="text-slate-700 text-xs font-bold">Interview Conversation</span>
         </div>
 
+        {/* Text-to-speech audio toggle */}
         <button
           onClick={onToggleMute}
           className={`ml-2 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all ${
@@ -137,6 +184,7 @@ export default function ChatPanel({
           )}
         </button>
 
+        {/* Compact video proctoring feed toggle button for DSA mode */}
         {isDSA && (
           <button
             onClick={onToggleVideoFeed}
@@ -158,16 +206,17 @@ export default function ChatPanel({
           </button>
         )}
 
+        {/* Focus area pill */}
         {session.focus_area && <span className="ml-auto text-xs text-slate-500 font-semibold">Topic: {session.focus_area}</span>}
       </div>
 
-      {/* Compact video panel for DSA mode */}
+      {/* Embedded compact video proctoring feed (webcam + face detection) */}
       {isDSA && showVideoFeed && (
         <div className="h-[160px] flex-shrink-0 border-b border-slate-200 bg-slate-50 overflow-hidden relative">
           <VideoPanel
             sessionId={session.id}
-            userDisplayName={user?.display_name}
-            userId={user?.id}
+            userDisplayName={user?.display_name || user?.email || 'Candidate'}
+            userId={user?.id || session?.user_id || `candidate_${session.id.slice(0, 8)}`}
             isActive={session.status === 'in_progress'}
             aiState={isAiTyping ? 'thinking' : messages.length > 0 && messages[messages.length - 1].role === 'interviewer' ? 'speaking' : 'idle'}
             compact
@@ -176,19 +225,31 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* Messages */}
+      {/* Conversational Messages Scroll Area */}
       <ScrollArea className="flex-1">
         <div className="px-4 py-4 flex flex-col gap-4 min-h-full">
           {messages.length === 0 && !isAiTyping && (
             <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="w-12 h-12 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center mb-3">
-                <MessageSquare className="w-6 h-6 text-blue-500" />
+              <div className="w-12 h-12 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center mb-3">
+                <Brain className="w-6 h-6 text-indigo-600" />
               </div>
-              <p className="text-slate-500 text-sm font-semibold">Ready to begin</p>
-              <p className="text-slate-400 text-xs mt-1">Your AI interviewer will introduce themselves shortly.</p>
+              <p className="text-slate-700 text-sm font-bold">Interview Studio Active</p>
+              <p className="text-slate-400 text-xs mt-1 max-w-xs">
+                {chatError ? chatError : 'Your AI interviewer will introduce themselves shortly.'}
+              </p>
+              {chatError && (
+                <button
+                  onClick={onRetry}
+                  className="mt-3.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Generate Question
+                </button>
+              )}
             </div>
           )}
-          {/* Virtual window: render only last 100 messages */}
+
+          {/* Virtualization window: render only the last 100 turns to prevent DOM bloat */}
           {messages.length > 100 && (
             <div className="text-center py-2">
               <span className="text-slate-400 text-[10px] font-semibold">
@@ -196,6 +257,7 @@ export default function ChatPanel({
               </span>
             </div>
           )}
+
           {messages.slice(-100).map((msg) => (
             <div
               key={msg.id}
@@ -204,11 +266,14 @@ export default function ChatPanel({
               <ChatBubble message={msg} />
             </div>
           ))}
+
+          {/* Animated typing dots when AI is computing a response */}
           {isAiTyping && <TypingIndicator />}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
+      {/* Inline WebSocket / AI streaming error alert */}
       {chatError && (
         <div className="px-4 pb-2">
           <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs py-2 px-3 rounded-xl font-medium">
@@ -223,7 +288,7 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* Hints panel */}
+      {/* Progressive Algorithmic Hints Drawer */}
       {isDSA && showHints && hints.length > 0 && (
         <div className="mx-4 mb-2 bg-amber-50 border border-amber-200 p-3 rounded-xl animate-fade-in-up">
           <div className="flex items-center gap-2 mb-2">
@@ -244,9 +309,13 @@ export default function ChatPanel({
         </div>
       )}
 
-      {/* Input area */}
+      {/* Input Composer & Toolbar */}
       <div className="px-4 pb-4 pt-2 border-t border-slate-200 bg-white flex-shrink-0">
         <div className="bg-white border border-slate-200 p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-200 rounded-xl transition-all shadow-sm">
+          {/*
+           * Textarea with proctoring anti-cheat handler onPaste:
+           * Prevents pasting solution code directly from external tools and triggers violation alert.
+           */}
           <textarea
             ref={textareaRef}
             value={input}
@@ -262,6 +331,8 @@ export default function ChatPanel({
           <div className="flex items-center justify-between mt-1.5">
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-400 font-semibold">{input.length} chars</span>
+
+              {/* Speech-to-text recording toggle */}
               <button
                 type="button"
                 onClick={onToggleSpeech}
@@ -283,22 +354,29 @@ export default function ChatPanel({
                   <><Mic className="w-3 h-3" /> Speak</>
                 )}
               </button>
-              {isDSA &&
-                (userPlan === 'free' ? (
-                  <Link href="/billing" className="flex items-center gap-1.5 text-xs text-amber-700 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 font-bold hover:bg-amber-100 transition-colors">
-                    <Lightbulb className="w-3 h-3" /> Hints (Pro)
-                  </Link>
-                ) : (
-                  <button
-                    onClick={hints.length > 0 ? onToggleHints : onRequestHint}
-                    disabled={hintLoading}
-                    className="flex items-center gap-1.5 text-xs text-amber-700 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 font-bold disabled:opacity-50 hover:bg-amber-100 transition-colors"
-                  >
-                    <Lightbulb className="w-3 h-3" />
-                    {hintLoading ? 'Loading…' : hints.length > 0 ? `${hints.length} Hint${hints.length !== 1 ? 's' : ''}` : 'Get Hint'}
-                  </button>
-                ))}
+
+              {/* Hint request / toggle button */}
+              {isDSA && (
+                <button
+                  type="button"
+                  onClick={hints.length > 0 ? onToggleHints : onRequestHint}
+                  disabled={hintLoading}
+                  className="flex items-center gap-1.5 text-xs text-amber-800 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 font-semibold disabled:opacity-50 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                  title={hints.length > 0 ? "Toggle interview hints" : "Request a hint from the AI interviewer"}
+                >
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                  <span>
+                    {hintLoading
+                      ? 'Fetching Hint…'
+                      : hints.length > 0
+                      ? `${hints.length} Hint${hints.length !== 1 ? 's' : ''}`
+                      : 'Get Hint'}
+                  </span>
+                </button>
+              )}
             </div>
+
+            {/* Send submission button */}
             <Button size="sm" variant="gradient" onClick={onSend} disabled={!input.trim() || isAiTyping} className="h-8 text-xs font-bold">
               <Send className="w-3.5 h-3.5 mr-1" />
               Send
