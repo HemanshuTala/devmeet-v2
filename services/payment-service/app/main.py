@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .routes import router
+from .routes import router, close_payment_http_client
 from .database import db
 from .middleware import RequestIDMiddleware
 from .config import razorpay_enabled, RAZORPAY_KEY_ID
@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     await db.connect()
     yield
     # Safely drain and disconnect pool connections on shutdown
+    await close_payment_http_client()
     await db.disconnect()
 
 

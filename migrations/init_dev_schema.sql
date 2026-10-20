@@ -291,3 +291,22 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 
 CREATE INDEX IF NOT EXISTS idx_outbox_unpublished ON outbox_events(published, created_at) WHERE published = FALSE;
 CREATE INDEX IF NOT EXISTS idx_outbox_aggregate ON outbox_events(aggregate_type, aggregate_id);
+
+-- Performance indexes added during backend optimization phase
+-- Covers the most frequent dashboard and session-listing queries
+CREATE INDEX IF NOT EXISTS idx_sessions_user_status_created
+    ON sessions(user_id, status, created_at DESC);
+
+-- Partial index for public leaderboard queries
+CREATE INDEX IF NOT EXISTS idx_user_profiles_public_active
+    ON user_profiles(id)
+    WHERE profile_public = TRUE AND deleted_at IS NULL;
+
+-- Speeds up quota resets and limit checks in increment_quota
+CREATE INDEX IF NOT EXISTS idx_usage_quotas_user_reset
+    ON usage_quotas(user_id, last_reset_date);
+
+-- Covers outbox polling query: WHERE published = FALSE ORDER BY created_at
+CREATE INDEX IF NOT EXISTS idx_outbox_published_created
+    ON outbox_events(published, created_at)
+    WHERE published = FALSE;

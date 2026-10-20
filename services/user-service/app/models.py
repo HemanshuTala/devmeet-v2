@@ -12,8 +12,8 @@ Key Validation Features:
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional, List, Union
+from datetime import datetime, date
 from enum import Enum
 import re
 
@@ -93,7 +93,7 @@ class UserQuotaResponse(BaseModel):
     """
     interviews_today: int
     interviews_this_month: int
-    last_reset_date: datetime
+    last_reset_date: Union[datetime, date]
     plan: Plan
     daily_limit: int
     monthly_limit: int

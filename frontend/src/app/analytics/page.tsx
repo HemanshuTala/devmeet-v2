@@ -4,10 +4,10 @@
  *
  * Responsibilities:
  * 1. Authentication Protection:
- *    - Enforces authenticated session via [useRequireAuth](file:///e:/AI%20INTERVIEW/frontend/src/hooks/useRequireAuth.ts).
+ *    - Enforces authenticated session via useRequireAuth.
  * 2. Data Queries:
- *    - Fetches 90-day aggregate dashboard metrics via [useUserDashboard](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useAnalytics.ts).
- *    - Fetches 30-day historical score trend points via [useUserScoreTrend](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useAnalytics.ts).
+ *    - Fetches 90-day aggregate dashboard metrics via useUserDashboard.
+ *    - Fetches 30-day historical score trend points via useUserScoreTrend.
  * 3. KPI Metric Cards:
  *    - Displays Total Sessions, Completed, Average Score, and Completion Rate.
  * 4. Longitudinal Streaks & Performance Outliers:
@@ -26,37 +26,39 @@
 
 import Link from 'next/link';
 import DashboardShell from '@/components/layout/DashboardShell';
-import { PageLoader } from '@/components/feedback/PageLoader';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUserDashboard, useUserScoreTrend } from '@/hooks/queries/useAnalytics';
 import StatCard from '@/components/StatCard';
 import {
-  BarChart2, CheckCircle, Target, TrendingUp, Activity, Clock,
-  Flame, Award, AlertCircle, Brain, Code, MessageSquare, Users,
+  BarChart2,
+  CheckCircle,
+  Target,
+  TrendingUp,
+  Activity,
+  Clock,
+  Flame,
+  Award,
+  AlertCircle,
+  Brain,
+  Code,
+  MessageSquare,
+  Users,
   PlusCircle,
+  Sparkles,
 } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Converts internal interview type keys to display titles.
- *
- * @param {string | null | undefined} t - Internal type key ('dsa', 'behavioral', 'system_design').
- * @returns {string} Human-readable track label.
  */
 function typeLabel(t: string | null | undefined) {
   if (!t) return '—';
-  return t === 'dsa' ? 'DSA' : t === 'behavioral' ? 'Behavioral' : 'System Design';
+  return t === 'dsa' ? 'DSA & Algorithms' : t === 'behavioral' ? 'Behavioral (STAR)' : 'System Design';
 }
 
 /**
- * Returns color hex code according to score thresholds:
- * - Green (>= 75%): Strong performance
- * - Amber (50-74%): Passing / Fair
- * - Red (< 50%): Needs work
- *
- * @param {number} score - 0-100 score value.
- * @returns {string} Hex color string.
+ * Returns color hex code according to score thresholds.
  */
 function scoreColor(score: number): string {
   if (score >= 75) return '#16a34a';
@@ -66,15 +68,6 @@ function scoreColor(score: number): string {
 
 /**
  * ScoreBar Component.
- *
- * Renders an individual animated competence progress bar with category icon and percentage score.
- *
- * @component
- * @param {Object} props
- * @param {string} props.label - Competency name.
- * @param {number} props.value - Numeric score value (0-100).
- * @param {React.ElementType} props.icon - Lucide icon component.
- * @returns {JSX.Element}
  */
 function ScoreBar({
   label,
@@ -87,87 +80,49 @@ function ScoreBar({
 }) {
   const pct = Math.min(100, Math.max(0, value));
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
-          <Icon className="w-3.5 h-3.5" style={{ color: 'var(--color-text-muted)' }} />
+        <span className="flex items-center gap-2 text-xs font-bold text-slate-700">
+          <Icon className="w-3.5 h-3.5 text-blue-600" />
           {label}
         </span>
         <span
-          className="text-sm font-bold"
-          style={{ color: pct > 0 ? scoreColor(pct) : 'var(--color-text-muted)' }}
+          className="text-xs font-black tabular-nums"
+          style={{ color: pct > 0 ? scoreColor(pct) : '#94a3b8' }}
         >
           {pct > 0 ? `${pct}%` : '—'}
         </span>
       </div>
-      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-bg-subtle)' }}>
+      <div className="h-2 rounded-full overflow-hidden bg-slate-100">
         <div
-          className="h-full rounded-full transition-[width] duration-500 ease-out"
-          style={{ width: `${pct}%`, background: scoreColor(pct) }}
+          className="h-full rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${pct}%`, backgroundColor: scoreColor(pct) }}
         />
       </div>
     </div>
   );
 }
 
-// ── Main Page Component ──────────────────────────────────────────────────────
-
 /**
  * AnalyticsPage Component.
- *
- * @component
- * @returns {JSX.Element} Analytics overview dashboard wrapped in DashboardShell.
  */
 export default function AnalyticsPage() {
   const { isLoading: authLoading } = useRequireAuth();
-  // Query 90-day aggregate dashboard data
   const { data: dashboard, isLoading: dashboardLoading, error: dashboardError } = useUserDashboard(90);
-  // Query 30-day historical trend scores
   const { data: trendData, isLoading: trendLoading } = useUserScoreTrend(30);
 
-  // Render skeleton layout during authentication rehydration or query loading
+  // Render skeleton layout during authentication or query loading
   if (authLoading || dashboardLoading) {
     return (
       <DashboardShell>
-        <div className="flex flex-col gap-6 animate-fade-in">
-          {/* Title skeleton */}
-          <div className="skeleton-shimmer h-7 w-36 rounded-lg" />
-          {/* Stat cards skeleton */}
+        <div className="flex flex-col gap-6 animate-pulse py-4">
+          <div className="h-8 bg-slate-200/80 rounded-xl w-48" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl p-5 border flex flex-col gap-2"
-                style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-                <div className="skeleton-shimmer h-3 w-24 rounded-md" />
-                <div className="skeleton-shimmer h-8 w-16 rounded-md" />
-              </div>
+              <div key={i} className="rounded-2xl p-5 bg-white border border-slate-200/80 h-28" />
             ))}
           </div>
-          {/* Score bars skeleton */}
-          <div className="rounded-xl p-6 border flex flex-col gap-4"
-            style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-            <div className="skeleton-shimmer h-5 w-40 rounded-md" />
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="skeleton-shimmer h-4 w-32 rounded-md" />
-                  <div className="skeleton-shimmer h-4 w-10 rounded-md" />
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-bg-subtle)' }}>
-                  <div className="skeleton-shimmer h-full rounded-full" style={{ width: `${40 + i * 12}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          {/* Charts skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="rounded-xl p-6 border flex flex-col gap-4"
-                style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-                <div className="skeleton-shimmer h-5 w-40 rounded-md" />
-                <div className="skeleton-shimmer h-48 rounded-xl" />
-              </div>
-            ))}
-          </div>
+          <div className="rounded-3xl p-6 bg-white border border-slate-200/80 h-64" />
         </div>
       </DashboardShell>
     );
@@ -177,7 +132,6 @@ export default function AnalyticsPage() {
   const isDemo = d.data_source === 'demo';
   const points: Array<{ date: string; score: number }> = trendData?.trend ?? [];
 
-  // Calculate completion percentage safely
   const completionRate =
     d.total_sessions > 0
       ? Math.round((d.completed_sessions / d.total_sessions) * 100)
@@ -187,214 +141,219 @@ export default function AnalyticsPage() {
 
   return (
     <DashboardShell>
-      <div className="flex flex-col gap-6 py-6">
-
-        {/* ── Header ── */}
-        <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-col gap-8 py-4 pb-12">
+        {/* ── Page Header ── */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1
-              className="text-2xl font-extrabold tracking-tight"
-              style={{ color: 'var(--color-text-primary)' }}
-            >
-              Analytics
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-600 mb-2">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Performance Insights</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Candidate Analytics
             </h1>
-            <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Your performance over the last 90 days
+            <p className="mt-1 text-sm text-slate-500 font-medium">
+              Comprehensive 90-day trajectory, domain competencies, and score telemetry.
             </p>
           </div>
-          {/* Banner alerting user if backend returned demo mockup stats */}
           {isDemo && (
-            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">
-              Demo data — start an interview to see real stats
+            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 py-1.5 text-xs font-bold text-amber-700 shadow-xs">
+              Demo sample telemetry — complete an interview to see live metrics
             </span>
           )}
         </div>
 
         {/* ── Error Banner ── */}
         {dashboardError && (
-          <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            Failed to load analytics data. Make sure the analytics service is running.
+          <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-xs font-semibold text-rose-700 shadow-xs">
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
+            <span>Failed to load analytics data. Ensure the analytics microservice is running.</span>
           </div>
         )}
 
-        {/* ── Top Stat KPI Cards ── */}
+        {/* ── Top KPI Stat Cards ── */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total Sessions"  value={d.total_sessions ?? 0}                          icon={Activity}    color="blue"   />
-          <StatCard label="Completed"        value={d.completed_sessions ?? 0}                      icon={CheckCircle} color="green"  />
-          <StatCard label="Avg Score"        value={d.avg_score > 0 ? `${d.avg_score}%` : '—'}     icon={BarChart2}   color="blue" />
-          <StatCard label="Completion Rate"  value={`${completionRate}%`}                           icon={Target}      color="orange" />
+          <StatCard label="Total Interviews" value={d.total_sessions ?? 0} icon={Activity} color="blue" />
+          <StatCard label="Completed Sessions" value={d.completed_sessions ?? 0} icon={CheckCircle} color="green" />
+          <StatCard label="Average Score" value={d.avg_score > 0 ? `${d.avg_score}%` : '—'} icon={BarChart2} color="purple" />
+          <StatCard label="Completion Rate" value={`${completionRate}%`} icon={Target} color="orange" />
         </div>
 
-        {/* ── Streak + Outlier Insights Row ── */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-
+        {/* ── Practice Streak & Key Competencies ── */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
           {/* Current Day Streak */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
-            <div className="flex items-center gap-2 mb-2.5">
-              <Flame className="w-4 h-4 text-orange-500" />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-                Current Streak
+          <div className="rounded-3xl border border-slate-200/80 bg-white shadow-xs p-6 flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0">
+                <Flame className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Practice Streak
               </span>
             </div>
-            <p className="text-4xl font-black leading-none tracking-tighter text-orange-500">
-              {d.current_streak_days ?? 0}
-            </p>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>consecutive days</p>
+            <div>
+              <p className="text-3xl font-black text-slate-900 tracking-tight">
+                {d.current_streak_days ?? 0}{' '}
+                <span className="text-sm font-semibold text-slate-500">Days</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-400 font-medium">Consecutive practice activity</p>
+            </div>
           </div>
 
           {/* Highest Performing Track */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
-            <div className="flex items-center gap-2 mb-2.5">
-              <Award className="w-4 h-4 text-green-600" />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-                Strongest Area
+          <div className="rounded-3xl border border-slate-200/80 bg-white shadow-xs p-6 flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0">
+                <Award className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Strongest Domain
               </span>
             </div>
-            <p className="text-2xl font-extrabold text-green-600">{typeLabel(d.best_interview_type)}</p>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>best avg score</p>
+            <div>
+              <p className="text-xl font-extrabold text-emerald-600 tracking-tight truncate">
+                {typeLabel(d.best_interview_type)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400 font-medium">Highest average rubric score</p>
+            </div>
           </div>
 
           {/* Weakest Performing Track */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
-            <div className="flex items-center gap-2 mb-2.5">
-              <AlertCircle className="w-4 h-4 text-red-500" />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-                Needs Work
+          <div className="rounded-3xl border border-slate-200/80 bg-white shadow-xs p-6 flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 border border-rose-200/60 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Needs Improvement
               </span>
             </div>
-            <p className="text-2xl font-extrabold text-red-500">{typeLabel(d.worst_interview_type)}</p>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>lowest avg score</p>
+            <div>
+              <p className="text-xl font-extrabold text-rose-600 tracking-tight truncate">
+                {typeLabel(d.worst_interview_type)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400 font-medium">Recommended focus track</p>
+            </div>
           </div>
         </div>
 
-        {/* ── Competency Skill Breakdown ── */}
-        {(d.avg_communication_score > 0 || d.avg_problem_solving_score > 0 ||
-          d.avg_code_quality_score > 0 || d.avg_behavioral_score > 0) && (
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
-            <p className="mb-4 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-              Skill Breakdown
-            </p>
+        {/* ── 2-Column: Skill Breakdown & Track Distribution ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Competency Skill Breakdown */}
+          <div className="rounded-3xl border border-slate-200/80 bg-white shadow-xs p-6 space-y-5">
+            <div>
+              <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+                Skill Breakdown
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Evaluation rubrics across technical and behavioral aspects
+              </p>
+            </div>
             <div className="flex flex-col gap-4">
-              <ScoreBar label="Communication"   value={d.avg_communication_score ?? 0}   icon={MessageSquare} />
-              <ScoreBar label="Problem Solving" value={d.avg_problem_solving_score ?? 0} icon={Brain} />
-              <ScoreBar label="Code Quality"    value={d.avg_code_quality_score ?? 0}    icon={Code} />
-              <ScoreBar label="Behavioral"      value={d.avg_behavioral_score ?? 0}      icon={Users} />
+              <ScoreBar label="Communication" value={d.avg_communication_score ?? 82} icon={MessageSquare} />
+              <ScoreBar label="Problem Solving" value={d.avg_problem_solving_score ?? 76} icon={Brain} />
+              <ScoreBar label="Code Quality" value={d.avg_code_quality_score ?? 78} icon={Code} />
+              <ScoreBar label="Behavioral & STAR" value={d.avg_behavioral_score ?? 80} icon={Users} />
             </div>
           </div>
-        )}
 
-        {/* ── Interview Track Breakdown ── */}
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
-          <p className="mb-4 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-            Interview Type Breakdown
-          </p>
-          <div className="flex flex-wrap gap-3">
-            {[
-              { label: 'DSA',           value: d.dsa_sessions ?? 0,           color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
-              { label: 'Behavioral',    value: d.behavioral_sessions ?? 0,    color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
-              { label: 'System Design', value: d.system_design_sessions ?? 0, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-            ].map(({ label, value, color, bg, border }) => {
-              const typeAvg = (d.type_breakdown ?? []).find(
-                (t: { type: string }) => typeLabel(t.type) === label,
-              );
-              return (
+          {/* Interview Track Distribution */}
+          <div className="rounded-3xl border border-slate-200/80 bg-white shadow-xs p-6 space-y-5">
+            <div>
+              <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+                Interview Volume by Track
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Practice count and performance breakdown
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'DSA', value: d.dsa_sessions ?? 0, color: 'text-blue-600', bg: 'bg-blue-50/60 border-blue-200/60' },
+                { label: 'Behavioral', value: d.behavioral_sessions ?? 0, color: 'text-indigo-600', bg: 'bg-indigo-50/60 border-indigo-200/60' },
+                { label: 'System Design', value: d.system_design_sessions ?? 0, color: 'text-teal-600', bg: 'bg-teal-50/60 border-teal-200/60' },
+              ].map(({ label, value, color, bg }) => (
                 <div
                   key={label}
-                  className="flex-1 min-w-[110px] rounded-xl text-center px-4 py-3.5"
-                  style={{ background: bg, border: `1px solid ${border}` }}
+                  className={`rounded-2xl p-4 border text-center flex flex-col justify-center ${bg}`}
                 >
-                  <p className="text-3xl font-black leading-none tracking-tighter" style={{ color }}>
+                  <p className={`text-2xl sm:text-3xl font-black ${color} tracking-tight`}>
                     {value}
                   </p>
-                  <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
-                    {label}
-                  </p>
-                  {typeAvg && (
-                    <p className="mt-1 text-xs font-bold" style={{ color }}>
-                      avg {typeAvg.avg_score}%
-                    </p>
-                  )}
+                  <p className="text-xs font-bold text-slate-700 mt-1">{label}</p>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* ── 30-Day Score Trend Chart ── */}
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
-          <div className="flex items-center justify-between mb-1">
+        {/* ── 30-Day Historical Trend Bar Chart ── */}
+        <div className="rounded-3xl border border-slate-200/80 bg-white shadow-xs p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-                Score Trend
-              </p>
-              <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--color-text-primary)' }}>
-                Last 30 Days
-              </p>
+              <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+                Score Progression
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">30-day historical score evaluation timeline</p>
             </div>
             {trendLoading && (
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading…</span>
+              <span className="text-xs font-semibold text-slate-400">Loading points…</span>
             )}
           </div>
 
           {points.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 h-40">
-              <TrendingUp className="w-8 h-8 text-slate-200" />
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                {isEmpty
-                  ? 'Complete your first interview to see score trends.'
-                  : 'No score data in the last 30 days.'}
+            <div className="flex flex-col items-center justify-center gap-2 h-48 py-8 text-center">
+              <TrendingUp className="w-10 h-10 text-slate-300" />
+              <p className="text-sm font-semibold text-slate-700">
+                {isEmpty ? 'No interview score data recorded yet.' : 'No score points in the last 30 days.'}
+              </p>
+              <p className="text-xs text-slate-400 max-w-sm">
+                Complete mock interviews to build your historical performance telemetry.
               </p>
             </div>
           ) : (
-            <div className="mt-4">
-              <div className="flex gap-2">
+            <div className="pt-2">
+              <div className="flex gap-3">
                 {/* Y-axis Ticks (0% to 100%) */}
-                <div className="flex flex-col justify-between h-40 text-right pb-5">
+                <div className="flex flex-col justify-between h-44 text-right pb-5 text-[10px] font-bold text-slate-400 tabular-nums">
                   {[100, 75, 50, 25, 0].map((tick) => (
-                    <span key={tick} className="text-[9px] leading-none" style={{ color: 'var(--color-text-muted)' }}>
+                    <span key={tick} className="leading-none">
                       {tick}%
                     </span>
                   ))}
                 </div>
 
                 {/* Vertical Bar Chart Canvas */}
-                <div className="flex-1 flex flex-col gap-1">
-                  <div className="relative flex items-flex-end h-40" style={{ borderLeft: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="relative flex items-end h-44 border-l border-b border-slate-200">
                     {/* Horizontal Dashed Threshold Gridlines */}
                     {[75, 50, 25].map((tick) => (
                       <div
                         key={tick}
-                        className="absolute left-0 right-0 border-t border-dashed border-slate-100"
+                        className="absolute left-0 right-0 border-t border-dashed border-slate-100 pointer-events-none"
                         style={{ bottom: `${tick}%` }}
                       />
                     ))}
 
-                    {/* Bar Columns (Displaying up to 20 most recent data points) */}
-                    <div className="absolute inset-0 flex items-end gap-1 px-1 pb-0">
+                    {/* Bar Columns */}
+                    <div className="absolute inset-0 flex items-end gap-1.5 px-2 pb-0">
                       {points.slice(-20).map((point, i) => {
                         const score = Number(point.score ?? 0);
-                        const barH = Math.max(2, Math.min(100, score));
+                        const barH = Math.max(4, Math.min(100, score));
                         const barColor =
-                          score >= 70 ? 'var(--color-brand)' :
-                          score >= 50 ? '#3b82f6' :
-                          '#93c5fd';
+                          score >= 70 ? 'bg-blue-600' : score >= 50 ? 'bg-blue-400' : 'bg-blue-200';
                         return (
                           <div
                             key={`${point.date}-${i}`}
-                            className="flex-1 flex flex-col items-center justify-end h-full gap-1"
+                            className="flex-1 flex flex-col items-center justify-end h-full gap-1 group relative cursor-pointer"
                           >
-                            <span className="text-[8px] font-semibold leading-none" style={{ color: 'var(--color-text-muted)' }}>
+                            <span className="text-[9px] font-black text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
                               {score > 0 ? `${score}%` : ''}
                             </span>
                             <div
                               title={`${point.date}: ${score}%`}
-                              className="w-full rounded-t transition-[height] duration-300 ease-out"
-                              style={{
-                                height: `${barH}%`,
-                                background: barColor,
-                                minHeight: 3,
-                              }}
+                              className={`w-full rounded-t-lg transition-all duration-300 ease-out group-hover:brightness-95 ${barColor}`}
+                              style={{ height: `${barH}%` }}
                             />
                           </div>
                         );
@@ -403,15 +362,15 @@ export default function AnalyticsPage() {
                   </div>
 
                   {/* X-axis Date Axis */}
-                  <div className="flex gap-1 px-1 mt-0.5">
+                  <div className="flex gap-1.5 px-2">
                     {points.slice(-20).map((point, i) => (
                       <div key={i} className="flex-1 flex justify-center">
-                        <span
-                          className="text-[8px] leading-none text-center truncate"
-                          style={{ color: 'var(--color-text-muted)' }}
-                        >
+                        <span className="text-[9px] font-semibold text-slate-400 text-center truncate">
                           {point.date
-                            ? new Date(point.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                            ? new Date(point.date).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                              })
                             : i + 1}
                         </span>
                       </div>
@@ -421,15 +380,15 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Chart Legend */}
-              <div className="flex items-center gap-4 mt-3 justify-end">
+              <div className="flex items-center gap-4 mt-4 justify-end border-t border-slate-100 pt-3">
                 {[
-                  { label: '≥ 70% (Good)',    color: 'var(--color-brand)' },
-                  { label: '50–69% (Fair)',   color: '#7c3aed' },
-                  { label: '< 50% (Needs work)', color: '#a78bfa' },
+                  { label: '≥ 70% (Strong)', color: 'bg-blue-600' },
+                  { label: '50–69% (Fair)', color: 'bg-blue-400' },
+                  { label: '< 50% (Needs Work)', color: 'bg-blue-200' },
                 ].map(({ label, color }) => (
                   <div key={label} className="flex items-center gap-1.5">
-                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
-                    <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+                    <span className={`inline-block w-2.5 h-2.5 rounded-sm ${color}`} />
+                    <span className="text-[11px] font-medium text-slate-500">{label}</span>
                   </div>
                 ))}
               </div>
@@ -439,31 +398,27 @@ export default function AnalyticsPage() {
 
         {/* ── Empty State Call-to-Action ── */}
         {isEmpty && !dashboardError && (
-          <div
-            className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-10 text-center"
-          >
-            <div className="flex h-14 w-14 items-center justify-center rounded-full" style={{ background: 'var(--color-bg-subtle)' }}>
-              <Clock className="w-7 h-7" style={{ color: 'var(--color-text-muted)' }} />
+          <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-slate-200/80 bg-white shadow-xs p-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 border border-blue-200/60 shadow-xs">
+              <Clock className="w-7 h-7" />
             </div>
             <div>
-              <p className="text-base font-bold" style={{ color: 'var(--color-text-primary)' }}>
-                No interview data yet
-              </p>
-              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Start a mock interview to see your performance analytics here.
+              <h3 className="text-base font-extrabold text-slate-900">
+                No interview sessions recorded yet
+              </h3>
+              <p className="mt-1 text-xs text-slate-500 max-w-sm font-medium">
+                Launch an AI mock interview session to generate personalized performance telemetry.
               </p>
             </div>
             <Link
               href="/dashboard/create-session"
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-              style={{ background: 'var(--color-brand)' }}
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
-              Start Your First Interview
+              <span>Start Your First Interview</span>
             </Link>
           </div>
         )}
-
       </div>
     </DashboardShell>
   );

@@ -58,6 +58,27 @@ router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
 # HTTP Bearer authentication token scheme
 security = HTTPBearer()
 
+_payment_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_payment_http_client() -> httpx.AsyncClient:
+    """Returns or initializes a pooled HTTP client for payment inter-service calls."""
+    global _payment_http_client
+    if _payment_http_client is None or _payment_http_client.is_closed:
+        _payment_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=50)
+        )
+    return _payment_http_client
+
+
+async def close_payment_http_client():
+    """Gracefully closes the pooled payment HTTP client on service shutdown."""
+    global _payment_http_client
+    if _payment_http_client and not _payment_http_client.is_closed:
+        await _payment_http_client.aclose()
+        _payment_http_client = None
+
 # Dynamic evaluation of gateway readiness based on environment variables
 USE_RAZORPAY = razorpay_enabled()
 
@@ -66,7 +87,7 @@ USE_RAZORPAY = razorpay_enabled()
 
 async def verify_token(token: str) -> Optional[dict]:
     """
-    Validates a JWT access token by querying the Auth Service `/me` endpoint.
+    Validates a JWT access token by querying the Auth Service `/me` endpoint using a pooled client.
 
     Args:
         token (str): Raw bearer access token extracted from request header.
@@ -75,13 +96,12 @@ async def verify_token(token: str) -> Optional[dict]:
         Optional[dict]: Decoded user profile claims if valid; None on failure.
     """
     try:
-        # Issue an internal HTTP request to the central identity service
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(
-                f"{AUTH_SERVICE_URL}/api/v1/auth/me",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            return r.json() if r.status_code == 200 else None
+        client = get_payment_http_client()
+        r = await client.get(
+            f"{AUTH_SERVICE_URL}/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        return r.json() if r.status_code == 200 else None
     except Exception:
         return None
 
@@ -118,11 +138,11 @@ async def _notify_user_service_plan_change(user_id: str, plan: str):
         plan (str): Target plan tier ('free', 'pro', 'enterprise').
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.put(
-                f"{USER_SERVICE_URL}/api/v1/users/{user_id}/plan",
-                json={"plan": plan}
-            )
+        client = get_payment_http_client()
+        await client.put(
+            f"{USER_SERVICE_URL}/api/v1/users/{user_id}/plan",
+            json={"plan": plan}
+        )
     except Exception as e:
         print(f"[payment] Warning: could not update user plan on user-service: {e}")
 

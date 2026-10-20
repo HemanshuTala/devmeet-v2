@@ -52,9 +52,9 @@ class Database:
             database=os.getenv("POSTGRES_DB", "devmeet"),
             user=os.getenv("POSTGRES_USER", "devmeet"),
             password=os.getenv("POSTGRES_PASSWORD", "devmeet_password"),
-            min_size=2,
-            max_size=10,
-            command_timeout=30
+            min_size=int(os.getenv("DB_POOL_MIN", "2")),
+            max_size=int(os.getenv("DB_POOL_MAX", "10")),
+            command_timeout=float(os.getenv("DB_TIMEOUT", "30.0"))
         )
 
     async def disconnect(self):
@@ -238,95 +238,84 @@ class Database:
         """
         Atomically increments interview session usage counters after checking plan limits.
 
-        Steps executed in a SINGLE connection/transaction to avoid deadlocks:
+        Steps executed cleanly without holding multi-statement transaction locks:
         1. Ensures quota and plan rows exist (upsert).
-        2. Resets daily counter if the date has rolled over.
-        3. Validates plan limits.
-        4. Increments counters atomically.
+        2. Retrieves user's active tier and checks daily/monthly quota limits.
+        3. Updates counters atomically.
+        4. Returns updated quota record.
 
         Returns:
             dict: The updated quota record.
         """
         async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                # 1. Ensure rows exist and reset daily counter if needed – all on same conn
-                await conn.execute(
-                    """
-                    INSERT INTO user_plans (user_id, plan)
-                    VALUES ($1, 'free')
-                    ON CONFLICT (user_id) DO NOTHING
-                    """,
-                    user_id
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO usage_quotas (user_id, interviews_today, interviews_this_month, last_reset_date)
-                    VALUES ($1, 0, 0, CURRENT_DATE)
-                    ON CONFLICT (user_id) DO NOTHING
-                    """,
-                    user_id
-                )
+            # 1. Ensure default rows exist
+            await conn.execute(
+                """
+                INSERT INTO user_plans (user_id, plan)
+                VALUES ($1, 'free')
+                ON CONFLICT (user_id) DO NOTHING;
+                """,
+                user_id
+            )
+            await conn.execute(
+                """
+                INSERT INTO usage_quotas (user_id, interviews_today, interviews_this_month, last_reset_date)
+                VALUES ($1, 0, 0, CURRENT_DATE)
+                ON CONFLICT (user_id) DO NOTHING;
+                """,
+                user_id
+            )
 
-                # 2. Reset daily / monthly counters if date rolled over
-                await conn.execute(
-                    """
-                    UPDATE usage_quotas
-                    SET interviews_today = CASE WHEN last_reset_date < CURRENT_DATE THEN 0 ELSE interviews_today END,
-                        interviews_this_month = CASE WHEN date_trunc('month', last_reset_date) < date_trunc('month', CURRENT_DATE) THEN 0 ELSE interviews_this_month END,
-                        last_reset_date = CURRENT_DATE
-                    WHERE user_id = $1 AND last_reset_date < CURRENT_DATE
-                    """,
-                    user_id
-                )
+            # 2. Get user plan and current quota
+            plan_row = await conn.fetchrow("SELECT plan FROM user_plans WHERE user_id = $1", user_id)
+            plan = plan_row["plan"] if plan_row else "free"
+            limits = await self.get_plan_limits(plan)
 
-                # 3. Read current quota (same connection, no new pool acquire)
-                row = await conn.fetchrow(
-                    """
-                    SELECT uq.interviews_today, uq.interviews_this_month, uq.last_reset_date,
-                           COALESCE(up.plan, 'free') AS plan, uq.created_at
-                    FROM usage_quotas uq
-                    LEFT JOIN user_plans up ON uq.user_id = up.user_id
-                    WHERE uq.user_id = $1
-                    """,
-                    user_id
-                )
-                if not row:
-                    raise Exception("User quota not found")
-                quota = dict(row)
+            row = await conn.fetchrow(
+                """
+                SELECT interviews_today, interviews_this_month, last_reset_date, created_at
+                FROM usage_quotas
+                WHERE user_id = $1
+                """,
+                user_id
+            )
+            if not row:
+                raise Exception("User quota not found")
 
-                # 4. Check limits
-                limits = await self.get_plan_limits(quota["plan"])
+            # 3. Calculate rollover
+            from datetime import date as dt_date
+            today = dt_date.today()
+            last_reset = row["last_reset_date"]
+            if hasattr(last_reset, "date"):
+                last_reset = last_reset.date()
 
-                if limits["daily"] > 0 and quota["interviews_today"] >= limits["daily"]:
-                    raise Exception("Daily interview limit reached (5 free interviews per day)")
+            cur_today = 0 if last_reset < today else int(row["interviews_today"])
+            cur_month = 0 if (last_reset.year < today.year or last_reset.month < today.month) else int(row["interviews_this_month"])
 
-                if limits["monthly"] > 0 and quota["interviews_this_month"] >= limits["monthly"]:
-                    raise Exception("Monthly interview limit reached (5 free interviews per month)")
+            if limits["daily"] > 0 and cur_today >= limits["daily"]:
+                raise Exception("Daily interview limit reached (5 free interviews per day)")
 
-                # 5. Increment usage
-                await conn.execute(
-                    """
-                    UPDATE usage_quotas
-                    SET interviews_today = interviews_today + 1,
-                        interviews_this_month = interviews_this_month + 1,
-                        updated_at = NOW()
-                    WHERE user_id = $1
-                    """,
-                    user_id
-                )
+            if limits["monthly"] > 0 and cur_month >= limits["monthly"]:
+                raise Exception("Monthly interview limit reached (5 free interviews per month)")
 
-                # 6. Return updated record (same connection)
-                updated = await conn.fetchrow(
-                    """
-                    SELECT uq.interviews_today, uq.interviews_this_month, uq.last_reset_date,
-                           COALESCE(up.plan, 'free') AS plan, uq.created_at
-                    FROM usage_quotas uq
-                    LEFT JOIN user_plans up ON uq.user_id = up.user_id
-                    WHERE uq.user_id = $1
-                    """,
-                    user_id
-                )
-                return dict(updated) if updated else quota
+            # 4. Atomic update and return
+            new_today = cur_today + 1
+            new_month = cur_month + 1
+            updated = await conn.fetchrow(
+                """
+                UPDATE usage_quotas
+                SET interviews_today = $2,
+                    interviews_this_month = $3,
+                    last_reset_date = $4,
+                    updated_at = NOW()
+                WHERE user_id = $1
+                RETURNING interviews_today, interviews_this_month, last_reset_date, created_at
+                """,
+                user_id, new_today, new_month, today
+            )
+            res = dict(updated) if updated else dict(row)
+            res["plan"] = plan
+            return res
 
     async def get_user_plan(self, user_id: str) -> dict:
         """

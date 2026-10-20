@@ -46,12 +46,33 @@ security = HTTPBearer(auto_error=False)
 
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
 
+_analytics_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_analytics_http_client() -> httpx.AsyncClient:
+    """Returns or initializes a connection-pooled HTTP client for analytics inter-service calls."""
+    global _analytics_http_client
+    if _analytics_http_client is None or _analytics_http_client.is_closed:
+        _analytics_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=50)
+        )
+    return _analytics_http_client
+
+
+async def close_analytics_http_client():
+    """Gracefully closes the pooled analytics HTTP client on service shutdown."""
+    global _analytics_http_client
+    if _analytics_http_client and not _analytics_http_client.is_closed:
+        await _analytics_http_client.aclose()
+        _analytics_http_client = None
+
 
 async def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Optional[dict]:
     """
-    Validates optional Bearer JWT against auth-service.
+    Validates optional Bearer JWT against auth-service using a pooled HTTP client.
 
     Parameters:
       credentials (Optional[HTTPAuthorizationCredentials]): Bearer token if provided.
@@ -62,12 +83,12 @@ async def get_optional_user(
     if not credentials:
         return None
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(
-                f"{AUTH_SERVICE_URL}/api/v1/auth/me",
-                headers={"Authorization": f"Bearer {credentials.credentials}"},
-            )
-            return r.json() if r.status_code == 200 else None
+        client = get_analytics_http_client()
+        r = await client.get(
+            f"{AUTH_SERVICE_URL}/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {credentials.credentials}"},
+        )
+        return r.json() if r.status_code == 200 else None
     except Exception:
         return None
 

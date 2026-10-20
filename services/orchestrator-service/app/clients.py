@@ -30,11 +30,21 @@ _http_client: Optional[httpx.AsyncClient] = None
 def get_http_client() -> httpx.AsyncClient:
     """
     Returns the shared asynchronous HTTP client instance, initializing it if needed.
+    Configured with standard connection pool limits and timeouts.
     """
     global _http_client
     if _http_client is None:
-        _http_client = httpx.AsyncClient(timeout=10.0)
+        limits = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+        _http_client = httpx.AsyncClient(timeout=10.0, limits=limits)
     return _http_client
+
+
+async def close_http_client():
+    """Gracefully closes persistent HTTP client connection pool on service shutdown."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
 
 
 _get_http_client = get_http_client

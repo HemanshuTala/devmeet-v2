@@ -42,6 +42,27 @@ security = HTTPBearer()
 # Base URL for inter-service communication with the central Auth Service
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
 
+_admin_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_admin_http_client() -> httpx.AsyncClient:
+    """Returns or initializes a connection-pooled HTTP client for admin inter-service calls."""
+    global _admin_http_client
+    if _admin_http_client is None or _admin_http_client.is_closed:
+        _admin_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=50)
+        )
+    return _admin_http_client
+
+
+async def close_admin_http_client():
+    """Gracefully closes the pooled admin HTTP client on service shutdown."""
+    global _admin_http_client
+    if _admin_http_client and not _admin_http_client.is_closed:
+        await _admin_http_client.aclose()
+        _admin_http_client = None
+
 
 # ─── RBAC: Admin Guard (AUTH-05) ─────────────────────────────────────────────
 
@@ -69,15 +90,15 @@ async def require_admin(credentials: HTTPAuthorizationCredentials = Depends(secu
     """
     token = credentials.credentials
     try:
-        # Validate token against Auth Service with a strict 5-second timeout
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{AUTH_SERVICE_URL}/api/v1/auth/me",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            if response.status_code != 200:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
-            user = response.json()
+        # Validate token against Auth Service with pooled client
+        client = get_admin_http_client()
+        response = await client.get(
+            f"{AUTH_SERVICE_URL}/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        user = response.json()
     except HTTPException:
         # Re-raise explicit HTTP exceptions
         raise
@@ -387,12 +408,12 @@ async def impersonate_user(
 
     token = credentials.credentials
     try:
-        # Request short-lived impersonation token from centralized Auth Service
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{AUTH_SERVICE_URL}/api/v1/auth/impersonate-token?target_user_id={user_id}",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+        # Request short-lived impersonation token from centralized Auth Service using pooled client
+        client = get_admin_http_client()
+        response = await client.post(
+            f"{AUTH_SERVICE_URL}/api/v1/auth/impersonate-token?target_user_id={user_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
             if response.status_code != 200:
                 detail = "Failed to generate impersonation token"
                 try:

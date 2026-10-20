@@ -51,6 +51,8 @@ services:
     build: ./services/auth-service
     ports:
       - "8001:8001"
+    volumes:
+      - ./services/auth-service/app:/app/app
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -71,6 +73,8 @@ services:
     build: ./services/user-service
     ports:
       - "8002:8002"
+    volumes:
+      - ./services/user-service/app:/app/app
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432

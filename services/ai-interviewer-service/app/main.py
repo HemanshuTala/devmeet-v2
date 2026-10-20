@@ -25,16 +25,26 @@ Key Architectural Components:
 """
 
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import router
+from .routes import router, close_auth_client
 from .middleware import RequestIDMiddleware
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager ensuring graceful shutdown of pooled HTTP connections."""
+    yield
+    await close_auth_client()
+
 
 # Initialize FastAPI application
 app = FastAPI(
     title="AI Interviewer Service",
     description="Low-latency AI interview question generation and streaming via Groq LPUs",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # ─── Cross-Origin Resource Sharing (CORS) ─────────────────────────────────────

@@ -6,7 +6,7 @@
  * 1. Multi-Step Interview Configuration:
  *    - Step 1 (Interview Type): DSA & Coding, Behavioral (STAR), or System Design.
  *    - Step 2 (Difficulty Level): Easy, Medium (Senior), or Hard (Advanced/Staff).
- *    - Step 3 (Duration): Preset buttons (15m, 30m, 45m, 60m, 90m, 120m) and continuous [Slider](file:///e:/AI%20INTERVIEW/frontend/src/components/ui/slider.tsx).
+ *    - Step 3 (Duration): Preset buttons (15m, 30m, 45m, 60m, 90m, 120m) and continuous Slider.
  *    - Step 4 (Targeting & Focus): Company name (e.g. Google, Meta) and topic focus (e.g. Dynamic Programming, Distributed Databases).
  * 2. URL Parameter Pre-population:
  *    - Automatically synchronizes query params (`?type=...&difficulty=...&focus=...&company=...`).
@@ -24,7 +24,21 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Code2, MessageSquare, Layout, Play, Target, Check, Timer, Building2, ShieldCheck, Bot, ClipboardList, Rocket } from 'lucide-react';
+import {
+  Code2,
+  MessageSquare,
+  Layout,
+  Play,
+  Target,
+  Check,
+  Timer,
+  Building2,
+  ShieldCheck,
+  Bot,
+  ClipboardList,
+  Rocket,
+  Sparkles,
+} from 'lucide-react';
 import { useCreateSession } from '@/hooks/queries/useSessions';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import DashboardShell from '@/components/layout/DashboardShell';
@@ -41,8 +55,11 @@ const TYPES = [
     icon: Code2,
     skills: ['Arrays & Trees', 'DP & Graphs', 'Big O Analysis', 'Optimizations'],
     accent: '#2563eb',
-    accentBg: '#eff6ff',
-    accentBorder: '#bfdbfe',
+    accentBg: 'bg-blue-50/80',
+    accentBorder: 'border-blue-200',
+    accentRing: 'ring-blue-500/20',
+    accentText: 'text-blue-600',
+    badgeBg: 'bg-blue-600 text-white',
   },
   {
     value: 'behavioral',
@@ -51,9 +68,12 @@ const TYPES = [
     description: 'Leadership stories, soft skills, and STAR-method response techniques.',
     icon: MessageSquare,
     skills: ['STAR Structure', 'Conflict Mgmt', 'Leadership', 'Team Dynamics'],
-    accent: '#0891b2',
-    accentBg: '#ecfeff',
-    accentBorder: '#a5f3fc',
+    accent: '#4f46e5',
+    accentBg: 'bg-indigo-50/80',
+    accentBorder: 'border-indigo-200',
+    accentRing: 'ring-indigo-500/20',
+    accentText: 'text-indigo-600',
+    badgeBg: 'bg-indigo-600 text-white',
   },
   {
     value: 'system_design',
@@ -62,17 +82,53 @@ const TYPES = [
     description: 'Scalable architectures, distributed systems, and engineering trade-offs.',
     icon: Layout,
     skills: ['Load Balancing', 'Microservices', 'Caching & DBs', 'Scalability'],
-    accent: '#7c3aed',
-    accentBg: '#f5f3ff',
-    accentBorder: '#ddd6fe',
+    accent: '#0d9488',
+    accentBg: 'bg-teal-50/80',
+    accentBorder: 'border-teal-200',
+    accentRing: 'ring-teal-500/20',
+    accentText: 'text-teal-600',
+    badgeBg: 'bg-teal-600 text-white',
   },
 ];
 
 /** Difficulty level specifications */
 const DIFFICULTIES = [
-  { value: 'easy', label: 'Easy', desc: 'Warm-up & fundamentals', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', textColor: '#14532d' },
-  { value: 'medium', label: 'Medium', desc: 'Senior developer level', color: '#d97706', bg: '#fffbeb', border: '#fde68a', textColor: '#78350f' },
-  { value: 'hard', label: 'Hard', desc: 'Advanced & edge cases', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', textColor: '#7f1d1d' },
+  {
+    value: 'easy',
+    label: 'Easy',
+    desc: 'Warm-up & fundamentals',
+    activeBg: 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-500/20',
+    dotColor: 'bg-emerald-500',
+    textActive: 'text-white',
+    textMuted: 'text-emerald-100',
+    color: '#16a34a',
+    bg: '#f0fdf4',
+    border: '#bbf7d0',
+  },
+  {
+    value: 'medium',
+    label: 'Medium',
+    desc: 'Senior developer level',
+    activeBg: 'bg-amber-600 text-white border-amber-600 shadow-amber-500/20',
+    dotColor: 'bg-amber-500',
+    textActive: 'text-white',
+    textMuted: 'text-amber-100',
+    color: '#d97706',
+    bg: '#fffbeb',
+    border: '#fde68a',
+  },
+  {
+    value: 'hard',
+    label: 'Hard',
+    desc: 'Advanced & edge cases',
+    activeBg: 'bg-rose-600 text-white border-rose-600 shadow-rose-500/20',
+    dotColor: 'bg-rose-500',
+    textActive: 'text-white',
+    textMuted: 'text-rose-100',
+    color: '#dc2626',
+    bg: '#fef2f2',
+    border: '#fecaca',
+  },
 ];
 
 /** Preset session durations in minutes */
@@ -80,9 +136,6 @@ const DURATIONS = [15, 30, 45, 60, 90, 120];
 
 /**
  * Formats duration in minutes to user-friendly label.
- *
- * @param {number} min - Minutes.
- * @returns {string} Formatted duration string.
  */
 function fmt(min: number) {
   if (min < 60) return `${min} min`;
@@ -93,38 +146,26 @@ function fmt(min: number) {
 
 /**
  * Root CreateSessionPage component wrapped in Suspense boundary for `useSearchParams`.
- *
- * @component
- * @returns {JSX.Element}
  */
 export default function CreateSessionPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ minHeight: '100vh', background: 'var(--color-bg)', padding: '24px' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {/* Title skeleton */}
-            <div className="skeleton-shimmer" style={{ height: 32, width: 220, borderRadius: 8 }} />
-            {/* Step 1 — interview type cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <DashboardShell maxWidth="max-w-[1140px]">
+          <div className="flex flex-col gap-6 animate-pulse">
+            <div className="h-10 bg-slate-200/80 rounded-xl w-64" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="skeleton-shimmer" style={{ height: 120, borderRadius: 12 }} />
+                <div key={i} className="h-44 bg-slate-200/80 rounded-2xl" />
               ))}
             </div>
-            {/* Step 2 — difficulty + duration */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div className="skeleton-shimmer" style={{ height: 56, borderRadius: 10 }} />
-              <div className="skeleton-shimmer" style={{ height: 56, borderRadius: 10 }} />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-24 bg-slate-200/80 rounded-2xl" />
+              ))}
             </div>
-            {/* Step 3 — text inputs */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div className="skeleton-shimmer" style={{ height: 44, borderRadius: 8 }} />
-              <div className="skeleton-shimmer" style={{ height: 44, borderRadius: 8 }} />
-            </div>
-            {/* Launch button */}
-            <div className="skeleton-shimmer" style={{ height: 48, borderRadius: 12 }} />
           </div>
-        </div>
+        </DashboardShell>
       }
     >
       <CreateSessionForm />
@@ -137,63 +178,39 @@ export default function CreateSessionPage() {
  */
 function Spinner() {
   return (
-    <div
-      style={{
-        width: 28,
-        height: 28,
-        border: '2.5px solid #e5e5e5',
-        borderTopColor: '#2563eb',
-        borderRadius: '50%',
-        animation: 'spin 0.75s linear infinite',
-      }}
-    />
+    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
   );
 }
 
 /**
  * StepHeader Component.
- *
- * Numbered step indicator header.
  */
 function StepHeader({ n, title, sub }: { n: number; title: string; sub: string }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <span
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: '50%',
-            background: '#2563eb',
-            color: '#fff',
-            fontSize: 11,
-            fontWeight: 800,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+    <div className="mb-3.5">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center shrink-0 shadow-xs">
           {n}
         </span>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#111', letterSpacing: '-0.01em' }}>{title}</span>
+        <h2 className="text-base font-bold text-slate-900 tracking-tight">{title}</h2>
       </div>
-      <p style={{ fontSize: 12, color: '#999', margin: 0, paddingLeft: 30, fontWeight: 400 }}>{sub}</p>
+      <p className="text-xs text-slate-500 font-medium pl-8.5">{sub}</p>
     </div>
   );
 }
 
 /**
  * SummaryRow Component.
- *
- * Formatted row in the sticky right-side session preview card.
  */
 function SummaryRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div className="flex items-center gap-3">
       {icon}
-      <div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{label}</div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{value}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
+          {label}
+        </div>
+        <div className="text-xs font-bold text-slate-800 truncate">{value}</div>
       </div>
     </div>
   );
@@ -220,22 +237,11 @@ function StyledInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       maxLength={maxLength}
-      style={{
-        width: '100%',
-        padding: '10px 12px',
-        borderRadius: 8,
-        border: '1px solid #e5e5e5',
-        fontSize: 13,
-        color: '#333',
-        outline: 'none',
-        fontFamily: 'inherit',
-        transition: 'border 0.15s',
-      }}
+      className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
     />
   );
 }
 
-const TYPE_LABELS: Record<string, string> = { dsa: 'DSA & Coding', behavioral: 'Behavioral', system_design: 'System Design' };
 const LAUNCH_STEP_ICONS = [ShieldCheck, Bot, ClipboardList, Rocket];
 const LAUNCH_STEPS = [
   { label: 'Authenticating your session' },
@@ -246,145 +252,67 @@ const LAUNCH_STEPS = [
 
 /**
  * LaunchOverlay Component.
- *
  * Fullscreen animated loading sequence presented while orchestrator service allocates resources.
  */
 function LaunchOverlay({ step, type, difficulty }: { step: number; type: string; difficulty: string }) {
   const progress = ((step + 1) / (LAUNCH_STEPS.length + 1)) * 100;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        background: '#fafafa',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'var(--font-jakarta), system-ui, sans-serif',
-        animation: 'launchFadeIn 0.3s ease',
-      }}
-    >
-      <style>{`
-        @keyframes launchFadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes launchSpin { to { transform: rotate(360deg) } }
-        @keyframes launchStepIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes launchCheckScale { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
-        @keyframes launchPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-        @keyframes launchProgressGlow { 0%, 100% { box-shadow: 0 0 8px rgba(37, 99, 235,0.3); } 50% { box-shadow: 0 0 16px rgba(37, 99, 235,0.5); } }
-      `}</style>
-
-      {/* Target Icon & Concentric Ring Spinner */}
-      <div style={{ marginBottom: 32, position: 'relative' }}>
-        <svg width="56" height="56" viewBox="0 0 56 56" style={{ animation: 'launchSpin 1.2s linear infinite' }}>
-          <circle cx="28" cy="28" r="24" fill="none" stroke="#e5e5e5" strokeWidth="3" />
-          <circle cx="28" cy="28" r="24" fill="none" stroke="#2563eb" strokeWidth="3"
-            strokeDasharray="120 150" strokeLinecap="round" />
-        </svg>
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Target style={{ width: 20, height: 20, color: '#2563eb' }} />
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in font-sans">
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl p-8 max-w-md w-full flex flex-col items-center text-center">
+        {/* Animated Icon */}
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200/60 flex items-center justify-center mb-6 shadow-sm">
+          <Target className="w-8 h-8 text-blue-600 animate-pulse" />
         </div>
-      </div>
 
-      {/* Title */}
-      <h2 style={{
-        fontSize: 22, fontWeight: 700, color: '#111', letterSpacing: '-0.02em',
-        margin: '0 0 4px', textAlign: 'center',
-      }}>
-        Launching Your Interview
-      </h2>
-      <p style={{ fontSize: 13, color: '#999', fontWeight: 500, margin: '0 0 36px' }}>
-        {TYPE_LABELS[type] || type} &middot; {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
-      </p>
+        {/* Title */}
+        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-1.5">
+          Launching Interview Room
+        </h2>
+        <p className="text-xs text-slate-500 font-medium mb-6">
+          Allocating container runtime & connecting AI engine...
+        </p>
 
-      {/* Sequential Milestone Steps */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, width: 300 }}>
-        {LAUNCH_STEPS.map((s, i) => {
-          const done = step > i;
-          const active = step === i;
-          const StepIcon = LAUNCH_STEP_ICONS[i];
-          const isLast = i === LAUNCH_STEPS.length - 1;
-
-          return (
-            <div key={i}>
+        {/* Step List */}
+        <div className="w-full flex flex-col gap-3 text-left">
+          {LAUNCH_STEPS.map((s, idx) => {
+            const Icon = LAUNCH_STEP_ICONS[idx];
+            const done = idx < step;
+            const active = idx === step;
+            return (
               <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '10px 0',
-                  opacity: done || active ? 1 : 0.4,
-                  transition: 'opacity 0.3s ease',
-                  animation: (done || active) ? `launchStepIn 0.3s ease ${i * 0.08}s both` : 'none',
-                }}
+                key={s.label}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                  active
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-xs'
+                    : done
+                    ? 'bg-emerald-50/50 border-emerald-200/60 text-emerald-800'
+                    : 'bg-slate-50/50 border-slate-100 text-slate-400'
+                }`}
               >
-                {/* Step indicator circular badge */}
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: done ? '#f0fdf4' : active ? '#eff6ff' : '#f5f5f5',
-                  border: done ? '1.5px solid #bbf7d0' : active ? '1.5px solid #bfdbfe' : '1.5px solid #e5e5e5',
-                  transition: 'all 0.3s ease',
-                  animation: done ? 'launchCheckScale 0.35s ease' : 'none',
-                }}>
-                  {done
-                    ? <Check style={{ width: 14, height: 14, color: '#16a34a' }} />
-                    : <StepIcon style={{ width: 14, height: 14, color: active ? '#2563eb' : '#999' }} />
-                  }
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                    active ? 'bg-blue-600 text-white' : done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  {done ? <Check className="w-4 h-4 stroke-[3]" /> : <Icon className="w-3.5 h-3.5" />}
                 </div>
-
-                {/* Milestone label */}
-                <div style={{ flex: 1 }}>
-                  <span style={{
-                    fontSize: 13.5, fontWeight: 600,
-                    color: done ? '#16a34a' : active ? '#111' : '#999',
-                    transition: 'color 0.3s',
-                  }}>
-                    {s.label}
-                  </span>
-                  {active && (
-                    <span style={{
-                      display: 'block', fontSize: 11, color: '#2563eb', fontWeight: 500, marginTop: 1,
-                      animation: 'launchPulse 1.5s ease infinite',
-                    }}>
-                      In progress…
-                    </span>
-                  )}
-                </div>
-
-                {/* Status Dot */}
-                {done && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />}
-                {active && <div style={{
-                  width: 6, height: 6, borderRadius: '50%', background: '#2563eb',
-                  animation: 'launchPulse 1s ease infinite',
-                }} />}
+                <span className="text-xs font-bold flex-1">{s.label}</span>
+                {active && (
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                )}
               </div>
+            );
+          })}
+        </div>
 
-              {/* Vertical Connector Line */}
-              {!isLast && (
-                <div style={{ marginLeft: 15.5, width: 1, height: 8, background: done ? '#bbf7d0' : '#e5e5e5', transition: 'background 0.3s' }} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Bottom Progress Bar */}
-      <div style={{
-        width: 300, height: 3, background: '#e5e5e5', borderRadius: 4, marginTop: 32, overflow: 'hidden',
-      }}>
-        <div style={{
-          height: '100%',
-          width: `${progress}%`,
-          background: '#2563eb',
-          borderRadius: 4,
-          transition: 'width 0.5s ease',
-          animation: 'launchProgressGlow 2s ease infinite',
-        }} />
+        {/* Progress Bar */}
+        <div className="w-full h-1.5 bg-slate-100 rounded-full mt-6 overflow-hidden">
+          <div
+            className="h-full bg-blue-600 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -392,8 +320,6 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
 
 /**
  * CreateSessionForm Component.
- *
- * Interactive session creation form.
  */
 function CreateSessionForm() {
   const router = useRouter();
@@ -445,135 +371,110 @@ function CreateSessionForm() {
         ...(focus.trim() ? { focus_area: focus.trim() } : {}),
       });
       setLaunchStep(4);
-      // Route candidate into the live interview room
       router.push(`/interview/${session.id}`);
-    } catch (err) {
-      stepTimers.current.forEach(clearTimeout);
-      stepTimers.current = [];
+    } catch (err: any) {
       setLaunching(false);
-      setLaunchStep(0);
+      stepTimers.current.forEach(clearTimeout);
 
-      const msg = err instanceof Error ? err.message : 'Failed to create session.';
-      // Check for concurrent active interview conflict and extract existing UUID to resume
-      if (msg.includes('CONCURRENT_SESSION') || msg.includes('active interview session')) {
+      // Handle active concurrent session conflict
+      const msg = err?.message ?? '';
+      if (err?.code === 'CONCURRENT_SESSION' || msg.includes('active interview session')) {
         const match = msg.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
         if (match) {
-          toast.info('Resuming active session…');
-          setLaunching(true);
+          toast.info('Resuming your existing in-progress session.');
           router.push(`/interview/${match[0]}`);
           return;
         }
-        const m = 'You have an active session. Resume it from History.';
-        setError(m);
-        toast.error(m);
-      } else if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('limit')) {
-        const m = 'Interview quota exceeded: You have used your 5 free interviews. Please upgrade to Pro for unlimited sessions!';
-        setError(m);
-        toast.error(m);
-      } else {
-        setError(msg);
-        toast.error(msg);
       }
-    }
-  }, [selectedType, selectedDiff, duration, company, focus, router, createSession]);
 
-  const typeData = TYPES.find((t) => t.value === selectedType)!;
-  const diffData = DIFFICULTIES.find((d) => d.value === selectedDiff)!;
+      const userMsg = err?.message || 'Failed to create session. Please try again.';
+      setError(userMsg);
+      toast.error(userMsg);
+    }
+  }, [selectedType, selectedDiff, duration, company, focus, createSession, router]);
+
+  useEffect(() => () => { stepTimers.current.forEach(clearTimeout); }, []);
+
+  const typeData = TYPES.find((t) => t.value === selectedType) || TYPES[0];
+  const diffData = DIFFICULTIES.find((d) => d.value === selectedDiff) || DIFFICULTIES[1];
 
   return (
     <>
-      {/* Fullscreen Launch Animation Overlay */}
       {launching && <LaunchOverlay step={launchStep} type={selectedType} difficulty={selectedDiff} />}
 
-      <DashboardShell maxWidth="max-w-[1100px]">
+      <DashboardShell maxWidth="max-w-[1140px]">
         {/* Page Title */}
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', letterSpacing: '-0.025em', margin: 0 }}>New Interview Session</h1>
-          <p style={{ fontSize: 13, color: '#888', margin: '5px 0 0', fontWeight: 400 }}>Configure your interview and click Start when ready.</p>
+        <div className="mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-600 mb-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Interactive Setup Wizard</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            New Interview Session
+          </h1>
+          <p className="text-sm text-slate-500 mt-1 font-medium">
+            Customize track, difficulty, duration, and target company to launch your personalized mock interview.
+          </p>
         </div>
 
-        {/* Error Notification */}
         {error && (
-          <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13, marginBottom: 20 }}>
-            {error}
+          <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+            <span>{error}</span>
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, alignItems: 'start' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
           {/* Left Column: Form Steps */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <div className="flex flex-col gap-8">
             {/* Step 1: Interview Track Type */}
-            <section>
-              <StepHeader n={1} title="Interview Type" sub="Choose the focus area for your session" />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            <section className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs">
+              <StepHeader n={1} title="Interview Type" sub="Choose the focus domain for this interview simulation" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4">
                 {TYPES.map((type) => {
                   const Icon = type.icon;
                   const sel = selectedType === type.value;
                   return (
                     <button
                       key={type.value}
+                      type="button"
                       onClick={() => setSelectedType(type.value)}
-                      style={{
-                        background: sel ? type.accentBg : '#fff',
-                        border: sel ? `1.5px solid ${type.accent}` : '1px solid #e8e8e8',
-                        borderRadius: 12,
-                        padding: '18px 16px 16px',
-                        textAlign: 'left' as const,
-                        cursor: 'pointer',
-                        outline: 'none',
-                        transition: 'all 0.15s ease',
-                        position: 'relative' as const,
-                        boxShadow: sel ? `0 0 0 3px ${type.accent}18` : 'none',
-                      }}
+                      className={`relative text-left p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between ${
+                        sel
+                          ? `${type.accentBg} ${type.accentBorder} shadow-sm ring-2 ${type.accentRing}`
+                          : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs'
+                      }`}
                     >
                       {sel && (
                         <div
-                          style={{
-                            position: 'absolute',
-                            top: 12,
-                            right: 12,
-                            width: 18,
-                            height: 18,
-                            borderRadius: '50%',
-                            background: type.accent,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
+                          className={`absolute top-3.5 right-3.5 w-5 h-5 rounded-full flex items-center justify-center text-white shadow-xs ${type.badgeBg}`}
                         >
-                          <Check style={{ width: 10, height: 10, color: '#fff', strokeWidth: 3 }} />
+                          <Check className="w-3 h-3 stroke-[3]" />
                         </div>
                       )}
-                      <div
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 9,
-                          background: sel ? type.accent : '#f0f0f0',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginBottom: 14,
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        <Icon style={{ width: 18, height: 18, color: sel ? '#fff' : '#999' }} />
+                      <div>
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3.5 transition-all shadow-xs ${
+                            sel ? `${type.badgeBg}` : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-sm font-extrabold text-slate-900 tracking-tight mb-1">
+                          {type.label}
+                        </h3>
+                        <p className="text-xs text-slate-500 leading-relaxed font-medium mb-4">
+                          {type.description}
+                        </p>
                       </div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111', letterSpacing: '-0.015em', marginBottom: 5 }}>{type.label}</div>
-                      <div style={{ fontSize: 12, color: '#888', lineHeight: 1.55, marginBottom: 14, fontWeight: 400 }}>{type.description}</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
+                      <div className="flex flex-wrap gap-1 mt-auto pt-2">
                         {type.skills.map((s) => (
                           <span
                             key={s}
-                            style={{
-                              fontSize: 10.5,
-                              fontWeight: 600,
-                              borderRadius: 5,
-                              padding: '2px 7px',
-                              background: sel ? type.accentBg : '#f5f5f5',
-                              color: sel ? type.accent : '#999',
-                              border: `1px solid ${sel ? type.accentBorder : '#ebebeb'}`,
-                            }}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                              sel
+                                ? `${type.accentBorder} ${type.accentText} bg-white/80`
+                                : 'border-slate-100 text-slate-400 bg-slate-50'
+                            }`}
                           >
                             {s}
                           </span>
@@ -586,135 +487,152 @@ function CreateSessionForm() {
             </section>
 
             {/* Step 2: Difficulty Level */}
-            <section>
-              <StepHeader n={2} title="Difficulty Level" sub="Pick a level that matches your experience" />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            <section className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs">
+              <StepHeader n={2} title="Difficulty Level" sub="Pick a level that matches your career benchmark" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
                 {DIFFICULTIES.map((opt) => {
                   const sel = selectedDiff === opt.value;
                   return (
                     <button
                       key={opt.value}
+                      type="button"
                       onClick={() => setSelectedDiff(opt.value)}
-                      style={{
-                        background: sel ? opt.color : '#fff',
-                        border: sel ? `1.5px solid ${opt.color}` : '1px solid #e8e8e8',
-                        borderRadius: 10,
-                        padding: '14px 16px',
-                        textAlign: 'left' as const,
-                        cursor: 'pointer',
-                        outline: 'none',
-                        transition: 'all 0.15s ease',
-                        boxShadow: sel ? `0 2px 12px ${opt.color}30` : 'none',
-                      }}
+                      className={`text-left p-4 rounded-2xl border transition-all duration-200 cursor-pointer ${
+                        sel
+                          ? `${opt.activeBg} shadow-sm`
+                          : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs'
+                      }`}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: sel ? 'rgba(255,255,255,0.8)' : opt.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: sel ? '#fff' : '#111' }}>{opt.label}</span>
-                        {sel && <Check style={{ width: 13, height: 13, color: 'rgba(255,255,255,0.9)', marginLeft: 'auto', strokeWidth: 3 }} />}
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              sel ? 'bg-white' : opt.dotColor
+                            }`}
+                          />
+                          <span className={`text-sm font-extrabold ${sel ? 'text-white' : 'text-slate-900'}`}>
+                            {opt.label}
+                          </span>
+                        </div>
+                        {sel && <Check className="w-4 h-4 stroke-[3] text-white" />}
                       </div>
-                      <p style={{ fontSize: 12, color: sel ? 'rgba(255,255,255,0.75)' : '#888', margin: '0 0 0 14px', fontWeight: 400 }}>{opt.desc}</p>
+                      <p className={`text-xs font-medium pl-4 ${sel ? opt.textMuted : 'text-slate-500'}`}>
+                        {opt.desc}
+                      </p>
                     </button>
                   );
                 })}
               </div>
             </section>
 
-            {/* Step 3 & 4: Session Duration & Optional Targeting */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {/* Step 3 & 4: Duration & Targeting */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Duration with Slider */}
-              <section>
-                <StepHeader n={3} title="Session Duration" sub="How long is this session?" />
-                <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 12, padding: '18px 16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 16 }}>
+              <section className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs flex flex-col justify-between">
+                <div>
+                  <StepHeader n={3} title="Session Duration" sub="Select target interview time window" />
+                  <div className="grid grid-cols-3 gap-2 mt-4 mb-5">
                     {DURATIONS.map((m) => (
                       <button
                         key={m}
+                        type="button"
                         onClick={() => setDuration(m)}
-                        style={{
-                          padding: '8px 4px',
-                          borderRadius: 8,
-                          border: duration === m ? '1.5px solid #2563eb' : '1px solid #e8e8e8',
-                          background: duration === m ? '#eff6ff' : '#fafafa',
-                          color: duration === m ? '#2563eb' : '#666',
-                          fontSize: 12,
-                          fontWeight: duration === m ? 700 : 500,
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.12s',
-                          fontFamily: 'inherit',
-                        }}
+                        className={`py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          duration === m
+                            ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-xs'
+                            : 'bg-slate-50 text-slate-600 border-slate-200/80 hover:bg-slate-100'
+                        }`}
                       >
                         {fmt(m)}
                       </button>
                     ))}
                   </div>
-                  <Slider min={15} max={120} step={15} value={[duration]} onValueChange={(v) => setDuration(v[0])} aria-label="Duration" />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                    <span style={{ fontSize: 10, color: '#bbb', fontWeight: 500 }}>15 min</span>
-                    <span style={{ fontSize: 10, color: '#bbb', fontWeight: 500 }}>2 hrs</span>
+                  <Slider
+                    min={15}
+                    max={120}
+                    step={15}
+                    value={[duration]}
+                    onValueChange={(v) => setDuration(v[0])}
+                    aria-label="Duration"
+                  />
+                  <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mt-2">
+                    <span>15 min</span>
+                    <span>2 hours</span>
                   </div>
                 </div>
               </section>
 
               {/* Optional Settings */}
-              <section>
-                <StepHeader n={4} title="Optional Settings" sub="Target company or specific focus area" />
-                <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 12, padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <section className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs">
+                <StepHeader n={4} title="Targeting & Focus" sub="Tailor prompts to target company rubrics" />
+                <div className="flex flex-col gap-4 mt-4">
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                      <Building2 style={{ width: 13, height: 13, color: '#888' }} />
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       Target Company
                     </label>
-                    <StyledInput value={company} onChange={setCompany} placeholder="e.g. Google, Meta, Amazon" maxLength={80} />
+                    <StyledInput
+                      value={company}
+                      onChange={setCompany}
+                      placeholder="e.g. Google, Meta, Stripe"
+                      maxLength={80}
+                    />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                      <Target style={{ width: 13, height: 13, color: '#888' }} />
-                      Focus Area
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
+                      <Target className="w-3.5 h-3.5 text-slate-400" />
+                      Focus Area / Topic
                     </label>
-                    <StyledInput value={focus} onChange={setFocus} placeholder="e.g. Arrays, Distributed systems" maxLength={120} />
+                    <StyledInput
+                      value={focus}
+                      onChange={setFocus}
+                      placeholder="e.g. Graphs, High Concurrency"
+                      maxLength={120}
+                    />
                   </div>
                 </div>
               </section>
             </div>
           </div>
 
-          {/* Right Column: Sticky Summary Sidebar */}
-          <div style={{ position: 'sticky', top: 24 }}>
-            <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-              {/* Header */}
-              <div style={{ padding: '18px 20px 16px', borderBottom: '1px solid #f0f0f0' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 6 }}>
-                  Session Summary
+          {/* Right Column: Sticky Summary Card */}
+          <div className="sticky top-6">
+            <div className="bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-xs space-y-5 p-6">
+              <div>
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+                  Session Preview
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: '#111', letterSpacing: '-0.02em' }}>{typeData.shortLabel}</div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 3, fontWeight: 400 }}>{typeData.description}</div>
+                <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">
+                  {typeData.shortLabel}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                  {typeData.description}
+                </p>
               </div>
 
-              {/* Rows */}
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="border-t border-slate-100 pt-4 flex flex-col gap-3.5">
                 <SummaryRow
                   icon={
-                    <div style={{ width: 26, height: 26, borderRadius: 7, background: typeData.accentBg, border: `1px solid ${typeData.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <typeData.icon style={{ width: 13, height: 13, color: typeData.accent }} />
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200/60 flex items-center justify-center shrink-0">
+                      <typeData.icon className="w-4 h-4 text-blue-600" />
                     </div>
                   }
-                  label="Type"
+                  label="Track"
                   value={typeData.shortLabel}
                 />
                 <SummaryRow
                   icon={
-                    <div style={{ width: 26, height: 26, borderRadius: 7, background: diffData.bg, border: `1px solid ${diffData.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: diffData.color, display: 'block' }} />
+                    <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center shrink-0">
+                      <span className={`w-2.5 h-2.5 rounded-full ${diffData.dotColor}`} />
                     </div>
                   }
                   label="Difficulty"
-                  value={<span style={{ color: diffData.color, fontWeight: 700 }}>{diffData.label}</span>}
+                  value={<span className="font-extrabold">{diffData.label}</span>}
                 />
                 <SummaryRow
                   icon={
-                    <div style={{ width: 26, height: 26, borderRadius: 7, background: '#f5f5f5', border: '1px solid #ebebeb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Timer style={{ width: 13, height: 13, color: '#888' }} />
+                    <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center shrink-0">
+                      <Timer className="w-4 h-4 text-slate-500" />
                     </div>
                   }
                   label="Duration"
@@ -723,45 +641,36 @@ function CreateSessionForm() {
                 {company && (
                   <SummaryRow
                     icon={
-                      <div style={{ width: 26, height: 26, borderRadius: 7, background: '#f5f5f5', border: '1px solid #ebebeb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Building2 style={{ width: 13, height: 13, color: '#888' }} />
+                      <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4 text-slate-500" />
                       </div>
                     }
-                    label="Company"
+                    label="Target Company"
                     value={company}
                   />
                 )}
                 {focus && (
                   <SummaryRow
                     icon={
-                      <div style={{ width: 26, height: 26, borderRadius: 7, background: '#f5f5f5', border: '1px solid #ebebeb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Target style={{ width: 13, height: 13, color: '#888' }} />
+                      <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center shrink-0">
+                        <Target className="w-4 h-4 text-slate-500" />
                       </div>
                     }
-                    label="Focus"
+                    label="Focus Area"
                     value={focus}
                   />
                 )}
               </div>
 
-              {/* Topics Pills */}
-              <div style={{ padding: '0 20px 16px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 8 }}>
-                  Topics Covered
+              <div className="border-t border-slate-100 pt-4">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
+                  Rubric Topics
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
+                <div className="flex flex-wrap gap-1.5">
                   {typeData.skills.map((s) => (
                     <span
                       key={s}
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: '3px 8px',
-                        borderRadius: 5,
-                        background: typeData.accentBg,
-                        color: typeData.accent,
-                        border: `1px solid ${typeData.accentBorder}`,
-                      }}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 text-slate-600"
                     >
                       {s}
                     </span>
@@ -769,47 +678,27 @@ function CreateSessionForm() {
                 </div>
               </div>
 
-              {/* Launch Action Button */}
-              <div style={{ padding: '0 20px 20px' }}>
+              <div className="border-t border-slate-100 pt-4">
                 <button
+                  type="button"
                   onClick={handleStart}
                   disabled={createSession.isPending}
-                  className="hover:bg-[#1d4ed8]"
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    padding: '13px 20px',
-                    borderRadius: 10,
-                    background: '#2563eb',
-                    color: '#fff',
-                    border: 'none',
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: createSession.isPending ? 'not-allowed' : 'pointer',
-                    opacity: createSession.isPending ? 0.7 : 1,
-                    transition: 'all 0.15s',
-                    fontFamily: 'inherit',
-                    letterSpacing: '-0.01em',
-                    boxShadow: '0 2px 8px rgba(37, 99, 235,0.3)',
-                  }}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {createSession.isPending ? (
                     <>
                       <Spinner />
-                      <span>Creating session&hellip;</span>
+                      <span>Allocating Room...</span>
                     </>
                   ) : (
                     <>
-                      <Play style={{ width: 15, height: 15, fill: 'currentColor' }} />
+                      <Play className="w-4 h-4 fill-white" />
                       <span>Start Interview</span>
                     </>
                   )}
                 </button>
-                <p style={{ fontSize: 11, color: '#bbb', textAlign: 'center', marginTop: 10, fontWeight: 400 }}>
-                  Your AI interviewer will be ready instantly.
+                <p className="text-[11px] text-slate-400 text-center mt-2.5 font-medium">
+                  Instant AI allocation · Zero setup required
                 </p>
               </div>
             </div>

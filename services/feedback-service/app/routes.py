@@ -35,6 +35,27 @@ logger = logging.getLogger("feedback-service")
 # Initialize router with standard prefix
 router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
 
+_feedback_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_feedback_http_client() -> httpx.AsyncClient:
+    """Returns or initializes a pooled HTTP client for feedback inter-service calls."""
+    global _feedback_http_client
+    if _feedback_http_client is None or _feedback_http_client.is_closed:
+        _feedback_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=50)
+        )
+    return _feedback_http_client
+
+
+async def close_feedback_http_client():
+    """Gracefully closes the pooled feedback HTTP client on service shutdown."""
+    global _feedback_http_client
+    if _feedback_http_client and not _feedback_http_client.is_closed:
+        await _feedback_http_client.aclose()
+        _feedback_http_client = None
+
 
 # ==============================================================================
 # ASYNCHRONOUS CANDIDATE NOTIFICATION WORKER
@@ -72,40 +93,40 @@ async def send_completion_notification(
     if not notification_url:
         return
 
+    client = get_feedback_http_client()
+
     # Step 1: Send transactional completion email
     try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{notification_url}/api/v1/notifications/email",
-                json={
-                    "to": email,
-                    "template": "session_complete",
-                    "data": {
-                        "name": name,
-                        "interview_type": interview_type.upper(),
-                        "score": overall_score,
-                        "report_url": pdf_url or f"/interview/{session_id}/feedback",
-                    },
+        await client.post(
+            f"{notification_url}/api/v1/notifications/email",
+            json={
+                "to": email,
+                "template": "session_complete",
+                "data": {
+                    "name": name,
+                    "interview_type": interview_type.upper(),
+                    "score": overall_score,
+                    "report_url": pdf_url or f"/interview/{session_id}/feedback",
                 },
-                timeout=5.0,
-            )
+            },
+            timeout=5.0,
+        )
     except Exception as e:
         logger.error("Failed to send session complete email: %s", e)
 
     # Step 2: Send real-time in-app push notification
     try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{notification_url}/api/v1/notifications/push",
-                json={
-                    "user_id": user_id,
-                    "type": "success",
-                    "title": "Interview Evaluated",
-                    "message": f"Your {interview_type.upper()} interview feedback is ready! Score: {overall_score}/100.",
-                    "data": {"session_id": session_id},
-                },
-                timeout=5.0,
-            )
+        await client.post(
+            f"{notification_url}/api/v1/notifications/push",
+            json={
+                "user_id": user_id,
+                "type": "success",
+                "title": "Interview Evaluated",
+                "message": f"Your {interview_type.upper()} interview feedback is ready! Score: {overall_score}/100.",
+                "data": {"session_id": session_id},
+            },
+            timeout=5.0,
+        )
     except Exception as e:
         logger.error("Failed to send push notification: %s", e)
 

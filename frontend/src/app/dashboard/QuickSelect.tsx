@@ -41,23 +41,23 @@ interface InterviewCardProps {
 const cardThemes = {
   dsa: {
     gradientBorder: 'bg-blue-600',
-    bgGradient: 'bg-blue-500/5',
-    iconBg: 'bg-blue-600',
+    bgGradient: 'bg-blue-500/10',
+    iconBg: 'bg-blue-600 shadow-blue-500/20',
     arrowActive: 'group-hover:bg-blue-600 group-hover:border-blue-600',
     skills: ['Complexity', 'LeetCode', 'Algorithms'],
   },
   behavioral: {
-    gradientBorder: 'bg-blue-600',
-    bgGradient: 'bg-blue-500/5',
-    iconBg: 'bg-blue-600',
-    arrowActive: 'group-hover:bg-blue-600 group-hover:border-blue-600',
+    gradientBorder: 'bg-indigo-600',
+    bgGradient: 'bg-indigo-500/10',
+    iconBg: 'bg-indigo-600 shadow-indigo-500/20',
+    arrowActive: 'group-hover:bg-indigo-600 group-hover:border-indigo-600',
     skills: ['STAR Method', 'Soft Skills', 'Leadership'],
   },
   system_design: {
-    gradientBorder: 'bg-blue-600',
-    bgGradient: 'bg-blue-500/5',
-    iconBg: 'bg-blue-600',
-    arrowActive: 'group-hover:bg-blue-600 group-hover:border-blue-600',
+    gradientBorder: 'bg-teal-600',
+    bgGradient: 'bg-teal-500/10',
+    iconBg: 'bg-teal-600 shadow-teal-500/20',
+    arrowActive: 'group-hover:bg-teal-600 group-hover:border-teal-600',
     skills: ['Scalability', 'DB Design', 'Architecture'],
   },
 };

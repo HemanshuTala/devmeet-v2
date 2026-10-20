@@ -57,9 +57,9 @@ class PaymentDatabase:
                 database=os.getenv("POSTGRES_DB", "devmeet"),
                 user=os.getenv("POSTGRES_USER", "devmeet"),
                 password=os.getenv("POSTGRES_PASSWORD", "devmeet_password"),
-                min_size=2,
-                max_size=10,
-                command_timeout=30,
+                min_size=int(os.getenv("DB_POOL_MIN", "2")),
+                max_size=int(os.getenv("DB_POOL_MAX", "10")),
+                command_timeout=float(os.getenv("DB_TIMEOUT", "30.0")),
             )
             print("[payment-db] Connected to PostgreSQL")
         except Exception as e:

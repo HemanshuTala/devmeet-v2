@@ -19,7 +19,7 @@ Role & Responsibility:
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import router
+from .routes import router, close_admin_http_client
 from .database import db
 from .middleware import RequestIDMiddleware
 
@@ -64,8 +64,9 @@ async def startup_event():
 async def shutdown_event():
     """
     Application shutdown event handler.
-    Gracefully drains all active database connection pool clients.
+    Gracefully drains all active database connection pool clients and pooled HTTP client.
     """
+    await close_admin_http_client()
     await db.disconnect()
 
 

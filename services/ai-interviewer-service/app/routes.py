@@ -56,10 +56,31 @@ security = HTTPBearer()
 # Base URL for upstream authentication validation
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
 
+_auth_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_auth_client() -> httpx.AsyncClient:
+    """Returns or initializes a connection-pooled HTTP client for auth verification."""
+    global _auth_http_client
+    if _auth_http_client is None or _auth_http_client.is_closed:
+        _auth_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=50)
+        )
+    return _auth_http_client
+
+
+async def close_auth_client():
+    """Gracefully closes the pooled auth HTTP client on service shutdown."""
+    global _auth_http_client
+    if _auth_http_client and not _auth_http_client.is_closed:
+        await _auth_http_client.aclose()
+        _auth_http_client = None
+
 
 async def verify_token(token: str) -> Optional[dict]:
     """
-    Validates an incoming Bearer JWT against auth-service.
+    Validates an incoming Bearer JWT against auth-service using a pooled HTTP connection.
 
     Parameters:
       token (str): Raw JWT token extracted from the Authorization header.
@@ -69,17 +90,17 @@ async def verify_token(token: str) -> Optional[dict]:
 
     Design Rationale:
       Delegates token decoding and revocation checking to auth-service's `/api/v1/auth/me`
-      endpoint to ensure centralized session and blacklist management.
+      endpoint to ensure centralized session and blacklist management without socket churn.
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{AUTH_SERVICE_URL}/api/v1/auth/me",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            if response.status_code == 200:
-                return response.json()
-            return None
+        client = get_auth_client()
+        response = await client.get(
+            f"{AUTH_SERVICE_URL}/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if response.status_code == 200:
+            return response.json()
+        return None
     except Exception:
         return None
 

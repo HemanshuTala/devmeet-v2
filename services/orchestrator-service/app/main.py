@@ -34,6 +34,7 @@ from .database import db
 from .routes import router
 from .outbox import outbox_publisher
 from .middleware import RequestIDMiddleware
+from .clients import close_http_client
 
 # Upstream Feedback Service URL for outbox event delivery
 FEEDBACK_SERVICE_URL = os.getenv("FEEDBACK_SERVICE_URL", "http://localhost:8007")
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     yield
     # ─── Shutdown Phase ───
     await outbox_publisher.stop()
+    await close_http_client()
     await db.disconnect()
 
 

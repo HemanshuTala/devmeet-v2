@@ -74,7 +74,7 @@ async def emit_event(
         VALUES ($1::uuid, $2, $3, $4::uuid, $5::jsonb)
         """,
         uuid.UUID(event_id),
-        event_id,
+        event_type,
         aggregate_type,
         uuid.UUID(aggregate_id),
         json.dumps(payload),
