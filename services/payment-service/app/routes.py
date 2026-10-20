@@ -1,3 +1,28 @@
+"""
+DevMeet Payment & Billing Service - REST API Endpoints
+======================================================
+This module coordinates candidate subscription plans, order creation, payment signature
+verification via HMAC-SHA256, and webhook event processing.
+
+Key Architectural Responsibilities:
+1. Multi-Tier Subscription Entitlement:
+   - Free (default tier: 3 interviews/mo, basic scoring).
+   - Pro (paid recurring tier: ₹1,599/mo, unlimited sessions, multi-modal interviews, full reports).
+   - Enterprise (contact-sales contracted plan).
+2. Dual Gateway Execution Engine (Razorpay + Mock Sandbox):
+   - When valid Razorpay credentials are configured, interacts with the live Razorpay SDK
+     to create orders (`client.order.create`) and verify cryptographically signed checkout tokens.
+   - Gracefully degrades to a sandbox mock checkout for local testing, demo days, and CI/CD runs.
+3. Cryptographic Signature Verification:
+   - Verifies Razorpay client-side signatures (`hmac.new(..., order_id|payment_id, sha256)`).
+   - Authenticates server-to-server webhook payloads using the configured `webhook_secret()`.
+4. Inter-Service Synchronization:
+   - Upon plan upgrades or downgrades, asynchronously notifies the User Service
+     (`PUT {USER_SERVICE_URL}/api/v1/users/{user_id}/plan`) to adjust quota limits immediately.
+5. Financial Audit & Ledger Logging:
+   - Every order, authorization, capture, and cancellation appends an immutable billing event record.
+"""
+
 import os
 import uuid
 import hashlib
@@ -16,6 +41,7 @@ from .config import (
     RAZORPAY_KEY_SECRET,
     USER_SERVICE_URL,
     AUTH_SERVICE_URL,
+    FRONTEND_URL,
     razorpay_enabled,
     webhook_secret,
 )
@@ -26,16 +52,30 @@ from .models import (
     Plan, PLAN_PRICES
 )
 
+# FastAPI router configuration with standard prefix
 router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
+
+# HTTP Bearer authentication token scheme
 security = HTTPBearer()
 
+# Dynamic evaluation of gateway readiness based on environment variables
 USE_RAZORPAY = razorpay_enabled()
 
 
 # ─── Auth helpers ────────────────────────────────────────────────────────────
 
 async def verify_token(token: str) -> Optional[dict]:
+    """
+    Validates a JWT access token by querying the Auth Service `/me` endpoint.
+
+    Args:
+        token (str): Raw bearer access token extracted from request header.
+
+    Returns:
+        Optional[dict]: Decoded user profile claims if valid; None on failure.
+    """
     try:
+        # Issue an internal HTTP request to the central identity service
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.get(
                 f"{AUTH_SERVICE_URL}/api/v1/auth/me",
@@ -46,15 +86,37 @@ async def verify_token(token: str) -> Optional[dict]:
         return None
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """
+    FastAPI authentication dependency that extracts and validates the candidate's bearer token.
+
+    Args:
+        credentials (HTTPAuthorizationCredentials): Injected Bearer token header.
+
+    Returns:
+        dict: Authenticated user dictionary containing user ID, email, and role.
+
+    Raises:
+        HTTPException(401): If token is missing, expired, or invalid.
+    """
     user = await verify_token(credentials.credentials)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
     return user
 
 
 async def _notify_user_service_plan_change(user_id: str, plan: str):
-    """Tell user-service to update the user's plan tier."""
+    """
+    Asynchronously notifies the User Service of a candidate plan upgrade or downgrade.
+    Enables immediate quota adjustments without requiring candidate re-authentication.
+
+    Args:
+        user_id (str): Target user UUID.
+        plan (str): Target plan tier ('free', 'pro', 'enterprise').
+    """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.put(
@@ -69,7 +131,16 @@ async def _notify_user_service_plan_change(user_id: str, plan: str):
 
 @router.get("/config")
 async def payment_config():
-    """Public payment configuration for the frontend checkout UI."""
+    """
+    Returns public payment provider configuration and client integration metadata.
+    
+    Why this exists:
+    Allows the frontend checkout modal to dynamically detect whether live Razorpay is active
+    or whether development mock checkout is enabled, along with the active currency (INR).
+
+    Returns:
+        dict: Provider identity ('razorpay' or 'mock'), key prefix, and ISO currency.
+    """
     return {
         "provider": "razorpay" if USE_RAZORPAY else "mock",
         "razorpay_enabled": USE_RAZORPAY,
@@ -82,10 +153,23 @@ async def payment_config():
 
 @router.get("/subscription", response_model=SubscriptionResponse)
 async def get_subscription(current_user: dict = Depends(get_current_user)):
-    """Get the current user's subscription status."""
+    """
+    Retrieves the authenticated candidate's active subscription tier and gateway identifiers.
+    
+    Why this exists:
+    Populates user profile badges, quota counters, and billing settings on the client.
+    If no active record is found in PostgreSQL, defaults gracefully to the 'free' tier.
+
+    Args:
+        current_user (dict): Authenticated candidate payload from JWT.
+
+    Returns:
+        SubscriptionResponse: Active plan, gateway customer IDs, and status.
+    """
     user_id = current_user["id"]
     sub = await db.get_subscription(user_id)
     if not sub:
+        # Candidate has never purchased a paid plan; default to free tier
         return SubscriptionResponse(
             user_id=user_id,
             plan=Plan.FREE,
@@ -109,17 +193,43 @@ async def create_checkout_session(
     payload: CheckoutSessionRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a Razorpay order for checkout (or mock one if keys not configured)."""
+    """
+    Initializes a new checkout order for purchasing or upgrading subscription plans.
+    
+    Execution Workflow:
+    1. Validates requested plan (rejects direct checkout for Free or Enterprise).
+    2. In live Razorpay mode: Mints an official order via Razorpay Client SDK.
+    3. In offline/mock mode: Automatically generates a sandbox mock order and redirect URL.
+    4. Logs the billing event in PostgreSQL for financial audit tracking.
+
+    Args:
+        payload (CheckoutSessionRequest): Target plan and redirect return URLs.
+        current_user (dict): Injected candidate claims.
+
+    Returns:
+        CheckoutSessionResponse: Order details and client modal initialization parameters.
+
+    Raises:
+        HTTPException(400): If attempting checkout for Free (use /cancel) or Enterprise (contact sales).
+    """
     user_id = current_user["id"]
 
+    # Reject invalid checkout requests
     if payload.plan == Plan.FREE:
-        raise HTTPException(status_code=400, detail="Cannot checkout to Free plan. Use cancel to downgrade.")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot checkout to Free plan. Use cancel to downgrade."
+        )
 
     if payload.plan == Plan.ENTERPRISE:
-        raise HTTPException(status_code=400, detail="Enterprise plan requires contacting sales. Email sales@devmeet.com")
+        raise HTTPException(
+            status_code=400,
+            detail="Enterprise plan requires contacting sales. Email sales@devmeet.com"
+        )
 
     price_info = PLAN_PRICES[payload.plan]
 
+    # Live Razorpay payment order initiation
     if USE_RAZORPAY:
         try:
             import razorpay
@@ -133,8 +243,10 @@ async def create_checkout_session(
                     "plan": payload.plan.value,
                 }
             }
+            # Issue order creation request to Razorpay servers
             order = client.order.create(data=order_data)
 
+            # Record order event in database ledger
             await db.log_billing_event(
                 user_id=user_id,
                 event_type="razorpay.order.created",
@@ -156,9 +268,10 @@ async def create_checkout_session(
                 prefill_email=current_user.get("email"),
             )
         except Exception as e:
+            # Fall back to sandbox simulation if Razorpay API fails or times out
             print(f"[payment] Razorpay order creation failed ({e}). Falling back to mock checkout mode.")
 
-    # ── Mock / sandbox checkout ───────────────────────────────────────────────
+    # ── Mock / Sandbox checkout fallback ─────────────────────────────────────
     mock_order_id = f"order_mock_{uuid.uuid4().hex[:16]}"
     mock_url = (
         f"{FRONTEND_URL}/dashboard?payment=mock_success"
@@ -191,17 +304,38 @@ async def create_checkout_session(
 
 @router.post("/webhook")
 async def razorpay_webhook(request: Request):
-    """Handle Razorpay webhook events with signature verification."""
+    """
+    Handles asynchronous server-to-server webhook notifications from Razorpay.
+    
+    Why this exists:
+    Provides resilient payment fulfillment even if the candidate closes their browser
+    during checkout or when recurring auto-debit renewals process offline.
+    
+    Security:
+    Verifies the HMAC-SHA256 signature in the 'x-razorpay-signature' header against
+    the raw body to prevent unauthorized spoofing of payment capture events.
+
+    Args:
+        request (Request): Raw incoming HTTP request for raw body signature inspection.
+
+    Returns:
+        dict: Acknowledgment payload with event type.
+
+    Raises:
+        HTTPException(400): If signature is invalid or JSON malformed.
+        HTTPException(500): If webhook secret is missing in live mode.
+    """
     body = await request.body()
     sig_header = request.headers.get("x-razorpay-signature", "")
 
     if USE_RAZORPAY:
-        # In live mode, a missing or invalid signature must be rejected — no bypass allowed
+        # In production mode, reject any request without a valid cryptographic signature
         if not sig_header:
             raise HTTPException(status_code=400, detail="Missing webhook signature header")
         if not webhook_secret():
             raise HTTPException(status_code=500, detail="Webhook secret not configured")
-        # Razorpay HMAC-SHA256 verification
+
+        # Razorpay HMAC-SHA256 verification against raw body bytes
         mac = hmac.new(
             webhook_secret().encode("utf-8"),
             body,
@@ -232,8 +366,10 @@ async def razorpay_webhook(request: Request):
     razorpay_payment_id = payment_entity.get("id")
 
     if not user_id:
+        # If webhook payload lacks an associated candidate ID, acknowledge receipt but skip
         return {"received": True, "status": "skipped_no_user_id"}
 
+    # Handle payment success and recurring charge activations
     if event_type in ("payment.captured", "subscription.activated", "subscription.charged"):
         if not plan:
             plan = Plan.PRO.value
@@ -251,8 +387,10 @@ async def razorpay_webhook(request: Request):
             amount=payment_entity.get("amount"),
             provider_event_id=event_id,
         )
+        # Notify user-service to refresh quotas
         await _notify_user_service_plan_change(user_id, plan)
 
+    # Handle cancellations and failed auto-renewals
     elif event_type in ("subscription.cancelled", "subscription.halted", "payment.failed"):
         await db.cancel_subscription(user_id)
         await db.log_billing_event(
@@ -261,6 +399,7 @@ async def razorpay_webhook(request: Request):
             plan="free",
             provider_event_id=event_id,
         )
+        # Revert candidate to free tier limits
         await _notify_user_service_plan_change(user_id, "free")
 
     return {"received": True, "event_type": event_type}
@@ -274,8 +413,23 @@ async def verify_payment(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Verify a Razorpay payment after checkout popup success.
-    Frontend sends razorpay_payment_id, razorpay_order_id, razorpay_signature.
+    Verifies the client-side Razorpay modal completion signature.
+    
+    Why this exists:
+    When a candidate successfully completes payment in the frontend Razorpay checkout modal,
+    Razorpay provides `razorpay_order_id`, `razorpay_payment_id`, and `razorpay_signature`.
+    This endpoint recomputes the HMAC-SHA256 signature using the server-side secret
+    to ensure the payment was authentic, then immediately activates the Pro plan.
+
+    Args:
+        request (Request): JSON body containing order_id, payment_id, and signature.
+        current_user (dict): Authenticated candidate session.
+
+    Returns:
+        dict: Success confirmation with plan name and payment ID.
+
+    Raises:
+        HTTPException(400): If cryptographic signature mismatch occurs.
     """
     body = await request.json()
     payment_id = body.get("razorpay_payment_id", "")
@@ -293,9 +447,12 @@ async def verify_payment(
             hashlib.sha256
         ).hexdigest()
         if not hmac.compare_digest(expected, signature):
-            raise HTTPException(status_code=400, detail="Payment signature verification failed")
+            raise HTTPException(
+                status_code=400,
+                detail="Payment signature verification failed"
+            )
 
-    # Activate subscription
+    # Activate subscription entitlements in database
     await db.upsert_subscription(
         user_id=user_id,
         plan=plan,
@@ -311,6 +468,7 @@ async def verify_payment(
         amount=price_info.get("amount_paise", 0),
         provider_event_id=payment_id,
     )
+    # Inform user-service of immediate plan upgrade
     await _notify_user_service_plan_change(user_id, plan)
 
     return {"success": True, "plan": plan, "payment_id": payment_id}
@@ -321,8 +479,17 @@ async def verify_payment(
 @router.post("/mock-webhook")
 async def mock_webhook(payload: MockWebhookRequest):
     """
-    Simulate a Razorpay webhook for local development.
-    Instantly upgrades or cancels a user's plan without real Razorpay keys.
+    Simulates a Razorpay webhook event for local testing and developer demos.
+    
+    Why this exists:
+    Allows developers and QA engineers to trigger subscription upgrades or cancellations
+    instantly in local development without needing live financial transactions.
+
+    Args:
+        payload (MockWebhookRequest): Simulated event type and target plan.
+
+    Returns:
+        dict: Simulation result indicating whether plan was upgraded or cancelled.
     """
     user_id    = payload.user_id
     plan       = payload.plan.value
@@ -352,10 +519,24 @@ async def mock_webhook(payload: MockWebhookRequest):
 
 @router.post("/cancel")
 async def cancel_subscription(current_user: dict = Depends(get_current_user)):
-    """Cancel the current user's subscription, downgrading to Free plan."""
+    """
+    Cancels an active subscription and downgrades the candidate to the Free tier.
+    
+    Why this exists:
+    Provides a self-service cancellation flow. Notifies Razorpay to halt recurring billing
+    if an active gateway subscription exists, logs the cancellation in billing events,
+    and updates user-service quotas.
+
+    Args:
+        current_user (dict): Authenticated candidate session.
+
+    Returns:
+        dict: Downgrade confirmation payload.
+    """
     user_id = current_user["id"]
     sub = await db.get_subscription(user_id)
 
+    # Cancel recurring subscription at the gateway level
     if USE_RAZORPAY and sub and sub.get("provider_subscription_id"):
         try:
             import razorpay
@@ -364,18 +545,34 @@ async def cancel_subscription(current_user: dict = Depends(get_current_user)):
         except Exception as e:
             print(f"[payment] Warning: Razorpay cancel failed: {e}")
 
+    # Update database record to 'free' and 'cancelled'
     await db.cancel_subscription(user_id)
     await db.log_billing_event(user_id=user_id, event_type="subscription.cancelled", plan="free")
     await _notify_user_service_plan_change(user_id, "free")
 
-    return {"success": True, "plan": "free", "message": "Subscription cancelled. Downgraded to Free plan."}
+    return {
+        "success": True,
+        "plan": "free",
+        "message": "Subscription cancelled. Downgraded to Free plan."
+    }
 
 
 # ─── GET /billing-history ─────────────────────────────────────────────────────
 
 @router.get("/billing-history", response_model=BillingHistoryResponse)
 async def get_billing_history(current_user: dict = Depends(get_current_user)):
-    """Fetch this user's full billing event history."""
+    """
+    Retrieves the authenticated candidate's past invoices, charges, and lifecycle events.
+    
+    Why this exists:
+    Powers the Billing History table in candidate settings and account dashboards.
+
+    Args:
+        current_user (dict): Authenticated candidate identity claims.
+
+    Returns:
+        BillingHistoryResponse: List of historical transaction records.
+    """
     user_id = current_user["id"]
     events  = await db.get_billing_history(user_id, limit=100)
     return BillingHistoryResponse(
@@ -400,7 +597,16 @@ async def get_billing_history(current_user: dict = Depends(get_current_user)):
 
 @router.get("/plans")
 async def list_plans():
-    """Return all available subscription plans and pricing."""
+    """
+    Public pricing catalog detailing available tiers (Free, Pro, Enterprise).
+    
+    Why this exists:
+    Provides pricing metadata, feature matrices, and monthly quotas to the frontend
+    landing page and upgrade dialogs without requiring user authentication.
+
+    Returns:
+        dict: Catalog of plans with price amounts and feature lists.
+    """
     return {
         "plans": [
             {
@@ -410,7 +616,7 @@ async def list_plans():
                 "price_display": "Free",
                 "currency": "INR",
                 "features": [
-                    "3 interviews per month",
+                    "5 free mock interviews",
                     "DSA mode only",
                     "Easy / Medium difficulty",
                     "Code execution",

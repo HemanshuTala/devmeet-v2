@@ -1,33 +1,126 @@
+"""
+================================================================================
+CODE EXECUTION SERVICE — PYDANTIC SCHEMAS & DATA TRANSFER OBJECTS (DTOs)
+================================================================================
+Role & Responsibility:
+  This module defines the validation schemas and Data Transfer Objects (DTOs)
+  used throughout the Code Execution Service. It enforces runtime type checking,
+  payload size limits, and security constraints on all submitted source code:
+    1. Language Support Enum: Whitelists supported runtimes (Python, JavaScript,
+       Java, C++, Go, Rust).
+    2. Execution Request Model: Enforces source code character limits (1 to 10,000 chars)
+       and execution timeout bounds (1 to 60 seconds, default 10s).
+    3. Execution Response Model: Encapsulates stdout output, stderr error traces,
+       execution wall-clock duration (seconds), and peak memory usage (MB).
+    4. Test Result Model: Represents test case evaluation outcomes (passed/failed,
+       actual vs expected output).
+================================================================================
+"""
+
 from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
 
 
 class Language(str, Enum):
-    PYTHON = "python"
-    JAVASCRIPT = "javascript"
-    JAVA = "java"
-    CPP = "cpp"
-    GO = "go"
-    RUST = "rust"
+    """
+    Whitelisted programming languages supported by the execution sandboxes.
+    Inherits from `str` and `Enum` to ensure JSON serialization compatibility.
+    """
+    PYTHON = "python"          # Python 3.11 runtime (python:3.11-slim)
+    JAVASCRIPT = "javascript"  # Node.js 20 runtime (node:20-alpine)
+    JAVA = "java"              # OpenJDK 17 runtime (openjdk:17-slim)
+    CPP = "cpp"                # GCC/G++ 13 runtime (gcc:13)
+    GO = "go"                  # Golang 1.22 runtime (golang:1.22-alpine)
+    RUST = "rust"              # Rust 1.77 runtime (rust:1.77-slim)
 
 
 class ExecutionRequest(BaseModel):
-    code: str = Field(..., min_length=1, max_length=10000)
-    language: Language
-    timeout_seconds: int = Field(default=10, ge=1, le=60)
+    """
+    Inbound payload specification for running candidate code snippets.
+
+    Attributes:
+      code (str): The raw source code to execute. Must contain at least 1 character
+                  and cannot exceed 10,000 characters (prevents memory bomb attacks).
+      language (Language): The target programming language runtime.
+      timeout_seconds (int): Maximum allowable execution time before process termination
+                             (between 1 and 60 seconds, defaults to 10s).
+    """
+    code: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="Source code string to execute inside the sandbox.",
+    )
+    language: Language = Field(
+        ...,
+        description="Target runtime programming language.",
+    )
+    timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Maximum execution timeout in seconds (1-60s).",
+    )
 
 
 class ExecutionResponse(BaseModel):
-    success: bool
-    output: str
-    error: Optional[str] = None
-    execution_time: float
-    memory_used: Optional[int] = None
+    """
+    Outbound payload structure returned after code execution concludes.
+
+    Attributes:
+      success (bool): True if the code completed with exit code 0; False if it timed out,
+                      crashed with an exception, or exceeded memory limits.
+      output (str): Captured standard output (stdout) from the process.
+      error (Optional[str]): Captured standard error (stderr) or system error message.
+      execution_time (float): Wall-clock duration of the execution run in seconds.
+      memory_used (Optional[int]): Peak RAM consumption in megabytes (MB) if measurable.
+    """
+    success: bool = Field(
+        ...,
+        description="Whether the code executed cleanly with zero exit code.",
+    )
+    output: str = Field(
+        ...,
+        description="Standard output (stdout) generated during execution.",
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Standard error (stderr) or timeout exception trace.",
+    )
+    execution_time: float = Field(
+        ...,
+        description="Wall-clock execution duration in seconds.",
+    )
+    memory_used: Optional[int] = Field(
+        default=None,
+        description="Peak memory consumed by the sandboxed process in megabytes (MB).",
+    )
 
 
 class TestResult(BaseModel):
-    test_name: str
-    passed: bool
-    output: str
-    expected: str
+    """
+    Outcome data structure for automated test case evaluations against candidate code.
+
+    Attributes:
+      test_name (str): Identifier or descriptive name of the test case (e.g., 'Test Case 1').
+      passed (bool): True if candidate's output matched expected output exactly.
+      output (str): The actual output generated by the candidate's code.
+      expected (str): The target expected output string.
+    """
+    test_name: str = Field(
+        ...,
+        description="Name or index of the test case.",
+    )
+    passed: bool = Field(
+        ...,
+        description="Whether the candidate's actual output matches expected output.",
+    )
+    output: str = Field(
+        ...,
+        description="Actual output produced by the candidate's code.",
+    )
+    expected: str = Field(
+        ...,
+        description="Expected reference output.",
+    )

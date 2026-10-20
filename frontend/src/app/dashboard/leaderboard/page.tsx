@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * @file page.tsx (Dashboard Community Leaderboard Page)
+ * @description Community Leaderboard screen celebrating top developer performances across DevMeet.
+ * Features an Olympic-style top-3 visual podium, ranked entries table (ranks 4+), user ranking callout,
+ * and an opt-in/opt-out privacy banner allowing users to control whether their profile and metrics
+ * appear on the public leaderboard.
+ */
+
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,20 +21,37 @@ import { getInitials } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 
+/**
+ * Represents an individual participant record on the community leaderboard.
+ */
 interface LeaderboardEntry {
+  /** Unique ID of the candidate */
   user_id: string;
+  /** Public display name or alias */
   display_name: string;
+  /** Cumulative average score across all graded mock interviews (0–100%) */
   avg_score: number;
+  /** Total number of mock sessions completed */
   sessions_count: number;
 }
 
+/**
+ * Visual Podium Card component rendered for ranks #1, #2, and #3.
+ * Uses customized gradient pedestals, medal/crown icons, and elevated heights to mimic athletic podiums.
+ *
+ * @param entry - Candidate record
+ * @param rank - Position index (1, 2, or 3)
+ * @param isMe - True if the entry belongs to the logged-in candidate
+ */
 function PodiumCard({ entry, rank, isMe }: { entry: LeaderboardEntry; rank: number; isMe: boolean }) {
+  // Pedestal height per rank tier
   const heights: Record<number, string> = {
     1: 'h-36',
     2: 'h-28',
     3: 'h-24',
   };
 
+  // Color theming per rank (Gold, Silver, Bronze)
   const colors: Record<number, { ring: string; bg: string; text: string; pedestal: string; shadow: string }> = {
     1: {
       ring: 'ring-amber-400',
@@ -58,8 +83,10 @@ function PodiumCard({ entry, rank, isMe }: { entry: LeaderboardEntry; rank: numb
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: rank * 0.1 }}
+      // Re-order visually so rank 2 is on the left, rank 1 in the middle, and rank 3 on the right
       className={`flex flex-col items-center gap-3 ${rank === 1 ? 'order-2' : rank === 2 ? 'order-1' : 'order-3'}`}
     >
+      {/* Candidate Avatar with Rank Badge */}
       <div className="relative">
         <Avatar className={`h-16 w-16 ring-4 ${c.ring} shadow-md transition-transform duration-300 hover:scale-105 ${isMe ? 'ring-offset-2 ring-offset-white' : ''}`}>
           <AvatarFallback className={`text-base font-bold ${c.bg} ${c.text}`}>
@@ -73,6 +100,7 @@ function PodiumCard({ entry, rank, isMe }: { entry: LeaderboardEntry; rank: numb
         </span>
       </div>
 
+      {/* Candidate Display Name & Score */}
       <div className="text-center">
         <p className="font-bold text-slate-900 text-sm leading-tight max-w-[100px] truncate">
           {entry.display_name}
@@ -82,6 +110,7 @@ function PodiumCard({ entry, rank, isMe }: { entry: LeaderboardEntry; rank: numb
         <p className="text-[10px] text-slate-400 font-semibold">{entry.sessions_count} sessions</p>
       </div>
 
+      {/* Elevated Podium Block */}
       <div className={`${heights[rank]} w-24 ${c.pedestal} ${c.shadow} rounded-t-2xl flex items-start justify-center pt-2.5 shadow-lg`}>
         <span className="text-white text-sm font-black drop-shadow-sm">#{rank}</span>
       </div>
@@ -89,6 +118,9 @@ function PodiumCard({ entry, rank, isMe }: { entry: LeaderboardEntry; rank: numb
   );
 }
 
+/**
+ * Skeleton placeholder for the leaderboard page while initial data is being fetched.
+ */
 function LeaderboardSkeleton() {
   return (
     <div className="space-y-10">
@@ -120,10 +152,19 @@ function LeaderboardSkeleton() {
   );
 }
 
+/**
+ * Main Community Leaderboard page component.
+ * Manages fetching of public candidate standings, privacy toggle synchronization with the backend,
+ * and splitting top 3 contenders from the broader leaderboard list.
+ */
 export default function LeaderboardPage() {
   const router = useRouter();
+
+  // Route-guard & user context
   const { user, isLoading: authLoading } = useRequireAuth();
   const { refreshUser } = useAuth();
+
+  // State
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingPublic, setUpdatingPublic] = useState(false);
@@ -131,6 +172,9 @@ export default function LeaderboardPage() {
 
   const userId = user?.id;
 
+  /**
+   * Fetches the top 50 ranked candidate entries from the User microservice.
+   */
   const loadLeaderboard = useCallback(async () => {
     try {
       const data = await userApi.getLeaderboard(50);
@@ -143,12 +187,17 @@ export default function LeaderboardPage() {
     }
   }, []);
 
+  // Fetch rankings on initial mount once authentication resolves
   useEffect(() => {
     if (!authLoading && userId) {
       loadLeaderboard();
     }
   }, [authLoading, userId, loadLeaderboard]);
 
+  /**
+   * Toggles the user's `profile_public` flag between public and private.
+   * Immediately updates AuthContext and re-syncs the leaderboard entries.
+   */
   const handleTogglePublic = async () => {
     if (!user) return;
     setUpdatingPublic(true);
@@ -175,6 +224,7 @@ export default function LeaderboardPage() {
     );
   }
 
+  // Calculate current user's placement (0 if not in top 50 or profile is private)
   const myRank = entries.findIndex((e) => e.user_id === user.id) + 1;
   const topThree = entries.slice(0, 3);
   const rest = entries.slice(3);
@@ -194,6 +244,7 @@ export default function LeaderboardPage() {
             </div>
           </div>
 
+          {/* Current user ranking pill */}
           {myRank > 0 && (
             <div className="flex items-center gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-2.5 shadow-sm self-start sm:self-auto">
               <Star className="w-4 h-4 text-blue-600 fill-blue-400" />
@@ -204,7 +255,7 @@ export default function LeaderboardPage() {
           )}
         </div>
 
-        {/* Opt-in Privacy Banner */}
+        {/* Opt-in / Privacy Settings Banner */}
         <div
           className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border p-6 shadow-sm transition-all duration-200 ${
             user.profile_public ? 'bg-emerald-50/40 border-emerald-200' : 'bg-amber-50/40 border-amber-200'
@@ -250,12 +301,13 @@ export default function LeaderboardPage() {
           </button>
         </div>
 
-        {/* Content Section */}
+        {/* Content Section: Skeletons, Error, Empty State, or Ranked List */}
         {loading ? (
           <LeaderboardSkeleton />
         ) : error ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-xs text-rose-800 font-bold">{error}</div>
         ) : entries.length === 0 ? (
+          /* Empty State: No public profiles exist in the community yet */
           <div className="rounded-3xl border border-slate-200/80 bg-white p-10 md:p-14 text-center shadow-sm max-w-xl mx-auto flex flex-col items-center gap-6 my-4">
             <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500 shadow-sm">
               <Trophy className="w-8 h-8" />
@@ -290,7 +342,7 @@ export default function LeaderboardPage() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Top 3 Podium Card */}
+            {/* Top 3 Visual Podium Component */}
             {topThree.length > 0 && (
               <div className="bg-white border border-slate-200/80 rounded-3xl p-8 shadow-sm">
                 <div className="flex items-end justify-center gap-6 pt-4">
@@ -321,12 +373,17 @@ export default function LeaderboardPage() {
                           isMe ? 'bg-blue-50/50' : ''
                         }`}
                       >
+                        {/* Numerical placement index */}
                         <span className="w-8 text-center text-xs font-black text-slate-400">#{rank}</span>
+
+                        {/* Candidate avatar */}
                         <Avatar className="h-10 w-10 shrink-0">
                           <AvatarFallback className="text-xs font-bold bg-slate-100 text-slate-700">
                             {getInitials(entry.display_name)}
                           </AvatarFallback>
                         </Avatar>
+
+                        {/* Name and completed session count */}
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-slate-900 truncate text-sm">
                             {entry.display_name}
@@ -338,6 +395,8 @@ export default function LeaderboardPage() {
                           </p>
                           <p className="text-xs text-slate-400 mt-0.5 font-medium">{entry.sessions_count} sessions completed</p>
                         </div>
+
+                        {/* Score stats */}
                         <div className="text-right shrink-0">
                           <p className="text-base font-black text-slate-900">{entry.avg_score}%</p>
                           <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wide">avg score</p>

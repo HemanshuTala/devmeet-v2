@@ -17,7 +17,7 @@ An adaptive, microservices-based AI interviewing platform engineered to simulate
 
 ## Microservices Architecture
 
-DevMeet v2.0 is built on 13 domain microservices orchestrated with Docker Compose on AWS EC2 behind an Nginx Layer 7 API Gateway.
+DevMeet v2.0 is built on 12 domain microservices orchestrated with Docker Compose on AWS EC2 behind an Nginx Layer 7 API Gateway.
 
 ```
 Candidate Browser ──► Nginx API Gateway (:80)
@@ -28,8 +28,8 @@ Auth (:8001)           Orchestrator (:8003) ──► AI Interviewer (:8004) ─
 User (:8002)           Code Execution (:8005, Docker sandbox)
 Admin (:8010)          Video (:8006) ───────► LiveKit Cloud
 Payment (:8012)        Feedback (:8007) ────► AWS S3 (PDFs)
-Notification (:8008)   Analytics (:8009) ───◄ Kafka
-File (:8011)           Search (:8013) ──────► Elasticsearch
+File (:8011)           Analytics (:8009)
+                       Search (:8013)
 ```
 
 ### Microservices Directory
@@ -44,12 +44,11 @@ File (:8011)           Search (:8013) ──────► Elasticsearch
 | `code-execution-service` | 8005 | FastAPI / Docker | Isolated multi-language sandbox execution engine |
 | `video-service` | 8006 | Express / Node.js | LiveKit WebRTC room token allocation & coordination |
 | `feedback-service` | 8007 | FastAPI / WeasyPrint | 6D scoring evaluation, PDF report generation, S3 storage |
-| `notification-service` | 8008 | Node.js / WebSockets | Live WebSocket notifications & AWS SES email dispatch |
-| `analytics-service` | 8009 | FastAPI / Kafka | Candidate score trends, category metrics, telemetry stream |
+| `analytics-service` | 8009 | FastAPI / PostgreSQL | Candidate score trends, category metrics, telemetry stream |
 | `admin-service` | 8010 | FastAPI / Python | System health monitoring, user administration, logs |
 | `file-service` | 8011 | FastAPI / boto3 | Image uploads, avatar processing, AWS S3 presigned URLs |
 | `payment-service` | 8012 | FastAPI / Razorpay | Subscription plans, Razorpay orders & webhook verification |
-| `search-service` | 8013 | FastAPI / Elasticsearch | Question bank fuzzy search & transcript indexing |
+| `search-service` | 8013 | FastAPI / Python | In-memory question bank search & transcript indexing |
 
 ---
 
@@ -58,8 +57,8 @@ File (:8011)           Search (:8013) ──────► Elasticsearch
 - **Frontend**: Next.js 14 (App Router, TypeScript), Tailwind CSS, Monaco Editor, Zustand, TanStack Query, Framer Motion, Web Speech API, MediaPipe, TensorFlow.js.
 - **Backend**: FastAPI (Python 3.11), Express (Node.js 20), Uvicorn, AsyncIO.
 - **Database & Cache**: PostgreSQL 16 (shared instance with per-service logical schemas), Redis 7.2.
-- **Message Bus & Search**: RabbitMQ 3.12 (task queues), Apache Kafka 3.6 (telemetry log stream), Elasticsearch 8.11 (search).
-- **Cloud Infrastructure**: AWS EC2 (`c7i-flex.large`), AWS ECR, AWS S3, AWS SES, Nginx API Gateway.
+- **Message Bus & Tasks**: RabbitMQ 3.12 (task queues & async code sandbox jobs).
+- **Cloud Infrastructure**: AWS EC2 (`t3.large` or `c7i-flex.large`), AWS ECR, AWS S3, Nginx API Gateway.
 
 ---
 

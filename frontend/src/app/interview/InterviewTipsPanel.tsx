@@ -1,11 +1,27 @@
-﻿import React from 'react';
+import React from 'react';
 import { Lightbulb, AlertTriangle } from 'lucide-react';
 
+/**
+ * @file InterviewTipsPanel.tsx (Contextual Interview Strategy Tips Sidebar)
+ * @description Displays domain-specific coaching tips in the right panel during behavioral
+ * and system-design interview sessions. Adapts tip content based on interview category.
+ * Tips are not shown for DSA/coding sessions which have a dedicated hints drawer instead.
+ */
+
+/**
+ * Props for InterviewTipsPanel.
+ */
 interface InterviewTipsPanelProps {
+  /** Interview type identifier ('behavioral' | 'system_design') */
   type: string;
 }
 
+/**
+ * InterviewTipsPanel Component.
+ * Renders an ordered, numbered checklist of situational coaching tips along with a caution callout.
+ */
 export default function InterviewTipsPanel({ type }: InterviewTipsPanelProps) {
+  // Select appropriate tip set based on the active interview domain
   const tips =
     type === 'behavioral'
       ? [
@@ -16,6 +32,7 @@ export default function InterviewTipsPanel({ type }: InterviewTipsPanelProps) {
           { title: 'Pause & Think', desc: "It's okay to take 5–10 seconds before answering." },
         ]
       : [
+          // System Design tips for non-behavioral sessions
           { title: 'Clarify Requirements', desc: 'Ask about scale, users, consistency before designing.' },
           { title: 'Start High-Level', desc: 'Draw overall architecture first, then deep-dive.' },
           { title: 'Discuss Trade-offs', desc: 'Show you understand CAP theorem, latency vs consistency.' },
@@ -25,6 +42,7 @@ export default function InterviewTipsPanel({ type }: InterviewTipsPanelProps) {
 
   return (
     <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto scrollbar-thin bg-slate-50">
+      {/* Panel Header */}
       <div className="flex items-center gap-2 mb-1">
         <Lightbulb className="w-5 h-5 text-amber-500" />
         <h3 className="text-slate-800 font-bold text-sm">
@@ -32,6 +50,7 @@ export default function InterviewTipsPanel({ type }: InterviewTipsPanelProps) {
         </h3>
       </div>
 
+      {/* Numbered tip cards */}
       <div className="flex flex-col gap-3">
         {tips.map((tip, i) => (
           <div
@@ -51,6 +70,7 @@ export default function InterviewTipsPanel({ type }: InterviewTipsPanelProps) {
         ))}
       </div>
 
+      {/* Caution callout warning against common pitfalls */}
       <div className="border border-amber-250 bg-amber-50/60 p-3 rounded-xl mt-2 shadow-sm">
         <div className="flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -64,4 +84,3 @@ export default function InterviewTipsPanel({ type }: InterviewTipsPanelProps) {
     </div>
   );
 }
-

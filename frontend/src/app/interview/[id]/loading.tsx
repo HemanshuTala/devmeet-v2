@@ -1,9 +1,19 @@
 'use client';
 
+/**
+ * @file loading.tsx (Interview Studio Streaming Loading Skeleton)
+ * @description Next.js streaming loading UI for the /interview/[id] studio route.
+ * Emulates the two-column split layout (header bar, code editor skeleton with mock code lines,
+ * and alternating dialogue chat bubble skeletons) to prevent layout shifts during hydration.
+ */
+
+/**
+ * InterviewLoading Component.
+ */
 export default function InterviewLoading() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
-      {/* Top bar skeleton */}
+      {/* Top control bar skeleton */}
       <div
         className="h-14 flex items-center px-4 gap-4 border-b"
         style={{ borderColor: 'rgba(255,255,255,0.08)', background: '#0f0f1a' }}
@@ -16,9 +26,9 @@ export default function InterviewLoading() {
         </div>
       </div>
 
-      {/* Main content */}
+      {/* Main split-view workspace skeleton */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2">
-        {/* Left — code editor skeleton */}
+        {/* Left column — code editor lines skeleton */}
         <div
           className="border-r p-4 flex flex-col gap-3"
           style={{ borderColor: 'rgba(255,255,255,0.08)' }}
@@ -44,7 +54,7 @@ export default function InterviewLoading() {
           </div>
         </div>
 
-        {/* Right — chat skeleton */}
+        {/* Right column — alternating conversation turn skeletons */}
         <div className="p-4 flex flex-col gap-4">
           <div className="h-5 w-36 rounded bg-slate-800 animate-pulse" />
           <div className="flex flex-col gap-4 flex-1">

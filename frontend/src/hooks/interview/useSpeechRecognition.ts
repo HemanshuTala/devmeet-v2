@@ -1,3 +1,21 @@
+/**
+ * ============================================================================
+ * DevMeet Frontend - Hybrid Speech-to-Text (STT) Voice Input Hook
+ * ============================================================================
+ * Enables voice dictation for candidate answers during live interview sessions.
+ *
+ * Dual-Engine Architectural Strategy:
+ * 1. Primary Engine: Browser-Native Web Speech API (`webkitSpeechRecognition`):
+ *    - Zero-latency, zero-cost, streaming interim transcript results.
+ *    - As the candidate speaks, updates the input buffer in real-time.
+ * 2. Secondary Engine: MediaRecorder + Server-Side Whisper AI Fallback:
+ *    - If Web Speech API is unsupported (Firefox, older Safari) or errors:
+ *      captures microphone audio via `navigator.mediaDevices.getUserMedia()`,
+ *      packages audio chunks into a Blob, and posts to `aiApi.transcribeAudio()`.
+ *    - Filters common Whisper hallucination tokens ('thanks for watching', 'subtitled by').
+ * ============================================================================
+ */
+
 import { useState, useCallback, useRef } from 'react';
 import { aiApi } from '@/lib/api';
 import { speak, stopSpeaking } from '@/lib/speech';
@@ -9,19 +27,30 @@ declare global {
   }
 }
 
+/**
+ * Custom React hook managing microphone recording and dual-engine speech recognition.
+ */
 export function useSpeechRecognition() {
+  // True while microphone is actively recording/listening
   const [isListening, setIsListening] = useState(false);
+  // True while server-side audio transcription is processing
   const [isTranscribing, setIsTranscribing] = useState(false);
 
+  // References to active recognition and recorder objects
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  /**
+   * Immediately halts active audio recording and releases hardware microphone tracks.
+   */
   const stopRecording = useCallback(() => {
+    // Halt native WebSpeech engine
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
       recognitionRef.current = null;
     }
+    // Halt MediaRecorder stream
     const rec = mediaRecorderRef.current;
     if (rec && rec.state !== 'inactive') {
       try { rec.stop(); } catch {}
@@ -32,12 +61,20 @@ export function useSpeechRecognition() {
     setIsTranscribing(false);
   }, []);
 
+  /**
+   * Toggles microphone recording on/off.
+   *
+   * @param opts.isAiTyping - Boolean flag indicating if AI is currently streaming (prevents interruptions).
+   * @param opts.onTranscript - Callback delivering finalized transcribed text.
+   * @param opts.onError - Callback reporting error messages.
+   */
   const toggleSpeechRecognition = useCallback(
     async (opts: {
       isAiTyping: boolean;
       onTranscript: (text: string) => void;
       onError: (msg: string) => void;
     }) => {
+      // Prevent mic activation while transcribing or while AI is speaking/typing
       if (isTranscribing || opts.isAiTyping) return;
 
       if (isListening) {
@@ -45,9 +82,10 @@ export function useSpeechRecognition() {
         return;
       }
 
+      // Silence any AI voice playback when candidate begins speaking
       stopSpeaking();
 
-      // ── Option A: Native Web Speech API (Instant, No API Key, Free) ──
+      // ── Option A: Native Web Speech API (Instant, No API Key, Free) ─────────
       const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognitionClass) {
         try {
@@ -103,7 +141,7 @@ export function useSpeechRecognition() {
         }
       }
 
-      // ── Option B: MediaRecorder + Server Endpoint Fallback ──
+      // ── Option B: MediaRecorder + Server Endpoint Fallback ───────────────────
       audioChunksRef.current = [];
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -131,10 +169,12 @@ export function useSpeechRecognition() {
           try {
             const formData = new FormData();
             formData.append('file', blob, `candidate_speech.${ext}`);
+            // Issue request to AI Interviewer transcription endpoint
             const response = await aiApi.transcribeAudio(formData);
             if (response?.text) {
               const text = response.text.trim();
               const lower = text.toLowerCase().replace(/[.,\/#!$%^&*;:{}=\-_`~()]/g, '').trim();
+              // Filter known Whisper hallucinations on silent background audio
               const hallucinations = ['thank you', 'thanks for watching', 'subtitled by', 'subscribe', 'you', 'h'];
               if (text && !hallucinations.includes(lower)) {
                 opts.onTranscript(text);

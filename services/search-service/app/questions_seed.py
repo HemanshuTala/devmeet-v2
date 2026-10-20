@@ -1,7 +1,35 @@
+"""
+DevMeet Search Service - Pre-Seeded Technical Interview Question Dataset
+========================================================================
+This module contains the initial offline catalog of curated interview questions
+spanning:
+1. Data Structures & Algorithms (DSA): Arrays, hash tables, trees, dynamic programming, graphs.
+2. System Design: Scalability, rate limiters, caching, URL shorteners, distributed messaging.
+3. Behavioral Interviews: STAR framework questions (Situation, Task, Action, Result)
+   focusing on leadership, conflict resolution, technical trade-offs, and ownership.
+
+Each record includes:
+- `id`: Stable identifier key.
+- `title` & `description`: Problem specification and algorithmic constraints.
+- `interview_type`: Primary track ('dsa', 'system_design', 'behavioral').
+- `difficulty`: Tier indicator ('easy', 'medium', 'hard').
+- `tags`: Algorithmic and conceptual categorization.
+- `company_tags`: FAANG and enterprise interview occurrences.
+- `hints`: Progressive hints released by AI interviewer during candidate struggles.
+"""
+
 import uuid
 
-def make_id():
+
+def make_id() -> str:
+    """
+    Generates a unique UUIDv4 string for synthetic question ID assignment.
+
+    Returns:
+        str: Hexadecimal UUID string.
+    """
     return str(uuid.uuid4())
+
 
 SEED_QUESTIONS = [
     # ─── 12 DSA Questions ─────────────────────────────────────────────────────────

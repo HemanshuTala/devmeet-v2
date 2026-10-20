@@ -4,7 +4,7 @@ $Gateway = $env:GATEWAY_URL
 if (-not $Gateway) { $Gateway = "http://localhost:8000" }
 
 $checks = @(
-    @{ Name = "API Gateway (auth health via proxy)"; Url = "$Gateway/api/v1/auth/../health"; Fallback = "http://localhost:8001/health" },
+    @{ Name = "API Gateway (health via proxy)"; Url = "$Gateway/health"; Fallback = "http://localhost:8001/health" },
     @{ Name = "Auth Service"; Url = "http://localhost:8001/health" },
     @{ Name = "User Service"; Url = "http://localhost:8002/health" },
     @{ Name = "Orchestrator"; Url = "http://localhost:8003/health" },
@@ -12,7 +12,6 @@ $checks = @(
     @{ Name = "Code Execution"; Url = "http://localhost:8005/health" },
     @{ Name = "Video Service"; Url = "http://localhost:8006/health" },
     @{ Name = "Feedback"; Url = "http://localhost:8007/health" },
-    @{ Name = "Notification"; Url = "http://localhost:8008/health" },
     @{ Name = "Analytics"; Url = "http://localhost:8009/health" },
     @{ Name = "Admin"; Url = "http://localhost:8010/health" },
     @{ Name = "File Service"; Url = "http://localhost:8011/health" },

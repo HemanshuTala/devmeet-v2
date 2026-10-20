@@ -1,26 +1,47 @@
 'use client';
 
+/**
+ * @file ViolationModal.tsx (Anti-Cheat Integrity Violation Alert Dialog)
+ * @description Full-screen modal triggered on detection of proctoring policy violations
+ * (tab switches, window blur, clipboard pastes). Displays violation context, policy rules,
+ * and escalation warning. Candidate must acknowledge before the studio resumes.
+ * Four accumulated violations result in automatic session termination.
+ */
+
 import { AlertTriangle } from 'lucide-react';
 
+/**
+ * Props for ViolationModal.
+ */
 interface ViolationModalProps {
+  /** Violation context message (e.g., "Tab switch detected") */
   message: string;
+  /** Callback to acknowledge and dismiss the alert */
   onDismiss: () => void;
 }
 
+/**
+ * ViolationModal Component.
+ */
 export default function ViolationModal({ message, onDismiss }: ViolationModalProps) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-md px-4 animate-fade-in">
       <div className="bg-white p-6 rounded-2xl border-2 border-red-500 max-w-md w-full shadow-2xl animate-scale-in text-center">
+        {/* Pulsing alert icon */}
         <div className="w-14 h-14 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mx-auto mb-4 text-red-650 shadow-sm animate-pulse">
           <AlertTriangle className="w-7 h-7" />
         </div>
         <h2 className="text-red-750 font-black text-xl mb-3">Security Alert</h2>
         <p className="text-slate-600 text-sm font-semibold mb-6 leading-relaxed">{message}</p>
+
+        {/* Policy summary */}
         <div className="bg-red-50/55 rounded-xl p-3.5 border border-red-100 text-left text-xs mb-6 text-red-900 font-bold space-y-1">
           <p>• Tab switching is strictly monitored during the interview.</p>
           <p>• Copying and pasting code or answers is disabled.</p>
           <p className="text-red-750 font-extrabold">• Warning: 4 violations will result in automatic termination.</p>
         </div>
+
+        {/* Acknowledgement button */}
         <button
           onClick={onDismiss}
           className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-500/10 transition-all"

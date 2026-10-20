@@ -2,18 +2,32 @@ import React from 'react';
 import Link from 'next/link';
 import { Sparkles, CheckCircle, Zap, CreditCard, ArrowRight } from 'lucide-react';
 
+/**
+ * @file BillingTab.tsx (Candidate Profile Billing & Subscription Tier Card)
+ * @description Embedded profile tab showing the user's current subscription level (Free, Pro, Enterprise),
+ * active benefits summary, comparison tier cards, and quick link to Stripe checkout.
+ */
+
+/**
+ * Props passed to BillingTab.
+ */
 interface BillingTabProps {
+  /** Active user subscription tier */
   plan: 'free' | 'pro' | 'enterprise';
+  /** Toast alert trigger callback */
   showToast: (type: 'success' | 'error', message: string) => void;
 }
 
+/**
+ * BillingTab Component.
+ */
 export default function BillingTab({
   plan,
   showToast,
 }: BillingTabProps) {
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Active plan card */}
+      {/* ── Active Plan Status Banner ── */}
       <div className="bg-white border border-blue-200 border-l-4 border-l-blue-600 p-6 rounded-2xl shadow-sm">
         <div className="flex items-center gap-2.5 mb-2">
           <Sparkles className="w-5 h-5 text-blue-600" />
@@ -22,13 +36,13 @@ export default function BillingTab({
         <p className="text-sm text-slate-500 leading-relaxed font-medium">
           {plan === 'pro'
             ? 'You have unlocked unlimited daily interviews, premium Groq audio-video simulations, detailed metric reports, and high-fidelity PDF downloads.'
-            : 'You are on the Free Tier which is capped at 5 interviews per day. Upgrade below to unlock standard audio/video and detailed metrics reports.'}
+            : 'You are on the Free Tier with 5 free mock interviews. Upgrade below to unlock unlimited sessions, standard audio/video and detailed metrics reports.'}
         </p>
       </div>
 
-      {/* Plan cards */}
+      {/* ── Tier Comparison Grid (Free, Pro, Enterprise) ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Free */}
+        {/* Free Starter Tier */}
         <div
           className={`bg-white p-5 rounded-2xl flex flex-col gap-4 border transition-all duration-300 shadow-sm ${
             plan === 'free' ? 'border-blue-300 shadow-blue-100' : 'border-blue-100'
@@ -46,12 +60,10 @@ export default function BillingTab({
           </div>
           <ul className="space-y-2 mt-4 text-xs text-slate-500 flex-1">
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />5 Mock Interviews /
-              day
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />5 Free Mock Interviews
             </li>
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />DSA algorithmic
-              review
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />DSA algorithmic review
             </li>
             <li className="flex items-center gap-2">
               <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />Conceptual ratings
@@ -65,7 +77,7 @@ export default function BillingTab({
           </button>
         </div>
 
-        {/* Pro */}
+        {/* Pro Candidate Tier */}
         <div
           className={`bg-white p-5 rounded-2xl flex flex-col gap-4 border transition-all duration-300 relative overflow-hidden shadow-sm ${
             plan === 'pro' ? 'border-blue-400 shadow-blue-100' : 'border-blue-200'
@@ -93,16 +105,13 @@ export default function BillingTab({
               <strong>Unlimited</strong> daily interviews
             </li>
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />Camera / mic
-              audio-video rooms
+              <CheckCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />Camera / mic audio-video rooms
             </li>
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />Exportable pre-signed
-              PDFs
+              <CheckCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />Exportable pre-signed PDFs
             </li>
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />Advanced performance
-              radar
+              <CheckCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />Advanced performance radar
             </li>
           </ul>
           {plan === 'pro' ? (
@@ -124,7 +133,7 @@ export default function BillingTab({
           )}
         </div>
 
-        {/* Enterprise */}
+        {/* Enterprise Organization Tier */}
         <div
           className={`bg-white p-5 rounded-2xl flex flex-col gap-4 border transition-all duration-300 shadow-sm ${
             plan === 'enterprise' ? 'border-amber-300 shadow-amber-100' : 'border-blue-100'
@@ -141,20 +150,17 @@ export default function BillingTab({
           </div>
           <ul className="space-y-2 mt-4 text-xs text-slate-500 flex-1">
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />Team management
-              dashboards
+              <CheckCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />Team management dashboards
             </li>
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />Custom corporate
-              templates
+              <CheckCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />Custom corporate templates
             </li>
             <li className="flex items-center gap-2">
-              <CheckCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />Admin analytics API
-              access
+              <CheckCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />Admin analytics API access
             </li>
           </ul>
           <button
-            className="btn-ghost w-full py-2 text-xs font-bold border border-amber-200 text-amber-700 hover:bg-amber-50"
+            className="btn-ghost w-full py-2 text-xs font-bold border border-amber-200 text-amber-700 hover:bg-amber-50 cursor-pointer"
             onClick={() => showToast('success', 'Corporate sales inquiry registered!')}
           >
             Contact Sales

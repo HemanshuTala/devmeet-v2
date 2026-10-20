@@ -1,3 +1,27 @@
+/**
+ * @file DeviceCheckScreen.tsx
+ * @description Hardware Readiness & Preflight Verification Screen for DevMeet Interviews.
+ *
+ * Runs comprehensive pre-interview diagnostic checks:
+ * 1. Camera Verification:
+ *    - Acquires webcam feed via `navigator.mediaDevices.getUserMedia({ video: true })`.
+ *    - Renders live video feed preview into an HTML `<video>` element with pulse indicator.
+ * 2. Microphone & Audio Level Analysis:
+ *    - Acquires audio stream via `getUserMedia({ audio: true })`.
+ *    - Connects stream to Web Audio API (`AudioContext` + `AnalyserNode`).
+ *    - Computes real-time RMS/frequency intensity and drives an interactive 24-bar audio meter visualizer.
+ * 3. Network Bandwidth & Quality Assessment:
+ *    - Reads Network Information API downlink estimates.
+ *    - Sends diagnostic telemetry payload to backend `videoApi.preflight()`.
+ * 4. Contextual Permission Help:
+ *    - Detects OS (macOS, Windows, iOS, Android, Linux) and browser (Chrome, Safari, Firefox, Edge).
+ *    - Generates step-by-step unblocking instructions when permissions are denied.
+ * 5. Audio-Only Fallback:
+ *    - Enables candidates without webcams or on constrained network connections to proceed in audio-only mode.
+ *
+ * @module components/interview/DeviceCheckScreen
+ */
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -9,6 +33,11 @@ import {
 } from 'lucide-react';
 import { videoApi } from '@/lib/api';
 
+/**
+ * Detects the client's web browser from user-agent string.
+ *
+ * @returns {'Firefox' | 'Edge' | 'Chrome' | 'Safari' | 'Browser' | 'Unknown'} Browser family name.
+ */
 function getBrowserName() {
   if (typeof navigator === 'undefined') return 'Unknown';
   const ua = navigator.userAgent;
@@ -19,6 +48,11 @@ function getBrowserName() {
   return 'Browser';
 }
 
+/**
+ * Detects the client's operating system from user-agent string.
+ *
+ * @returns {'Windows' | 'macOS' | 'Linux' | 'Android' | 'iOS' | 'Unknown'} OS name.
+ */
 function getOSName() {
   if (typeof navigator === 'undefined') return 'Unknown';
   const ua = navigator.userAgent;
@@ -30,6 +64,12 @@ function getOSName() {
   return 'Unknown';
 }
 
+/**
+ * Generates tailored permission recovery instructions matching the candidate's exact browser and OS.
+ *
+ * @param {'camera' | 'microphone'} area - Hardware device category.
+ * @returns {string} Step-by-step guidance on how to enable device permissions.
+ */
 function getPermissionInstructions(area: string) {
   const browser = getBrowserName();
   const os = getOSName();
@@ -42,9 +82,20 @@ function getPermissionInstructions(area: string) {
   return `Click the camera/lock icon in the address bar > set ${device} to Allow > refresh the page.`;
 }
 
+/** Diagnostic check states for camera, microphone, and network */
 type CheckStatus = 'idle' | 'checking' | 'pass' | 'fail' | 'warn';
 
+/**
+ * DeviceCheckScreen Component.
+ *
+ * @component
+ * @param {Object} props
+ * @param {(audioOnly?: boolean) => void} props.onProceed - Callback invoked when candidate passes checks and clicks proceed.
+ * @param {string} [props.sessionMode] - Optional session type name (e.g. 'dsa', 'behavioral').
+ * @returns {JSX.Element} Full-screen hardware check modal dialog.
+ */
 export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProceed: (audioOnly?: boolean) => void; sessionMode?: string }) {
+  // Overall status flags for each diagnostic pillar
   const [checks, setChecks] = useState<{ camera: CheckStatus; microphone: CheckStatus; network: CheckStatus }>({
     camera: 'idle',
     microphone: 'idle',
@@ -57,6 +108,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
   const [issues, setIssues] = useState<any[]>([]);
   const [audioOnly, setAudioOnly] = useState(false);
 
+  // DOM and Web Audio API references
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -64,6 +116,10 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
   const micStreamRef = useRef<MediaStream | null>(null);
   const camStreamRef = useRef<MediaStream | null>(null);
 
+  /**
+   * Component cleanup lifecycle:
+   * Releases camera/mic hardware locks and terminates AudioContext and animation frame timers on unmount.
+   */
   useEffect(() => {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -73,6 +129,11 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
     };
   }, []);
 
+  /**
+   * Initializes Web Audio API analyzer pipeline to calculate real-time microphone volume.
+   *
+   * @param {MediaStream} stream - Active microphone audio media stream.
+   */
   const startAudioMeter = useCallback((stream: MediaStream) => {
     try {
       const ctx = new AudioContext();
@@ -82,6 +143,8 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
       source.connect(analyser);
       audioContextRef.current = ctx;
       analyserRef.current = analyser;
+
+      // Recursive requestAnimationFrame loop measuring frequency bin amplitudes
       const tick = () => {
         if (!analyserRef.current) return;
         const data = new Uint8Array(analyserRef.current.frequencyBinCount);
@@ -95,6 +158,9 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
     } catch {}
   }, []);
 
+  /**
+   * Executes the full diagnostic suite (camera, microphone, bandwidth, server preflight).
+   */
   const runChecks = useCallback(async () => {
     setIsRunning(true);
     setServerResult(null);
@@ -102,6 +168,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
     setAudioLevel(0);
     setChecks({ camera: 'checking', microphone: 'checking', network: 'checking' });
 
+    // Cancel existing timers and release prior streams
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (audioContextRef.current) { try { audioContextRef.current.close(); } catch {} }
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -113,12 +180,13 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
     let micAvailable = false;
     let micPermission = 'prompt';
 
-    // Run camera and microphone checks in parallel (they're independent)
+    // Run camera and microphone checks in parallel (they're independent hardware devices)
     const [camResult, micResult] = await Promise.allSettled([
       navigator.mediaDevices.getUserMedia({ video: true }),
       navigator.mediaDevices.getUserMedia({ audio: true }),
     ]);
 
+    // Handle camera probe outcome
     if (camResult.status === 'fulfilled') {
       cameraAvailable = true;
       cameraPermission = 'granted';
@@ -132,6 +200,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
       setChecks((c) => ({ ...c, camera: err?.name === 'NotAllowedError' ? 'fail' : 'warn' }));
     }
 
+    // Handle microphone probe outcome
     if (micResult.status === 'fulfilled') {
       micAvailable = true;
       micPermission = 'granted';
@@ -144,12 +213,14 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
       setChecks((c) => ({ ...c, microphone: 'fail' }));
     }
 
+    // Estimate client network throughput
     let estimatedBandwidth = 4;
     try {
       const conn = (navigator as any).connection || (navigator as any).mozConnection;
       if (conn?.downlink) estimatedBandwidth = conn.downlink;
     } catch {}
 
+    // Send preflight assessment to video microservice
     try {
       const result = await videoApi.preflight({
         camera_available: cameraAvailable,
@@ -166,6 +237,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
       setChecks((c) => ({ ...c, network: nq === 'good' ? 'pass' : nq === 'fair' ? 'warn' : 'fail' }));
       setAudioOnly(!result.camera_ok && result.can_proceed_audio_only);
     } catch {
+      // Offline / service fallback calculation
       const localResult = {
         camera_ok: cameraAvailable,
         mic_ok: micAvailable,
@@ -182,11 +254,14 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
     setIsRunning(false);
   }, [startAudioMeter]);
 
+  // Trigger automated diagnostics on initial screen mount
   useEffect(() => { runChecks(); }, []);
 
+  // Determine whether candidate is eligible to proceed
   const allPassed = serverResult?.all_ok && checks.camera !== 'fail' && checks.microphone !== 'fail';
   const canProceed = !isRunning && (serverResult?.can_proceed_audio_only || !!allPassed);
 
+  // Configuration rows for the 3 diagnostic pillars
   const checkRows = [
     {
       key: 'camera' as const,
@@ -208,7 +283,6 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
     },
   ];
 
-  // ── Render ──
   return (
     <div className="fixed inset-0 z-50 bg-[#fafafa] flex items-center justify-center p-4">
       <motion.div
@@ -235,11 +309,11 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content Body */}
         <div className="p-7 grid grid-cols-1 md:grid-cols-2 gap-7">
-          {/* Left: Camera + Mic */}
+          {/* Left Column: Live Webcam View + Visual Mic Level Meter */}
           <div className="flex flex-col gap-4">
-            {/* Camera preview */}
+            {/* Live Camera Video Preview */}
             <div className="relative rounded-xl overflow-hidden bg-[#f5f5f5] border border-[#e5e5e5] aspect-video">
               <video
                 ref={videoPreviewRef}
@@ -274,7 +348,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
               )}
             </div>
 
-            {/* Mic level */}
+            {/* Microphone Volume Frequency Visualizer */}
             <div className="bg-[#f5f5f5] border border-[#e5e5e5] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 {checks.microphone === 'pass' ? (
@@ -314,7 +388,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
             </div>
           </div>
 
-          {/* Right: Check rows */}
+          {/* Right Column: Diagnostic Results List */}
           <div className="flex flex-col gap-3">
             {checkRows.map(({ key, label, icon, detail }) => (
               <div
@@ -346,7 +420,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
               </div>
             ))}
 
-            {/* Error issues */}
+            {/* Diagnostic Error Banner */}
             <AnimatePresence>
               {issues.filter((i) => i.type === 'error').map((issue, idx) => (
                 <motion.div
@@ -362,7 +436,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
               ))}
             </AnimatePresence>
 
-            {/* All passed banner */}
+            {/* All Passed Success Banner */}
             {allPassed && !isRunning && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.98 }}
@@ -376,8 +450,9 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer Actions */}
         <div className="px-7 py-4 border-t border-[#e5e5e5] flex items-center justify-between gap-4 flex-wrap">
+          {/* Re-run button */}
           <button
             onClick={runChecks}
             disabled={isRunning}
@@ -388,6 +463,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
           </button>
 
           <div className="flex items-center gap-3">
+            {/* Audio-only alternative */}
             {audioOnly && canProceed && (
               <button
                 onClick={() => {
@@ -399,6 +475,7 @@ export default function DeviceCheckScreen({ onProceed, sessionMode }: { onProcee
                 Audio-Only Mode
               </button>
             )}
+            {/* Proceed to interview button */}
             <button
               id="device-check-proceed-btn"
               onClick={() => {

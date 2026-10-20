@@ -1,3 +1,29 @@
+"""
+DevMeet Search Service - Hybrid Search Engine (Elasticsearch + In-Memory Fallback)
+==================================================================================
+This module implements the core interview question discovery and ranking algorithms
+for DevMeet.
+
+Key Architectural Responsibilities:
+1. Dual-Engine Architecture (Elasticsearch vs. In-Memory Substring / TF-IDF):
+   - In production or clustered environments: Interacts with an Elasticsearch 8+ cluster
+     using BM25 full-text scoring, field boosting (title^2), analyzer tokenization, and filter context.
+   - In lightweight, single-container, or disconnected dev environments: Gracefully degrades
+     to an in-memory index seeded from `SEED_QUESTIONS` with multi-field relevance scoring.
+2. Resilience & Circuit Breaking:
+   - Evaluates cluster liveness via non-blocking ping checks.
+   - Implements backoff retry throttling (`ES_RETRY_INTERVAL = 30s`) to avoid CPU-churning
+     connection loops when Elasticsearch is bootstrapping or partitioned.
+3. Automated Index Lifecycle & Seeding:
+   - `_initialize_index`: Automatically creates `devmeet_questions` index with explicit
+     keyword vs. text analyzer mappings.
+   - Automatically detects missing or outdated documents and populates questions from seed catalog.
+4. Flexible Filtering & Scoring:
+   - Supports filtering across interview track (`interview_type`), difficulty level,
+     and targeted companies (`company_tags`).
+   - Weighs title matches over body descriptions (score = 2 for title, 1 for description/tags).
+"""
+
 import os
 import random
 import time
@@ -5,23 +31,39 @@ from typing import Optional, List, Dict, Any
 from elasticsearch import Elasticsearch
 from .questions_seed import SEED_QUESTIONS
 
+# Elasticsearch connection coordinates
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 INDEX_NAME = "devmeet_questions"
-ES_RETRY_INTERVAL = 30  # seconds between reconnect attempts
+ES_RETRY_INTERVAL = 30  # Minimum seconds between cluster reconnect attempts
 
 
 class SearchEngine:
+    """
+    Hybrid search engine providing full-text question retrieval with automatic
+    Elasticsearch clustering and zero-dependency in-memory fallback.
+    """
+
     def __init__(self):
+        """
+        Initializes connection state attributes, loads pre-seeded interview problems,
+        and triggers a non-blocking initial connection probe.
+        """
         self.es_client: Optional[Elasticsearch] = None
         self.use_es = False
+        # Pre-seed in-memory question bank from static catalog
         self.local_db: List[Dict[str, Any]] = list(SEED_QUESTIONS)
         self._last_connect_attempt: float = 0
 
-        # Attempt initial connection (non-blocking)
+        # Attempt initial non-blocking connection to Elasticsearch cluster
         self._try_connect()
 
     def _try_connect(self) -> bool:
-        """Try to connect to Elasticsearch. Returns True on success."""
+        """
+        Attempts to establish connection with the Elasticsearch cluster.
+
+        Returns:
+            bool: True if connection and ping succeed, False otherwise.
+        """
         self._last_connect_attempt = time.monotonic()
         try:
             client = Elasticsearch(
@@ -30,6 +72,7 @@ class SearchEngine:
                 retry_on_timeout=True,
                 request_timeout=5,
             )
+            # Test connectivity via cluster ping
             if client.ping():
                 self.es_client = client
                 self.use_es = True
@@ -46,7 +89,10 @@ class SearchEngine:
             return False
 
     def _ensure_connection(self):
-        """Re-attempt connection if it was previously unavailable (rate-limited)."""
+        """
+        Periodically retries cluster connection if previously marked offline.
+        Rate-limited to prevent network thrashing.
+        """
         if self.use_es:
             return
         elapsed = time.monotonic() - self._last_connect_attempt
@@ -55,7 +101,11 @@ class SearchEngine:
             self._try_connect()
 
     def _initialize_index(self):
+        """
+        Ensures the index mapping exists in Elasticsearch and synchronizes seed questions.
+        """
         try:
+            # Create schema mappings if index does not exist
             if not self.es_client.indices.exists(index=INDEX_NAME):
                 self.es_client.indices.create(
                     index=INDEX_NAME,
@@ -76,6 +126,7 @@ class SearchEngine:
                 )
                 print(f"[SearchEngine] Created index '{INDEX_NAME}'.")
             
+            # Check if seed documents need to be indexed
             es_count = self.es_client.count(index=INDEX_NAME)["count"]
             if es_count < len(self.local_db):
                 print(f"[SearchEngine] ES count ({es_count}) is less than local seed ({len(self.local_db)}). Re-seeding index...")
@@ -97,12 +148,35 @@ class SearchEngine:
         limit: int = 10,
         offset: int = 0
     ) -> dict:
+        """
+        Dispatches search query to Elasticsearch or local in-memory fallback.
+
+        Args:
+            query (str, optional): Keyword query string.
+            interview_type (str, optional): Interview track filter ('dsa', 'system_design', 'behavioral').
+            difficulty (str, optional): Difficulty level filter ('easy', 'medium', 'hard').
+            company (str, optional): Company tag filter (e.g. 'Google', 'Meta').
+            limit (int): Page size limit (default 10).
+            offset (int): Pagination offset.
+
+        Returns:
+            dict: Search results envelope containing matched questions and total count.
+        """
         self._ensure_connection()
         if self.use_es and self.es_client:
             return await self._search_es(query, interview_type, difficulty, company, limit, offset)
         return await self._search_local(query, interview_type, difficulty, company, limit, offset)
 
     async def get_question_by_id(self, question_id: str) -> Optional[dict]:
+        """
+        Fetches a question by its primary identifier.
+
+        Args:
+            question_id (str): Unique question ID.
+
+        Returns:
+            Optional[dict]: Question dictionary if located, else None.
+        """
         self._ensure_connection()
         if self.use_es and self.es_client:
             try:
@@ -110,6 +184,7 @@ class SearchEngine:
                 return res["_source"]
             except Exception:
                 return None
+
         for q in self.local_db:
             if q["id"] == question_id:
                 return q
@@ -120,6 +195,16 @@ class SearchEngine:
         interview_type: Optional[str] = None,
         difficulty: Optional[str] = None
     ) -> Optional[dict]:
+        """
+        Selects a random interview question matching specified track and difficulty constraints.
+
+        Args:
+            interview_type (str, optional): Track constraint.
+            difficulty (str, optional): Difficulty constraint.
+
+        Returns:
+            Optional[dict]: Randomly chosen question or None if no questions match.
+        """
         filtered = self.local_db
         if interview_type:
             filtered = [q for q in filtered if q["interview_type"] == interview_type]
@@ -130,6 +215,15 @@ class SearchEngine:
         return random.choice(filtered)
 
     async def add_question(self, question: dict) -> bool:
+        """
+        Appends a new question to the local catalog and synchronizes to Elasticsearch if connected.
+
+        Args:
+            question (dict): Complete question dictionary.
+
+        Returns:
+            bool: True on success.
+        """
         self.local_db.append(question)
         self._ensure_connection()
         if self.use_es and self.es_client:
@@ -152,9 +246,13 @@ class SearchEngine:
         limit: int,
         offset: int
     ) -> dict:
+        """
+        Executes a multi-match boosted BM25 query against Elasticsearch cluster.
+        """
         must_queries = []
         filter_queries = []
 
+        # Boost title matches with weight 2x compared to description
         if query:
             must_queries.append({
                 "multi_match": {
@@ -165,6 +263,7 @@ class SearchEngine:
         else:
             must_queries.append({"match_all": {}})
 
+        # Structured term filters
         if interview_type:
             filter_queries.append({"term": {"interview_type": interview_type}})
         if difficulty:
@@ -190,6 +289,7 @@ class SearchEngine:
             questions = [h["_source"] for h in hits]
             return {"questions": questions, "total": total, "query": query}
         except Exception as e:
+            # Fall back to local search if Elasticsearch query execution throws an error
             print(f"[SearchEngine] ES search failed: {e}. Falling back to local search.")
             self.use_es = False
             self._last_connect_attempt = time.monotonic()
@@ -204,8 +304,12 @@ class SearchEngine:
         limit: int,
         offset: int
     ) -> dict:
+        """
+        Performs in-memory keyword scoring and multi-parameter filtering on seed questions.
+        """
         filtered = self.local_db
 
+        # Apply exact category filters
         if interview_type:
             filtered = [q for q in filtered if q["interview_type"].lower() == interview_type.lower()]
         if difficulty:
@@ -213,6 +317,7 @@ class SearchEngine:
         if company:
             filtered = [q for q in filtered if any(company.lower() == c.lower() for c in q["company_tags"])]
 
+        # Apply weighted substring matching if search text was provided
         if query:
             q_lower = query.lower()
             matching = []
@@ -222,8 +327,10 @@ class SearchEngine:
                 in_tags = any(q_lower in t.lower() for t in q["tags"])
                 in_companies = any(q_lower in c.lower() for c in q["company_tags"])
                 if in_title or in_desc or in_tags or in_companies:
+                    # Weigh title matches highest (2 points)
                     score = (2 if in_title else 0) + (1 if in_desc else 0) + (1 if in_tags else 0)
                     matching.append((score, q))
+            # Sort highest relevance score first
             matching.sort(key=lambda x: x[0], reverse=True)
             filtered = [item[1] for item in matching]
 
@@ -232,4 +339,5 @@ class SearchEngine:
         return {"questions": paginated, "total": total, "query": query}
 
 
+# Global singleton instance of the search engine
 search_engine = SearchEngine()

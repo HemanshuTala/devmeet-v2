@@ -1,5 +1,21 @@
 'use client';
 
+/**
+ * @file VideoPanel.tsx (Interview Video Streaming & Proctoring Visualizer Panel)
+ * @description Core audio/video interface for live mock interviews.
+ * Supports dual display modes:
+ * - Full mode (split view with candidate camera and AI Interviewer avatar)
+ * - Compact ribbon mode (used in DSA coding view to save editor real estate)
+ *
+ * Integrates:
+ * 1. WebRTC & LiveKit signaling (`useWebRTC`)
+ * 2. Camera/microphone acquisition and track control (`useMediaStream`)
+ * 3. Client-side computer vision edge proctoring (`useProctoring`)
+ * 4. Real-time audio amplitude visualization (`useAudioLevel`)
+ * 5. Device switching overlay (cameras & microphones)
+ * 6. Cloud recording with consent tracking and S3 upload queuing (`RecordingConsentModal`)
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Video as VideoIcon,
@@ -35,24 +51,28 @@ import { useProctoring } from './hooks/useProctoring';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useAudioLevel } from './hooks/useAudioLevel';
 
+/**
+ * Props for VideoPanel component.
+ */
 interface VideoPanelProps {
+  /** Interview session identifier */
   sessionId: string;
+  /** Candidate display name */
   userDisplayName?: string;
+  /** Candidate unique ID */
   userId?: string;
+  /** Whether the interview session is active */
   isActive: boolean;
+  /** Real-time AI agent status ('speaking' | 'thinking' | 'idle') */
   aiState: 'speaking' | 'thinking' | 'idle' | string;
+  /** Whether to render in compact ribbon mode (for coding layouts) */
   compact?: boolean;
+  /** Callback triggered when computer vision flags a proctoring violation */
   onProctorViolation?: (type: any, message?: any) => void;
 }
 
 /**
- * Main Video & Audio Panel for the Interview Room.
- * Coordinates:
- * 1. WebRTC & LiveKit room connection status.
- * 2. Candidate camera stream & microphone volume visualizer.
- * 3. Client-side proctoring overlay (face gaze tracking, multiple face detection).
- * 4. AI Interviewer animated avatar state (Speaking / Thinking / Idle).
- * 5. Device switching controls & recording consent modal.
+ * VideoPanel Component.
  */
 export default function VideoPanel({
   sessionId,
@@ -63,15 +83,19 @@ export default function VideoPanel({
   compact = false,
   onProctorViolation,
 }: VideoPanelProps) {
+  // Diagnostic log buffer (keeps last 20 events)
   const [logs, setLogs] = useState<string[]>([]);
   const addLog = useCallback((msg: string) => {
     setLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 19)]);
   }, []);
 
-  // WebRTC, MediaStream, Proctoring, and Audio Level hooks
+  const effectiveUserId = userId || (sessionId ? `candidate_${sessionId.slice(0, 8)}` : 'candidate');
+  const effectiveDisplayName = userDisplayName || 'Candidate';
+
+  // Sub-system hook integrations
   const media = useMediaStream(addLog);
   const proctor = useProctoring(media.videoRef, media.stream, isActive, media.videoActive, onProctorViolation, addLog);
-  const rtc = useWebRTC(sessionId, userId, userDisplayName, media.permissionStatus, addLog);
+  const rtc = useWebRTC(sessionId, effectiveUserId, effectiveDisplayName, media.permissionStatus, addLog);
   const { subscribe: audioSubscribe } = useAudioLevel(media.stream, media.audioActive);
 
   // User subscription plan & session recording states
@@ -80,6 +104,7 @@ export default function VideoPanel({
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
 
+  // Fetch candidate's quota to determine recording eligibility (Pro / Enterprise feature)
   useEffect(() => {
     userApi
       .getQuota()
@@ -89,11 +114,16 @@ export default function VideoPanel({
       .catch(() => {});
   }, []);
 
-  // Fallback to audio-only if WebRTC connection fails
+  // Gracefully handle WebRTC disconnection without killing candidate camera feed
   useEffect(() => {
-    if (rtc.connStatus === 'failed') media.setUseAudioOnly(true);
-  }, [rtc.connStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (rtc.connStatus === 'failed') {
+      addLog('WebRTC relay degraded — keeping local camera preview and proctor active.');
+    }
+  }, [rtc.connStatus, addLog]);
 
+  /**
+   * Toggles recording state or launches the legal consent modal.
+   */
   const handleRecordingToggle = () => {
     if (!isActive) return;
     if (isRecording) {
@@ -105,6 +135,9 @@ export default function VideoPanel({
     }
   };
 
+  /**
+   * Confirms recording consent and starts cloud capture.
+   */
   const confirmRecording = () => {
     setIsRecording(true);
     setShowConsentModal(false);
@@ -164,6 +197,8 @@ export default function VideoPanel({
                 activeWarning={proctor.activeWarning}
                 blurPerformanceWarning={proctor.blurPerformanceWarning}
                 modelsLoaded={proctor.modelsLoaded}
+                isDegraded={proctor.isDegraded}
+                proctorError={proctor.proctorError}
                 videoActive={media.videoActive}
                 onDismissBlurWarning={() => proctor.setBlurPerformanceWarning(null)}
                 size="sm"
@@ -266,6 +301,8 @@ export default function VideoPanel({
                 activeWarning={proctor.activeWarning}
                 blurPerformanceWarning={proctor.blurPerformanceWarning}
                 modelsLoaded={proctor.modelsLoaded}
+                isDegraded={proctor.isDegraded}
+                proctorError={proctor.proctorError}
                 videoActive={media.videoActive}
                 onDismissBlurWarning={() => proctor.setBlurPerformanceWarning(null)}
                 size="md"
@@ -323,6 +360,7 @@ export default function VideoPanel({
             </div>
           )}
 
+          {/* Microphone volume level indicator */}
           {media.permissionStatus === 'granted' && media.audioActive && (
             <div
               className="absolute bottom-3 right-3 z-10 flex items-center gap-0.5 bg-slate-900/80 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold border border-slate-700/40"
@@ -333,6 +371,7 @@ export default function VideoPanel({
             </div>
           )}
 
+          {/* Device settings modal overlay */}
           {showDeviceSettings && (
             <DeviceSettingsOverlay
               videoDevices={media.videoDevices}
@@ -346,6 +385,7 @@ export default function VideoPanel({
             />
           )}
 
+          {/* Quick toggle controls floating over the candidate camera preview */}
           {media.permissionStatus === 'granted' && (
             <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-2 z-10">
               <button
@@ -440,7 +480,7 @@ export default function VideoPanel({
         </div>
       </div>
 
-      {/* Network stats bar */}
+      {/* Network stats bar and cloud recording controls */}
       {rtc.connStatus === 'connected' && (
         <div className="flex-shrink-0 border-t border-slate-800/60 bg-slate-900/50">
           <div className="flex items-center justify-between px-4 py-2.5 gap-4">

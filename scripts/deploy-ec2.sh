@@ -149,7 +149,7 @@ info "ECR authentication successful."
 section "Step 5: Pull images from ECR"
 SERVICES=(
   "auth-service" "user-service" "orchestrator-service" "ai-interviewer-service"
-  "code-execution-service" "video-service" "feedback-service" "notification-service"
+  "code-execution-service" "video-service" "feedback-service"
   "analytics-service" "admin-service" "file-service" "payment-service"
   "search-service" "api-gateway" "frontend"
 )

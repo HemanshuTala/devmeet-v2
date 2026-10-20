@@ -1,3 +1,27 @@
+/**
+ * @file page.tsx
+ * @description Candidate Performance Analytics & Score Progression Dashboard for DevMeet.
+ *
+ * Responsibilities:
+ * 1. Authentication Protection:
+ *    - Enforces authenticated session via [useRequireAuth](file:///e:/AI%20INTERVIEW/frontend/src/hooks/useRequireAuth.ts).
+ * 2. Data Queries:
+ *    - Fetches 90-day aggregate dashboard metrics via [useUserDashboard](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useAnalytics.ts).
+ *    - Fetches 30-day historical score trend points via [useUserScoreTrend](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useAnalytics.ts).
+ * 3. KPI Metric Cards:
+ *    - Displays Total Sessions, Completed, Average Score, and Completion Rate.
+ * 4. Longitudinal Streaks & Performance Outliers:
+ *    - Consecutive daily practice streak (Flame counter).
+ *    - Strongest interview category (Award badge).
+ *    - Category needing improvement ("Needs Work").
+ * 5. Competency Breakdown:
+ *    - Visual progress meters for Communication, Problem Solving, Code Quality, and Behavioral.
+ * 6. Historical 30-Day Bar Chart:
+ *    - Renders normalized score bars with dashed horizontal threshold lines (25%, 50%, 75%).
+ *
+ * @module app/analytics/page
+ */
+
 'use client';
 
 import Link from 'next/link';
@@ -12,19 +36,46 @@ import {
   PlusCircle,
 } from 'lucide-react';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Converts internal interview type keys to display titles.
+ *
+ * @param {string | null | undefined} t - Internal type key ('dsa', 'behavioral', 'system_design').
+ * @returns {string} Human-readable track label.
+ */
 function typeLabel(t: string | null | undefined) {
   if (!t) return '—';
   return t === 'dsa' ? 'DSA' : t === 'behavioral' ? 'Behavioral' : 'System Design';
 }
 
+/**
+ * Returns color hex code according to score thresholds:
+ * - Green (>= 75%): Strong performance
+ * - Amber (50-74%): Passing / Fair
+ * - Red (< 50%): Needs work
+ *
+ * @param {number} score - 0-100 score value.
+ * @returns {string} Hex color string.
+ */
 function scoreColor(score: number): string {
   if (score >= 75) return '#16a34a';
   if (score >= 50) return '#d97706';
   return '#dc2626';
 }
 
+/**
+ * ScoreBar Component.
+ *
+ * Renders an individual animated competence progress bar with category icon and percentage score.
+ *
+ * @component
+ * @param {Object} props
+ * @param {string} props.label - Competency name.
+ * @param {number} props.value - Numeric score value (0-100).
+ * @param {React.ElementType} props.icon - Lucide icon component.
+ * @returns {JSX.Element}
+ */
 function ScoreBar({
   label,
   value,
@@ -59,20 +110,29 @@ function ScoreBar({
   );
 }
 
-// ── page ─────────────────────────────────────────────────────────────────────
+// ── Main Page Component ──────────────────────────────────────────────────────
 
+/**
+ * AnalyticsPage Component.
+ *
+ * @component
+ * @returns {JSX.Element} Analytics overview dashboard wrapped in DashboardShell.
+ */
 export default function AnalyticsPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  // Query 90-day aggregate dashboard data
   const { data: dashboard, isLoading: dashboardLoading, error: dashboardError } = useUserDashboard(90);
+  // Query 30-day historical trend scores
   const { data: trendData, isLoading: trendLoading } = useUserScoreTrend(30);
 
+  // Render skeleton layout during authentication rehydration or query loading
   if (authLoading || dashboardLoading) {
     return (
       <DashboardShell>
         <div className="flex flex-col gap-6 animate-fade-in">
-          {/* Title */}
+          {/* Title skeleton */}
           <div className="skeleton-shimmer h-7 w-36 rounded-lg" />
-          {/* Stat cards */}
+          {/* Stat cards skeleton */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="rounded-xl p-5 border flex flex-col gap-2"
@@ -82,7 +142,7 @@ export default function AnalyticsPage() {
               </div>
             ))}
           </div>
-          {/* Score bars */}
+          {/* Score bars skeleton */}
           <div className="rounded-xl p-6 border flex flex-col gap-4"
             style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
             <div className="skeleton-shimmer h-5 w-40 rounded-md" />
@@ -98,7 +158,7 @@ export default function AnalyticsPage() {
               </div>
             ))}
           </div>
-          {/* Charts */}
+          {/* Charts skeleton */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {Array.from({ length: 2 }).map((_, i) => (
               <div key={i} className="rounded-xl p-6 border flex flex-col gap-4"
@@ -117,6 +177,7 @@ export default function AnalyticsPage() {
   const isDemo = d.data_source === 'demo';
   const points: Array<{ date: string; score: number }> = trendData?.trend ?? [];
 
+  // Calculate completion percentage safely
   const completionRate =
     d.total_sessions > 0
       ? Math.round((d.completed_sessions / d.total_sessions) * 100)
@@ -141,6 +202,7 @@ export default function AnalyticsPage() {
               Your performance over the last 90 days
             </p>
           </div>
+          {/* Banner alerting user if backend returned demo mockup stats */}
           {isDemo && (
             <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">
               Demo data — start an interview to see real stats
@@ -148,7 +210,7 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* ── Error banner ── */}
+        {/* ── Error Banner ── */}
         {dashboardError && (
           <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -156,7 +218,7 @@ export default function AnalyticsPage() {
           </div>
         )}
 
-        {/* ── Top stat cards ── */}
+        {/* ── Top Stat KPI Cards ── */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total Sessions"  value={d.total_sessions ?? 0}                          icon={Activity}    color="blue"   />
           <StatCard label="Completed"        value={d.completed_sessions ?? 0}                      icon={CheckCircle} color="green"  />
@@ -164,10 +226,10 @@ export default function AnalyticsPage() {
           <StatCard label="Completion Rate"  value={`${completionRate}%`}                           icon={Target}      color="orange" />
         </div>
 
-        {/* ── Streak + best/worst row ── */}
+        {/* ── Streak + Outlier Insights Row ── */}
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
 
-          {/* Current Streak */}
+          {/* Current Day Streak */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
             <div className="flex items-center gap-2 mb-2.5">
               <Flame className="w-4 h-4 text-orange-500" />
@@ -181,7 +243,7 @@ export default function AnalyticsPage() {
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>consecutive days</p>
           </div>
 
-          {/* Strongest Area */}
+          {/* Highest Performing Track */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
             <div className="flex items-center gap-2 mb-2.5">
               <Award className="w-4 h-4 text-green-600" />
@@ -193,7 +255,7 @@ export default function AnalyticsPage() {
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>best avg score</p>
           </div>
 
-          {/* Needs Work */}
+          {/* Weakest Performing Track */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
             <div className="flex items-center gap-2 mb-2.5">
               <AlertCircle className="w-4 h-4 text-red-500" />
@@ -206,7 +268,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* ── Skill breakdown ── */}
+        {/* ── Competency Skill Breakdown ── */}
         {(d.avg_communication_score > 0 || d.avg_problem_solving_score > 0 ||
           d.avg_code_quality_score > 0 || d.avg_behavioral_score > 0) && (
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
@@ -222,7 +284,7 @@ export default function AnalyticsPage() {
           </div>
         )}
 
-        {/* ── Interview type breakdown ── */}
+        {/* ── Interview Track Breakdown ── */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
           <p className="mb-4 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
             Interview Type Breakdown
@@ -259,9 +321,8 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* ── Score trend chart ── */}
+        {/* ── 30-Day Score Trend Chart ── */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-5">
-          {/* Chart header */}
           <div className="flex items-center justify-between mb-1">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
@@ -287,9 +348,8 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <div className="mt-4">
-              {/* Y-axis label + chart area */}
               <div className="flex gap-2">
-                {/* Y-axis */}
+                {/* Y-axis Ticks (0% to 100%) */}
                 <div className="flex flex-col justify-between h-40 text-right pb-5">
                   {[100, 75, 50, 25, 0].map((tick) => (
                     <span key={tick} className="text-[9px] leading-none" style={{ color: 'var(--color-text-muted)' }}>
@@ -298,11 +358,10 @@ export default function AnalyticsPage() {
                   ))}
                 </div>
 
-                {/* Bars */}
+                {/* Vertical Bar Chart Canvas */}
                 <div className="flex-1 flex flex-col gap-1">
-                  {/* Grid lines */}
                   <div className="relative flex items-flex-end h-40" style={{ borderLeft: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
-                    {/* Horizontal gridlines at 25 / 50 / 75 */}
+                    {/* Horizontal Dashed Threshold Gridlines */}
                     {[75, 50, 25].map((tick) => (
                       <div
                         key={tick}
@@ -311,12 +370,11 @@ export default function AnalyticsPage() {
                       />
                     ))}
 
-                    {/* Bar columns */}
+                    {/* Bar Columns (Displaying up to 20 most recent data points) */}
                     <div className="absolute inset-0 flex items-end gap-1 px-1 pb-0">
                       {points.slice(-20).map((point, i) => {
                         const score = Number(point.score ?? 0);
                         const barH = Math.max(2, Math.min(100, score));
-                        // Brand-blue gradient based on score
                         const barColor =
                           score >= 70 ? 'var(--color-brand)' :
                           score >= 50 ? '#3b82f6' :
@@ -344,7 +402,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
 
-                  {/* X-axis date labels */}
+                  {/* X-axis Date Axis */}
                   <div className="flex gap-1 px-1 mt-0.5">
                     {points.slice(-20).map((point, i) => (
                       <div key={i} className="flex-1 flex justify-center">
@@ -362,7 +420,7 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Legend */}
+              {/* Chart Legend */}
               <div className="flex items-center gap-4 mt-3 justify-end">
                 {[
                   { label: '≥ 70% (Good)',    color: 'var(--color-brand)' },
@@ -379,7 +437,7 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* ── Empty state CTA ── */}
+        {/* ── Empty State Call-to-Action ── */}
         {isEmpty && !dashboardError && (
           <div
             className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-white shadow-sm px-6 py-10 text-center"

@@ -1,3 +1,27 @@
+/**
+ * @file DashboardShell.tsx
+ * @description Primary Authenticated Application Shell & Responsive Layout Frame.
+ *
+ * Provides the overarching UI structure for all dashboard views:
+ * 1. Collapsible Sidebar Navigation:
+ *    - Width toggles between 240px (expanded) and 68px (icon-only collapsed) via `useUIStore`.
+ *    - Tooltip indicators on hover when collapsed.
+ *    - Smooth spring tab indicator (`layoutId="activeTabIndicator"`).
+ * 2. Subscription Quota Tracker:
+ *    - Renders interview usage progress bar for Free Tier users (`useQuota`).
+ *    - One-click upgrade call-to-action to `/billing`.
+ * 3. Role-Based Admin Access:
+ *    - Conditionally mounts the staff Admin Panel launcher when `useIsAdmin()` is true.
+ * 4. Header Bar & Breadcrumb Title:
+ *    - Dynamically computes page title from `pathname` with animated entry transitions.
+ *    - Global Search launcher opening the `CommandMenu` (⌘K shortcut).
+ *    - Profile avatar badge and sign-out button.
+ * 5. Page Transitions:
+ *    - Wraps child page contents in [PageTransition](file:///e:/AI%20INTERVIEW/frontend/src/components/layout/PageTransition.tsx) for fluid route switches.
+ *
+ * @module components/layout/DashboardShell
+ */
+
 'use client';
 
 import React, { useState } from 'react';
@@ -33,6 +57,9 @@ import { cn } from '@/lib/utils';
 import TopLoadingBar from './TopLoadingBar';
 import PageTransition from './PageTransition';
 
+/**
+ * Navigation item specification for sidebar routing.
+ */
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, exact: true },
   { href: '/dashboard/create-session', label: 'New Interview', icon: Plus },
@@ -45,6 +72,18 @@ const NAV_ITEMS = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
+/**
+ * NavLink Component.
+ *
+ * Renders an individual navigation link with active state highlighting and tooltip support.
+ *
+ * @component
+ * @param {Object} props
+ * @param {typeof NAV_ITEMS[0]} props.item - Route descriptor.
+ * @param {boolean} props.isActive - Whether current route matches this link.
+ * @param {boolean} props.collapsed - Whether sidebar is collapsed to icon-only view.
+ * @returns {JSX.Element}
+ */
 function NavLink({
   item,
   isActive,
@@ -76,6 +115,7 @@ function NavLink({
       {!collapsed && (
         <span className="truncate tracking-tight">{item.label}</span>
       )}
+      {/* Animated active pill indicator */}
       {isActive && !collapsed && (
         <motion.div
           layoutId="activeTabIndicator"
@@ -86,6 +126,7 @@ function NavLink({
     </Link>
   );
 
+  // Wrap in tooltip when sidebar is in collapsed icon-only mode
   if (collapsed) {
     return (
       <TooltipProvider delayDuration={100}>
@@ -102,6 +143,15 @@ function NavLink({
   return content;
 }
 
+/**
+ * DashboardShell Component.
+ *
+ * @component
+ * @param {Object} props
+ * @param {React.ReactNode} props.children - Child page contents.
+ * @param {string} [props.maxWidth='max-w-7xl'] - Content layout max-width constraint.
+ * @returns {JSX.Element} Full-height dashboard framework with sidebar and header.
+ */
 export default function DashboardShell({
   children,
   maxWidth = 'max-w-7xl',
@@ -120,6 +170,11 @@ export default function DashboardShell({
   const userProfileItem = NAV_ITEMS.find((item) => item.href === '/profile');
   const displayName = user?.display_name || user?.email || 'User';
 
+  /**
+   * Resolves the human-readable headline shown in the top navigation header bar.
+   *
+   * @returns {string} Active view title.
+   */
   const getPageTitle = () => {
     if (pathname === '/dashboard') return 'Dashboard Overview';
     if (pathname.includes('/create-session')) return 'Setup AI Interview';
@@ -136,9 +191,10 @@ export default function DashboardShell({
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 font-sans antialiased">
+      {/* Route change loading indicator */}
       <TopLoadingBar />
 
-      {/* Sidebar */}
+      {/* Collapsible Left Sidebar */}
       <aside
         className={cn(
           'flex flex-col border-r border-slate-200/80 bg-white shadow-xs z-30 transition-all duration-300 select-none',
@@ -157,16 +213,18 @@ export default function DashboardShell({
               </span>
             )}
           </Link>
+          {/* Collapse / Expand Toggle Button */}
           <button
             type="button"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="w-7 h-7 rounded-lg border border-slate-200/70 text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-all cursor-pointer"
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Navigation List */}
+        {/* Navigation Link List */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.filter((i) => i.href !== '/profile' && i.href !== '/settings').map((item) => {
             const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
@@ -174,31 +232,52 @@ export default function DashboardShell({
           })}
         </nav>
 
-        {/* Tier Quota Widget */}
+        {/* Tier Quota Indicator Widget */}
         {quota && !sidebarCollapsed && (
           <div className="mx-3 mb-3 p-3.5 rounded-xl bg-slate-900 text-white shadow-sm space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-medium text-slate-300">Free Tier</span>
-              <span className="font-semibold text-blue-300">
-                {quota.interviewCount ?? 0} / {quota.limit ?? 5} Interviews
-              </span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(((quota.interviewCount ?? 0) / (quota.limit ?? 5)) * 100, 100)}%` }}
-              />
-            </div>
-            <Link
-              href="/billing"
-              className="block text-center text-[11px] font-semibold text-blue-400 hover:text-blue-300 pt-0.5"
-            >
-              Upgrade to Pro →
-            </Link>
+            {quota.plan && quota.plan !== 'free' ? (
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  {String(quota.plan).toUpperCase()} PLAN
+                </span>
+                <span className="font-bold text-emerald-400 text-[11px] bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Unlimited
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-slate-300">Free Tier</span>
+                  <span className="font-semibold text-blue-300">
+                    {quota.interviews_this_month ?? quota.interviews_today ?? quota.interviewCount ?? 0} / {quota.monthly_limit && quota.monthly_limit > 0 ? quota.monthly_limit : (quota.daily_limit && quota.daily_limit > 0 ? quota.daily_limit : (quota.limit ?? 5))} Free Interviews
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(
+                        (((quota.interviews_this_month ?? quota.interviews_today ?? quota.interviewCount ?? 0) /
+                          (quota.monthly_limit && quota.monthly_limit > 0 ? quota.monthly_limit : (quota.daily_limit && quota.daily_limit > 0 ? quota.daily_limit : (quota.limit ?? 5)))) *
+                          100),
+                        100
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <Link
+                  href="/billing"
+                  className="block text-center text-[11px] font-semibold text-blue-400 hover:text-blue-300 pt-0.5"
+                >
+                  Upgrade to Pro →
+                </Link>
+              </>
+            )}
           </div>
         )}
 
-        {/* Admin Link if Admin */}
+        {/* Admin Link (Rendered only for verified Admin users) */}
         {isAdmin && (
           <div className="mx-3 mb-2">
             {!sidebarCollapsed ? (
@@ -221,7 +300,7 @@ export default function DashboardShell({
           </div>
         )}
 
-        {/* Bottom User Bar */}
+        {/* User Profile Summary & Logout */}
         <div className="p-3 border-t border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <Avatar className="w-8 h-8 rounded-lg flex-shrink-0">
@@ -251,7 +330,7 @@ export default function DashboardShell({
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
+        {/* Top Header Bar */}
         <header className="h-14 flex-shrink-0 border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-6 flex items-center justify-between z-20">
           <AnimatePresence mode="popLayout">
             <motion.h1
@@ -267,7 +346,7 @@ export default function DashboardShell({
           </AnimatePresence>
 
           <div className="flex items-center gap-3">
-            {/* Quick Search Shortcut */}
+            {/* Quick Command Launcher (⌘K) */}
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
@@ -282,7 +361,7 @@ export default function DashboardShell({
               </kbd>
             </button>
 
-            {/* Quick User Profile Shortcut */}
+            {/* User Profile Avatar Link */}
             <Link href="/profile">
               <Avatar className="w-7 h-7 hover:opacity-80 transition-opacity cursor-pointer">
                 <AvatarFallback className="bg-blue-600 text-white text-[11px] font-bold">
@@ -293,6 +372,7 @@ export default function DashboardShell({
 
             <div className="w-px h-5 bg-slate-200" />
 
+            {/* Quick Sign Out Action */}
             <button
               type="button"
               onClick={() => logout()}
@@ -304,7 +384,7 @@ export default function DashboardShell({
           </div>
         </header>
 
-        {/* Content Body */}
+        {/* Scrollable Page Body */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-50/50 pb-12">
           <div className={cn(maxWidth, 'mx-auto px-6 md:px-8 py-6 space-y-6')}>
             <PageTransition>{children}</PageTransition>
@@ -312,6 +392,7 @@ export default function DashboardShell({
         </main>
       </div>
 
+      {/* Global Command Palette */}
       <CommandMenu open={commandOpen} setOpen={setCommandOpen} />
     </div>
   );

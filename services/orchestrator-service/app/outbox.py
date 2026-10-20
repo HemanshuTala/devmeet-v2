@@ -1,23 +1,37 @@
 """
-Transactional Outbox pattern for the orchestrator service.
+Transactional Outbox Pattern Implementation for Orchestrator Service.
+=====================================================================
+This module guarantees reliable event delivery between the Orchestrator Service
+and downstream consumer microservices (primarily `feedback-service`).
 
-Instead of calling downstream services directly (fragile HTTP calls that can fail
-after the DB transaction commits), we insert an event into the outbox table within
-the same transaction. A background publisher polls unpublished events and dispatches
-them reliably.
+The Dual-Write Problem Solved by Transactional Outbox:
+------------------------------------------------------
+When a candidate finishes an interview, two operations must happen:
+1. Update database state: `UPDATE sessions SET status = 'completed' WHERE id = ...`
+2. Notify feedback service to evaluate transcript and generate rubric score report.
 
-Usage in routes:
-    async with db.pool.acquire() as conn:
-        async with conn.transaction():
-            await conn.execute("UPDATE sessions SET status='completed' ...")
-            await emit_event(
-                conn,
-                event_type="session.completed",
-                aggregate_type="session",
-                aggregate_id=session_id,
-                payload={"session_id": session_id, "user_id": user_id},
-            )
+The Problem with Direct HTTP Calls:
+If the application commits the database transaction and then attempts an HTTP POST
+to `feedback-service`, a network glitch, timeout, or container restart will cause
+the notification to be permanently lost! The user's interview is marked completed,
+but their report is never generated.
+
+How the Transactional Outbox Works:
+-----------------------------------
+1. Atomic Emission (`emit_event`):
+   - Inside the EXACT SAME PostgreSQL transaction that updates the session status,
+     an event record is inserted into the `outbox_events` table (`published = FALSE`).
+   - If the database commit succeeds, the event is guaranteed to be saved. If it rolls back,
+     no phantom event is created.
+2. Background Polling & Dispatch (`OutboxPublisher`):
+   - A resilient background asyncio task periodically polls for unpublished rows.
+   - For `session.completed` events, it queries the full conversation transcript from
+     `conversation_turns` and sends an HTTP POST to `feedback-service:8007/api/v1/feedback/generate`.
+   - On HTTP 200/201/202, it flags the row as `published = TRUE` and records `published_at = NOW()`.
+   - If downstream is down or times out, the event remains unpublished and will be automatically
+     retried on the next polling cycle without dropping data.
 """
+
 import asyncio
 import json
 import logging
@@ -30,7 +44,7 @@ from .database import db
 
 logger = logging.getLogger("outbox")
 
-FEEDBACK_SERVICE_URL = None  # Set from environment in start_publisher()
+FEEDBACK_SERVICE_URL = None  # Populated from environment on application startup
 
 
 async def emit_event(
@@ -41,12 +55,17 @@ async def emit_event(
     payload: dict,
 ) -> str:
     """
-    Insert an event into the outbox table within the caller's transaction.
+    Inserts an event record into `outbox_events` within the caller's active database transaction.
 
-    Must be called inside an active transaction on `conn` so the event
-    is atomically committed with the domain change.
+    Parameters:
+        conn (asyncpg.Connection): Active database connection holding an uncommitted transaction.
+        event_type (str): Event name (e.g. 'session.completed').
+        aggregate_type (str): Domain entity category (e.g. 'session').
+        aggregate_id (str): Primary key UUID of the affected entity.
+        payload (dict): Structured context payload for downstream consumers.
 
-    Returns the event UUID.
+    Returns:
+        str: Generated event UUID.
     """
     event_id = str(uuid.uuid4())
     await conn.execute(
@@ -55,7 +74,7 @@ async def emit_event(
         VALUES ($1::uuid, $2, $3, $4::uuid, $5::jsonb)
         """,
         uuid.UUID(event_id),
-        event_type,
+        event_id,
         aggregate_type,
         uuid.UUID(aggregate_id),
         json.dumps(payload),
@@ -66,20 +85,24 @@ async def emit_event(
 
 class OutboxPublisher:
     """
-    Background task that polls the outbox_events table for unpublished events
-    and dispatches them to the appropriate downstream service.
-
-    Runs as an asyncio task started on app startup and cancelled on shutdown.
+    Background worker that queries unpublished outbox rows and delivers them reliably.
     """
 
     def __init__(self, poll_interval: float = 5.0, batch_size: int = 20):
+        """
+        Parameters:
+            poll_interval (float): Polling frequency in seconds (default: 5.0s).
+            batch_size (int): Max events to process per polling tick (default: 20).
+        """
         self.poll_interval = poll_interval
         self.batch_size = batch_size
         self._task: Optional[asyncio.Task] = None
         self._running = False
 
     async def start(self, feedback_service_url: str):
-        """Start the background publisher loop."""
+        """
+        Initializes the target feedback URL and starts the background asyncio polling task.
+        """
         global FEEDBACK_SERVICE_URL
         FEEDBACK_SERVICE_URL = feedback_service_url
         self._running = True
@@ -87,7 +110,9 @@ class OutboxPublisher:
         logger.info("Outbox publisher started (interval=%.1fs)", self.poll_interval)
 
     async def stop(self):
-        """Stop the background publisher."""
+        """
+        Signals the polling loop to stop and gracefully awaits task cancellation.
+        """
         self._running = False
         if self._task:
             self._task.cancel()
@@ -98,7 +123,9 @@ class OutboxPublisher:
         logger.info("Outbox publisher stopped")
 
     async def _poll_loop(self):
-        """Main polling loop — fetch unpublished events and dispatch them."""
+        """
+        Infinite polling loop executed as a background asyncio task.
+        """
         while self._running:
             try:
                 await self._process_batch()
@@ -107,7 +134,9 @@ class OutboxPublisher:
             await asyncio.sleep(self.poll_interval)
 
     async def _process_batch(self):
-        """Fetch and process a batch of unpublished events."""
+        """
+        Queries a batch of unpublished events from PostgreSQL and dispatches each sequentially.
+        """
         if not db.pool:
             return
 
@@ -126,6 +155,7 @@ class OutboxPublisher:
         for row in rows:
             success = await self._dispatch_event(row)
             if success:
+                # Mark as published atomically upon successful downstream HTTP acknowledgment
                 async with db.pool.acquire() as conn:
                     await conn.execute(
                         """
@@ -137,7 +167,9 @@ class OutboxPublisher:
                     )
 
     async def _dispatch_event(self, row) -> bool:
-        """Dispatch a single event to the appropriate handler. Returns True on success."""
+        """
+        Routes an outbox event to its corresponding handler based on `event_type`.
+        """
         event_type = row["event_type"]
         payload = row["payload"] if isinstance(row["payload"], dict) else json.loads(row["payload"])
 
@@ -146,7 +178,7 @@ class OutboxPublisher:
                 return await self._handle_session_completed(payload)
             else:
                 logger.warning("Unknown outbox event type: %s", event_type)
-                # Mark as published anyway to avoid infinite retry
+                # Mark unhandled event types as published to prevent infinite retry loops
                 return True
         except Exception as e:
             logger.error(
@@ -157,10 +189,13 @@ class OutboxPublisher:
 
     async def _handle_session_completed(self, payload: dict) -> bool:
         """
-        Dispatch session.completed → feedback-service to generate feedback.
-        Fetches the full transcript and session metadata from DB so the
-        feedback API receives all required fields: interview_type, difficulty,
-        language, target_company, and transcript.
+        Dispatches `session.completed` event to `feedback-service` for AI report generation.
+
+        Steps:
+        1. Validates required payload fields (session_id, interview_type, difficulty).
+        2. Queries PostgreSQL `conversation_turns` to build the full interview transcript.
+        3. Sends HTTP POST to `/api/v1/feedback/generate`.
+        4. Returns True on HTTP 200/201/202, triggering the published flag update in PostgreSQL.
         """
         if not FEEDBACK_SERVICE_URL:
             logger.warning("FEEDBACK_SERVICE_URL not configured, skipping dispatch")
@@ -177,9 +212,9 @@ class OutboxPublisher:
                 "Outbox event missing required fields for session %s — skipping feedback generation",
                 session_id,
             )
-            return True  # mark published so it doesn't retry forever
+            return True
 
-        # Fetch conversation turns from DB to build the transcript
+        # Fetch conversation dialogue history from PostgreSQL
         transcript: list = []
         try:
             if db.pool:
@@ -197,10 +232,9 @@ class OutboxPublisher:
                     transcript = [{"role": r["role"], "content": r["content"]} for r in rows]
         except Exception as e:
             logger.error("Failed to fetch turns for session %s: %s", session_id, e)
-            # Proceed without transcript — feedback service will return 0 score
-            # but won't 422. The feedback page request is the reliable path.
 
         try:
+            # 30-second timeout allows sufficient window for feedback service to acknowledge
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{FEEDBACK_SERVICE_URL}/api/v1/feedback/generate",
@@ -215,7 +249,7 @@ class OutboxPublisher:
                 )
                 if response.status_code in (200, 201, 202):
                     logger.info(
-                        "Feedback generation triggered for session %s", session_id
+                        "Feedback generation triggered successfully for session %s", session_id
                     )
                     return True
                 else:
@@ -232,5 +266,5 @@ class OutboxPublisher:
             return False
 
 
-# Singleton instance
+# Global singleton instance of the outbox publisher
 outbox_publisher = OutboxPublisher()

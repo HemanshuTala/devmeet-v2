@@ -1,10 +1,17 @@
 """
-X-Request-ID middleware for distributed request tracing.
+Distributed Request Tracing Middleware for AI Interviewer Service.
+==================================================================
+This module provides the `RequestIDMiddleware` ensuring end-to-end trace correlation
+across LLM prompt generation and token streaming sessions.
 
-Every inbound request gets a unique ID (from the X-Request-ID header if provided,
-otherwise a generated UUID). The ID is stored on request.state.request_id,
-included in structured log output, and returned in the response header.
+Correlation Tracking during LLM Generation:
+-------------------------------------------
+AI requests can involve multiple internal hops:
+Client -> Orchestrator -> AI Interviewer -> Groq Cloud API
+When a generation takes several seconds or encounters a rate limit, the `X-Request-ID`
+allows engineers to tie LLM token latency to specific candidate turns.
 """
+
 import uuid
 import logging
 import time
@@ -12,13 +19,23 @@ import time
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+# Dedicated logger for request ID tracing
 logger = logging.getLogger("request_id")
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware that propagates or generates `X-Request-ID` correlation identifiers.
+    """
+
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
+        """
+        Intercepts incoming HTTP request, times execution, attaches tracking headers,
+        and emits structured telemetry.
+        """
+        # Read existing correlation header from Orchestrator or generate fresh UUID
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         request.state.request_id = request_id
 

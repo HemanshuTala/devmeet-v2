@@ -1,4 +1,10 @@
--- DevMeet v2.0 — Consolidated authoritative schema
+-- ===============================================================================
+-- DevMeet v2.0 — Consolidated Authoritative Relational Database Schema
+-- ===============================================================================
+-- Purpose: Single source of truth for all PostgreSQL tables, indexes, and constraints.
+-- Loaded at Docker init time via /docker-entrypoint-initdb.d/init_dev_schema.sql.
+-- Services MUST NOT create tables or alter columns at runtime.
+-- ===============================================================================
 -- All tables, indexes, and constraints in one place.
 -- Loaded at Docker init time via docker-entrypoint-initdb.d.
 -- Services MUST NOT create tables or alter columns at runtime.

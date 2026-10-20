@@ -1,4 +1,23 @@
-﻿'use client';
+/**
+ * @file CommandMenu.tsx
+ * @description Global Spotlight/Command Palette Component for DevMeet.
+ *
+ * Responsibilities:
+ * 1. Global Keyboard Shortcut:
+ *    - Listens for `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to toggle visibility anywhere in the app.
+ * 2. Rapid Fuzzy Navigation (`cmdk`):
+ *    - Fuzzy-matches user queries across pages, actions, and settings.
+ * 3. Categorized Action Groups:
+ *    - Navigation: Dashboard, Create Session, Questions, History, Leaderboard, Analytics.
+ *    - Interview Shortcuts: Instant launcher for DSA, System Design, or Behavioral mock interviews.
+ *    - Account: Profile, Billing, System Settings, Logout.
+ * 4. Keyboard Accessibility:
+ *    - Arrow keys navigation, Enter selection, and Escape dismissal with backdrop blur.
+ *
+ * @module components/layout/CommandMenu
+ */
+
+'use client';
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -21,16 +40,30 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
+/**
+ * Props accepted by CommandMenu.
+ */
 interface CommandMenuProps {
+  /** Flag indicating whether the spotlight command palette is open. */
   open: boolean;
+  /** State setter to toggle or close the command palette. */
   setOpen: (open: boolean) => void;
 }
 
+/**
+ * CommandMenu Component.
+ *
+ * @component
+ * @param {CommandMenuProps} props
+ * @returns {JSX.Element} Portaled modal command palette.
+ */
 export function CommandMenu({ open, setOpen }: CommandMenuProps) {
   const router = useRouter();
   const { logout } = useAuth();
 
-  // Handle Ctrl+K / Cmd+K hotkey
+  /**
+   * Effect registering global keydown listener for Cmd+K and Ctrl+K shortcuts.
+   */
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -43,11 +76,19 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
     return () => document.removeEventListener('keydown', down);
   }, [open, setOpen]);
 
+  /**
+   * Closes the command menu and routes to the specified application path.
+   *
+   * @param {string} path - Target application URL route.
+   */
   const navigate = (path: string) => {
     setOpen(false);
     router.push(path);
   };
 
+  /**
+   * Closes the command menu and logs the user out via AuthContext.
+   */
   const handleLogout = async () => {
     setOpen(false);
     await logout();
@@ -65,6 +106,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
         className="w-full max-w-lg bg-white/98 border border-slate-200/80 shadow-2xl rounded-2xl overflow-hidden animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Search input header */}
         <div className="flex items-center border-b border-slate-100 px-4">
           <Search className="w-5 h-5 text-slate-400 shrink-0" />
           <Command.Input
@@ -72,11 +114,15 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
             className="w-full h-12 bg-transparent outline-none border-none text-slate-800 placeholder-slate-500 font-semibold text-sm px-3"
           />
         </div>
+
+        {/* Command search results list */}
         <Command.List className="max-h-[350px] overflow-y-auto p-2 scrollbar-none">
+          {/* Empty state when no commands match */}
           <Command.Empty className="text-slate-500 text-xs font-semibold p-4 text-center">
             No results found.
           </Command.Empty>
 
+          {/* Navigation Category */}
           <Command.Group heading="Navigation" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2">
             <Command.Item
               onSelect={() => navigate('/dashboard')}
@@ -127,6 +173,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
             </Command.Item>
           </Command.Group>
 
+          {/* Quick Interview Round Launchers */}
           <Command.Group heading="Interview Types" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-2">
             <Command.Item
               onSelect={() => navigate('/dashboard/create-session?type=dsa')}
@@ -153,6 +200,7 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
             </Command.Item>
           </Command.Group>
 
+          {/* User Account & Preference Settings */}
           <Command.Group heading="Account Settings" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-2">
             <Command.Item
               onSelect={() => navigate('/profile')}
@@ -191,4 +239,3 @@ export function CommandMenu({ open, setOpen }: CommandMenuProps) {
     </Command.Dialog>
   );
 }
-

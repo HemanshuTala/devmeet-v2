@@ -1,12 +1,31 @@
+/**
+ * @file loading.tsx
+ * @description Next.js Route Segment Skeleton Fallback for `/dashboard`.
+ *
+ * Prevents Cumulative Layout Shift (CLS) by mirroring the layout of the primary dashboard:
+ * 1. Top welcome greeting and action button placeholder.
+ * 2. 4-column KPI metric summary card placeholders.
+ * 3. 2-column chart canvas and quick action list placeholders.
+ * 4. 5-row recent sessions table placeholder.
+ *
+ * @module app/dashboard/loading
+ */
+
 'use client';
 
+/**
+ * DashboardLoading Component.
+ *
+ * @component
+ * @returns {JSX.Element} Shimmer skeleton layout matching the main dashboard.
+ */
 export default function DashboardLoading() {
   return (
     <div
       className="min-h-screen p-6 flex flex-col gap-6"
       style={{ background: 'var(--color-bg)' }}
     >
-      {/* Header skeleton */}
+      {/* Header Greeting Skeleton */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-2">
           <div className="skeleton-shimmer h-7 w-52 rounded-lg" />
@@ -15,7 +34,7 @@ export default function DashboardLoading() {
         <div className="skeleton-shimmer h-10 w-36 rounded-lg" />
       </div>
 
-      {/* Stat cards skeleton — 4 columns */}
+      {/* 4-Column Stat Cards Skeleton */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
@@ -36,9 +55,9 @@ export default function DashboardLoading() {
         ))}
       </div>
 
-      {/* Main grid — chart + quick actions */}
+      {/* Main Grid: Chart + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart area */}
+        {/* Trend chart area placeholder */}
         <div
           className="lg:col-span-2 rounded-xl p-6 border flex flex-col gap-4"
           style={{
@@ -51,7 +70,7 @@ export default function DashboardLoading() {
           <div className="skeleton-shimmer h-52 w-full rounded-xl" />
         </div>
 
-        {/* Quick actions */}
+        {/* Quick action shortcuts placeholder */}
         <div
           className="rounded-xl p-6 border flex flex-col gap-4"
           style={{
@@ -69,7 +88,7 @@ export default function DashboardLoading() {
         </div>
       </div>
 
-      {/* Sessions table */}
+      {/* Recent Sessions Table Skeleton */}
       <div
         className="rounded-xl p-6 border flex flex-col gap-4"
         style={{

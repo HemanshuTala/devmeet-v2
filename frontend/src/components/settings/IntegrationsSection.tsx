@@ -1,5 +1,22 @@
 'use client';
 
+/**
+ * ============================================================================
+ * DevMeet Frontend - Enterprise Integrations & Outbound Webhook Manager
+ * ============================================================================
+ * Manages third-party application connections and real-time webhook endpoints:
+ * 1. ATS (Applicant Tracking System) Integrations:
+ *    - Greenhouse, Lever, and Workday candidate pipeline synchronization.
+ * 2. Collaboration & Notifications:
+ *    - Slack channel notifications for completed interviews and score alerts.
+ * 3. Calendar Scheduling:
+ *    - Google Calendar and Outlook automated interview slot booking.
+ * 4. Outbound Webhook Dispatcher:
+ *    - Custom webhook registration (`session.completed`, `proctor.violation`, `feedback.generated`).
+ *    - Test payload firing (`POST /webhook`) with HMAC signing secret verification.
+ * ============================================================================
+ */
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

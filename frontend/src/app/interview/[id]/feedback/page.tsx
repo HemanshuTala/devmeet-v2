@@ -1,5 +1,22 @@
 'use client';
 
+/**
+ * @file page.tsx (Interview Performance Scorecard & Evaluation Report)
+ * @description Comprehensive post-interview feedback and analytics dashboard.
+ * Evaluates candidate performance across multiple dimensions:
+ * 1. Score Rings: Overall, Technical, and Communication percentages with animated counters.
+ * 2. Multi-Axis Skill Radar: Visualizes domain competencies using Recharts RadarChart
+ *    (Problem Solving, Code Quality, Edge Cases, STAR Framework, Scalability, Trade-offs).
+ * 3. Qualitative Breakdown: Key Strengths, Areas for Improvement, Actionable Steps (`FeedbackCards`).
+ * 4. Auditable Transcript: Complete turn-by-turn dialogue history (`TranscriptViewer`).
+ * 5. Two-Tiered Evaluation Engine:
+ *    - Primary: Remote Feedback Microservice (Groq LLM evaluation matrix)
+ *    - Secondary: Client-side content-aware fallback scoring (analyzes answer depth, question coverage,
+ *      Big-O keywords, code snippets) ensuring candidates receive a report even during network outages.
+ * 6. Export Capabilities: PDF download or standalone self-contained HTML report generation.
+ * 7. Celebration Confetti: Fires celebratory particle confetti for high scores (>= 70%).
+ */
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
@@ -18,6 +35,9 @@ import ScoreRing from './ScoreRing';
 import FeedbackCards from './FeedbackCards';
 import TranscriptViewer from './TranscriptViewer';
 
+/**
+ * Normalized feedback report data model.
+ */
 interface Feedback {
   overall_score: number;
   technical_score: number;
@@ -29,11 +49,15 @@ interface Feedback {
   pdf_url?: string;
 }
 
+/**
+ * InterviewFeedbackPage Component.
+ */
 export default function InterviewFeedbackPage() {
   const router = useRouter();
   const params = useParams();
   const sessionId = params.id as string;
 
+  // State management
   const [session, setSession] = useState<any>(null);
   const [turns, setTurns] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -43,8 +67,16 @@ export default function InterviewFeedbackPage() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Confetti canvas ref hook
   const confettiRef = useConfetti(showConfetti);
 
+  /**
+   * Main Report Hydration Effect:
+   * 1. Fetches interview session and turns from Orchestrator.
+   * 2. Attempts to fetch an existing report from Feedback Service.
+   * 3. If missing, requests Groq LLM evaluation via `feedbackApi.generate`.
+   * 4. If remote services are unreachable, triggers client-side heuristic evaluation.
+   */
   useEffect(() => {
     async function loadFeedback() {
       try {
@@ -53,7 +85,7 @@ export default function InterviewFeedbackPage() {
         setSession(s);
 
         let conversationTurns: any[] = [];
-        // Helper: extract plain question text from a turn (AI turns may be JSON-encoded when hints are present)
+        // Helper: extract plain question text from turn content (stripping JSON envelopes)
         const extractTurnContent = (turn: any): string => {
           const raw = turn.content || '';
           if (raw.startsWith('{') && turn.role !== 'candidate') {
@@ -75,15 +107,15 @@ export default function InterviewFeedbackPage() {
         }
         setTurns(conversationTurns);
 
-        // Step 1: Try fetching an already-generated report from the DB.
-        // If it doesn't exist yet (404 throws ApiError), generate it fresh.
+        // Step 1: Check if report was already computed and saved in DB
         let fb: any = null;
         try {
           fb = await feedbackApi.get(sessionId);
         } catch {
-          // 404 or network error — report not generated yet, proceed to generate below
+          // 404 or network error — report not generated yet, generate below
         }
 
+        // Step 2: Generate fresh report from LLM if not found
         if (!fb || !fb.overall_score) {
           try {
             fb = await feedbackApi.generate(sessionId, {
@@ -95,14 +127,15 @@ export default function InterviewFeedbackPage() {
                 role: t.role,
                 content: extractTurnContent(t),
               })),
-            });          } catch (generateErr) {
+            });
+          } catch (generateErr) {
             console.warn('Feedback Service generate failed, using local fallback:', generateErr);
             fb = null;
           }
         }
 
+        // If backend returned valid score, normalize and set
         if (fb && fb.overall_score != null) {
-          // Normalize API response → flat Feedback interface
           const normalized: Feedback = {
             overall_score: fb.overall_score ?? 0,
             technical_score: fb.scores?.problem_solving_score ?? fb.technical_score ?? 0,
@@ -115,10 +148,10 @@ export default function InterviewFeedbackPage() {
           };
           setFeedback(normalized);
           if (normalized.overall_score >= 70) setTimeout(() => setShowConfetti(true), 600);
-          return; // done — skip local fallback
+          return;
         }
 
-        // Step 2: Both API calls failed — run fully client-side scoring fallback
+        // Step 3: Local Content-Aware Fallback Engine (when Feedback API is offline)
         {
           console.warn('Feedback API unavailable. Running local client-side scoring fallback.');
           setUsingFallback(true);
@@ -133,6 +166,7 @@ export default function InterviewFeedbackPage() {
             (t: any) => (t.content || '').split(/\s+/).filter(Boolean).length >= 5
           ).length;
 
+          // Zero-score evaluation if candidate provided no meaningful interaction
           if (userMsgs.length < 2 || totalWords < 30 || meaningfulTurns < 2) {
             setFeedback({
               overall_score: 0,
@@ -152,21 +186,21 @@ export default function InterviewFeedbackPage() {
             return;
           }
 
-          // ── Content-aware local scoring (no random inflation) ──
+          // Compute quality metrics from participation
           const totalQuestions = conversationTurns.filter(
             (t: any) => t.role === 'interviewer' || t.role === 'assistant' || t.role === 'ai'
           ).length;
           const answeredQuestions = userMsgs.length;
           const coverageRatio = totalQuestions > 0 ? answeredQuestions / totalQuestions : 0;
 
-          // Base score from content depth (0-40 points)
+          // Base score from depth (0-40)
           const avgWordsPerAnswer = totalWords / Math.max(1, answeredQuestions);
           const depthScore = Math.min(40, Math.round(avgWordsPerAnswer * 0.4));
 
-          // Coverage score (0-30 points) — unanswered questions heavily penalized
+          // Coverage score (0-30)
           const coverageScore = Math.round(coverageRatio * 30);
 
-          // Quality signals (0-30 points)
+          // Technical quality keyword signals (0-30)
           const allContent = userMsgs.map((t: any) => (t.content || '').toLowerCase()).join(' ');
           let qualityScore = 0;
           if (allContent.includes('complexity') || allContent.includes('big o') || allContent.includes('o(n)'))
@@ -184,7 +218,7 @@ export default function InterviewFeedbackPage() {
             depthScore + coverageScore + (avgWordsPerAnswer > 30 ? 10 : 0)
           )));
 
-          const fb: Feedback = {
+          const localFb: Feedback = {
             overall_score: overallScore,
             technical_score: technicalScore,
             communication_score: communicationScore,
@@ -212,8 +246,8 @@ export default function InterviewFeedbackPage() {
                 : ['Cover all system design components: load balancing, caching, databases, monitoring.']),
             ],
           };
-          setFeedback(fb);
-          if (fb.overall_score >= 70) setTimeout(() => setShowConfetti(true), 600);
+          setFeedback(localFb);
+          if (localFb.overall_score >= 70) setTimeout(() => setShowConfetti(true), 600);
         }
       } catch (err: any) {
         setError(err.message || 'An unexpected error occurred while analyzing results.');
@@ -224,6 +258,9 @@ export default function InterviewFeedbackPage() {
     loadFeedback();
   }, [sessionId]);
 
+  /**
+   * Constructs skill radar chart dimensions according to interview domain.
+   */
   const radarData = useMemo(() => {
     if (!feedback || !session) return [];
     const t = session.interview_type;
@@ -257,6 +294,9 @@ export default function InterviewFeedbackPage() {
     ];
   }, [feedback, session]);
 
+  /**
+   * Exports feedback report to PDF, falling back to a self-contained responsive HTML report.
+   */
   const handleExportPDF = useCallback(async () => {
     if (!feedback || !sessionId) return;
     if (feedback.pdf_url && feedback.pdf_url.startsWith('http')) {
@@ -326,6 +366,7 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
     }
   }, [session, feedback, turns, sessionId]);
 
+  // Loading spinner during LLM evaluation
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -334,6 +375,7 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
     );
   }
 
+  // Error boundary fallback
   if (error || !session || !feedback) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
@@ -349,6 +391,7 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
     );
   }
 
+  // Letter grade mapping
   const scoreColor = (s: number) => (s >= 85 ? '#10b981' : s >= 70 ? '#3b82f6' : s >= 50 ? '#f59e0b' : '#ef4444');
   const gradeLetter =
     feedback.overall_score >= 90 ? 'A+' : feedback.overall_score >= 80 ? 'A' : feedback.overall_score >= 70 ? 'B' : feedback.overall_score >= 60 ? 'C' : 'D';
@@ -357,10 +400,11 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 py-8 px-4 sm:px-6 lg:px-8">
+      {/* Confetti celebration canvas */}
       {showConfetti && <canvas ref={confettiRef} className="fixed inset-0 z-[200] pointer-events-none" />}
 
       <div className="max-w-6xl mx-auto flex flex-col gap-6">
-        {/* Top bar */}
+        {/* Top navigation & action toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <button
             onClick={() => router.push('/dashboard')}
@@ -403,7 +447,7 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
           </div>
         </div>
 
-        {/* Header card */}
+        {/* Header Hero Card */}
         <section className="bg-white border border-blue-100 p-6 rounded-2xl flex flex-col md:flex-row items-start md:items-center gap-6 justify-between relative overflow-hidden shadow-sm">
           <div className="absolute top-0 right-0 w-72 h-72 bg-blue-50/50 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-50/30 rounded-full blur-2xl pointer-events-none" />
@@ -446,8 +490,9 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
           </div>
         </section>
 
-        {/* Scores + Radar */}
+        {/* Scores & Skill Radar Section */}
         <section className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Circular Score Rings */}
           <div className="lg:col-span-3 bg-white border border-blue-100 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-5">
               <Target className="w-5 h-5 text-blue-600" />
@@ -459,6 +504,8 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
               <ScoreRing score={feedback.communication_score} label="Communication" color="#0ea5e9" trackColor="rgba(186,230,253,0.8)" size={128} />
             </div>
           </div>
+
+          {/* Radar Chart */}
           <div className="lg:col-span-2 bg-white border border-blue-100 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <Zap className="w-5 h-5 text-blue-600" />
@@ -483,7 +530,7 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
           </div>
         </section>
 
-        {/* Percentile */}
+        {/* Peer Percentile Ranking Callout */}
         {feedback.percentile && (
           <section className="bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-200 p-5 rounded-2xl flex items-start gap-3 shadow-sm">
             <TrendingUp className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
@@ -536,10 +583,10 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
         {/* Strengths / Weaknesses / Recommendations */}
         <FeedbackCards strengths={feedback.strengths} weaknesses={feedback.weaknesses} recommendations={feedback.recommendations} />
 
-        {/* Transcript */}
+        {/* Transcript Accordion */}
         {turns.length > 0 && <TranscriptViewer turns={turns} interviewType={session.interview_type} />}
 
-        {/* Bottom nav */}
+        {/* Bottom Actions */}
         <div className="flex justify-center gap-3 pb-4">
           <button
             onClick={() => router.push('/dashboard')}

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, RefreshCw, VideoOff } from 'lucide-react';
+import { AlertTriangle, RefreshCw, VideoOff, ShieldCheck } from 'lucide-react';
 
 interface ProctorOverlaysProps {
   /** Active cheating / face detection warning message */
@@ -10,6 +10,10 @@ interface ProctorOverlaysProps {
   blurPerformanceWarning: string | null;
   /** Status flag indicating if MediaPipe & COCO-SSD models have finished loading */
   modelsLoaded: boolean;
+  /** Whether proctoring is operating in standard lightweight fallback mode */
+  isDegraded?: boolean;
+  /** Proctoring error message if any */
+  proctorError?: string | null;
   /** Whether the candidate's camera track is currently active */
   videoActive: boolean;
   /** Callback to dismiss non-critical warning banners */
@@ -18,13 +22,15 @@ interface ProctorOverlaysProps {
 }
 
 /**
- * Renders warning banners, camera-disabled overlays, and ML model initialization states.
+ * Renders warning banners, camera-disabled overlays, and non-blocking ML model status.
  * Operates on top of the candidate video canvas.
  */
 export function ProctorOverlays({
   activeWarning,
   blurPerformanceWarning,
   modelsLoaded,
+  isDegraded = false,
+  proctorError,
   videoActive,
   onDismissBlurWarning,
   size = 'sm',
@@ -33,6 +39,7 @@ export function ProctorOverlays({
 
   return (
     <>
+      {/* Real-time active violation / warning banner */}
       {activeWarning && (
         <div
           role="alert"
@@ -47,6 +54,7 @@ export function ProctorOverlays({
         </div>
       )}
 
+      {/* Performance Warning banner */}
       {blurPerformanceWarning && (
         <div
           role="alert"
@@ -70,22 +78,17 @@ export function ProctorOverlays({
         </div>
       )}
 
-      {!modelsLoaded && (
+      {/* Non-blocking initial loading spinner: ONLY show before timeout and if no error occurred */}
+      {!modelsLoaded && !isDegraded && !proctorError && (
         <div
-          className={`absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-2 p-3 text-center`}
+          className={`absolute bottom-2 left-2 z-20 bg-slate-900/80 backdrop-blur-md border border-slate-700/80 text-white rounded-lg px-2 py-1 flex items-center gap-1.5 text-[10px] font-medium shadow-md`}
         >
-          <RefreshCw className={`${isSmall ? 'w-4 h-4' : 'w-6 h-6'} text-blue-400 animate-spin`} />
-          <p className={`${isSmall ? 'text-[9px]' : 'text-xs'} text-blue-200 font-bold`}>
-            Initializing Proctor AI...
-          </p>
-          {!isSmall && (
-            <p className="text-[10px] text-slate-400 leading-relaxed max-w-[200px]">
-              Loading client-side gaze tracker and object proctor (0% server upload, private & fast)
-            </p>
-          )}
+          <RefreshCw className="w-2.5 h-2.5 text-indigo-400 animate-spin" />
+          <span>Calibrating AI Proctor...</span>
         </div>
       )}
 
+      {/* Camera disabled state */}
       {!videoActive && (
         <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center gap-2 z-30">
           <div

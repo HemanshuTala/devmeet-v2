@@ -1,3 +1,27 @@
+/**
+ * @file select.tsx
+ * @description Accessible Custom Dropdown Select Component Family for DevMeet.
+ *
+ * Built on `@radix-ui/react-select`:
+ * - Full WAI-ARIA compliant combobox/listbox implementation.
+ * - Supports keyboard navigation (Arrow Up/Down, Home/End, Enter/Space, Typeahead search).
+ * - Automatic viewport collision detection, positioning ('popper' or 'item-aligned'), and edge scrolling.
+ * - Portaled overlay preventing overflow clipping from parent containers.
+ * - Animated item check indicators and smooth state transitions.
+ *
+ * Subcomponents:
+ * - `Select`: Root controller managing selection state and open/closed dropdown state.
+ * - `SelectGroup`: Groups related options together under a common section.
+ * - `SelectValue`: Displays the selected value or placeholder text.
+ * - `SelectTrigger`: Interactive button that toggles the dropdown options list.
+ * - `SelectContent`: Portaled floating container rendering items and scroll buttons.
+ * - `SelectItem`: Selectable option item with checkmark indicator.
+ * - `SelectLabel`: Section header label for option groups.
+ * - `SelectSeparator`: Visual divider line between item groups.
+ *
+ * @module components/ui/select
+ */
+
 'use client';
 
 import * as React from 'react';
@@ -5,10 +29,31 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Root Select component from Radix UI. Controls dropdown state and value binding.
+ */
 const Select = SelectPrimitive.Root;
+
+/**
+ * SelectGroup component for grouping related options semantically.
+ */
 const SelectGroup = SelectPrimitive.Group;
+
+/**
+ * SelectValue component that displays the currently selected item label or placeholder.
+ */
 const SelectValue = SelectPrimitive.Value;
 
+/**
+ * SelectTrigger Component.
+ *
+ * Interactive button that opens the dropdown menu and displays the current value.
+ *
+ * @component
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>} props
+ * @param {React.Ref<HTMLButtonElement>} ref - Forwarded DOM reference.
+ * @returns {JSX.Element} Styled trigger button with chevron icon.
+ */
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
@@ -20,7 +65,7 @@ const SelectTrigger = React.forwardRef<
       'ring-offset-background placeholder:text-slate-400',
       'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400',
       'disabled:cursor-not-allowed disabled:opacity-50',
-      '[&>span]:line-clamp-1',
+      '[&>span]:line-clamp-1', // Truncate long labels with ellipsis to maintain height
       className
     )}
     {...props}
@@ -33,6 +78,11 @@ const SelectTrigger = React.forwardRef<
 ));
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
+/**
+ * SelectScrollUpButton Component.
+ *
+ * Appears when there are more items above the visible dropdown viewport.
+ */
 const SelectScrollUpButton = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
@@ -47,6 +97,11 @@ const SelectScrollUpButton = React.forwardRef<
 ));
 SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
 
+/**
+ * SelectScrollDownButton Component.
+ *
+ * Appears when there are more items below the visible dropdown viewport.
+ */
 const SelectScrollDownButton = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
@@ -61,6 +116,17 @@ const SelectScrollDownButton = React.forwardRef<
 ));
 SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
 
+/**
+ * SelectContent Component.
+ *
+ * Portaled floating list container that renders the selectable options.
+ *
+ * @component
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>} props
+ * @param {'popper' | 'item-aligned'} [props.position='popper'] - Positioning strategy.
+ * @param {React.Ref<HTMLDivElement>} ref - Forwarded DOM reference.
+ * @returns {JSX.Element} Portaled dropdown list with scroll controls and animations.
+ */
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
@@ -94,6 +160,11 @@ const SelectContent = React.forwardRef<
 ));
 SelectContent.displayName = SelectPrimitive.Content.displayName;
 
+/**
+ * SelectLabel Component.
+ *
+ * Displays a non-selectable category title or heading within a select menu.
+ */
 const SelectLabel = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Label>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
@@ -106,6 +177,17 @@ const SelectLabel = React.forwardRef<
 ));
 SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
+/**
+ * SelectItem Component.
+ *
+ * An individual option within the select list. Renders an active checkmark indicator when selected.
+ *
+ * @component
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>} props
+ * @param {string} props.value - Unique string value for the option.
+ * @param {React.Ref<HTMLDivElement>} ref - Forwarded DOM reference.
+ * @returns {JSX.Element} Interactive option row with indicator and label.
+ */
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
@@ -119,6 +201,7 @@ const SelectItem = React.forwardRef<
     )}
     {...props}
   >
+    {/* Left-aligned checkmark indicator visible only when item is active/selected */}
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
         <Check className="h-4 w-4 text-blue-600" />
@@ -129,6 +212,11 @@ const SelectItem = React.forwardRef<
 ));
 SelectItem.displayName = SelectPrimitive.Item.displayName;
 
+/**
+ * SelectSeparator Component.
+ *
+ * Visual divider horizontal rule between groups of options.
+ */
 const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>

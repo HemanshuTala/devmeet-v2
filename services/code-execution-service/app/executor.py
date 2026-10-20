@@ -1,3 +1,33 @@
+"""
+================================================================================
+CODE EXECUTION SERVICE — DOCKER SANDBOX ISOLATION & CLI EXECUTION ENGINE
+================================================================================
+Role & Responsibility:
+  This module implements the core isolation runtime for executing untrusted user code.
+  Running arbitrary code submitted by candidates over the internet is extremely dangerous:
+  a malicious user could attempt fork bombs, socket connections to internal databases,
+  reading environment variables, or filling server disk space.
+
+Multi-Layer Defense & Sandbox Hardening:
+  1. Container Resource Capping:
+     - `--memory=512m` & `--memswap=512m`: Prevents Out-Of-Memory (OOM) crashes on the host.
+     - `--cpus=0.5` (`cpu_quota=50000`): Limits thread execution to 50% of one core.
+     - `--pids-limit=64`: Thwarts fork bombs and infinite thread creation attacks.
+  2. Network & Filesystem Lockdown:
+     - `--network=none`: Disables all outbound and inbound networking (cannot ping or scrape).
+     - `--read-only`: Root filesystem is mounted strictly read-only.
+     - `--tmpfs=/tmp:size=32m,noexec,nosuid,nodev`: Small ephemeral RAM scratch space
+       for temporary compilation binaries, wiped immediately on exit.
+  3. Linux Kernel Privileges:
+     - `--security-opt=no-new-privileges:true`: Prevents `setuid` privilege escalation.
+     - `--cap-drop=ALL`: Strips all Linux root capabilities.
+  4. Dual Engine Architecture (SDK + CLI Fallback):
+     - Attempts Docker Python SDK socket communication first (`/var/run/docker.sock`).
+     - Automatically falls back to Docker CLI subprocess execution when running on
+       Windows Docker Desktop (where socket mounting can fail across WSL2 boundaries).
+================================================================================
+"""
+
 import asyncio
 import subprocess
 import sys
@@ -12,7 +42,7 @@ from .s3_service import s3_code_service
 
 logger = logging.getLogger("executor")
 
-# Try to import docker SDK — but we have a CLI fallback
+# Detect whether the Docker Python SDK is installed in the current environment
 try:
     import docker
     _DOCKER_SDK_AVAILABLE = True
@@ -22,14 +52,30 @@ except ImportError:
 
 
 class CodeExecutor:
+    """
+    Sandboxed execution engine coordinating Docker container lifecycle and fallback subprocesses.
+
+    Attributes:
+      timeout (int): Default execution timeout in seconds.
+      is_linux (bool): True if host system is running Linux.
+      client (docker.DockerClient | None): Active Docker SDK client if connected.
+      _docker_error (str | None): Diagnostic message if SDK connection failed.
+      _use_cli_fallback (bool): Set to True if Docker CLI was detected as an alternative.
+    """
+
     def __init__(self):
+        """
+        Initializes Docker client connection strategies:
+          1. Tries Docker Python SDK via env, socket, or TCP.
+          2. If SDK fails, tests whether Docker CLI is callable.
+        """
         self.timeout = 10
         self.is_linux = platform.system() == "Linux"
         self.client = None
         self._docker_error = None
         self._use_cli_fallback = False
 
-        # Try SDK first
+        # Attempt SDK connection first
         if _DOCKER_SDK_AVAILABLE:
             try:
                 self.client = self._create_docker_client()
@@ -39,7 +85,7 @@ class CodeExecutor:
                 self._docker_error = str(e)
                 logger.warning(f"CODE-03: Docker SDK failed: {e}. Trying CLI fallback...")
 
-        # If SDK failed, try CLI fallback
+        # If SDK connection was unsuccessful, check if Docker CLI works
         if self.client is None:
             if self._cli_available():
                 self._use_cli_fallback = True
@@ -49,7 +95,15 @@ class CodeExecutor:
                 logger.warning("CODE-03: Docker completely unavailable — code execution will return 503.")
 
     def _create_docker_client(self):
-        """Create Docker client — try multiple connection methods."""
+        """
+        Attempts multiple connection strategies to connect to the Docker daemon.
+
+        Connection Priority:
+          1. Explicit DOCKER_HOST environment variable.
+          2. Standard `docker.from_env()`.
+          3. Unix domain sockets (`/var/run/docker.sock`).
+          4. TCP sockets (Docker Desktop exposed on port 2375).
+        """
         errors = []
 
         # Method 1: DOCKER_HOST env var (set explicitly)
@@ -63,7 +117,7 @@ class CodeExecutor:
             except Exception as e:
                 errors.append(f"DOCKER_HOST={docker_host_env}: {e}")
 
-        # Method 2: from_env (respects DOCKER_HOST and socket)
+        # Method 2: from_env (respects DOCKER_HOST and default socket)
         try:
             c = docker.from_env()
             c.ping()
@@ -72,7 +126,7 @@ class CodeExecutor:
         except Exception as e:
             errors.append(f"from_env: {e}")
 
-        # Method 3: Explicit unix socket paths
+        # Method 3: Explicit Unix socket paths
         for sock in ["/var/run/docker.sock", "/run/docker.sock"]:
             if os.path.exists(sock):
                 try:
@@ -83,7 +137,7 @@ class CodeExecutor:
                 except Exception as e:
                     errors.append(f"unix://{sock}: {e}")
 
-        # Method 4: TCP (only works if Docker Desktop has 'Expose on port 2375' enabled)
+        # Method 4: TCP port 2375 (Docker Desktop setting)
         for tcp in ["tcp://host.docker.internal:2375", "tcp://localhost:2375", "tcp://172.17.0.1:2375"]:
             try:
                 c = docker.DockerClient(base_url=tcp)
@@ -96,21 +150,36 @@ class CodeExecutor:
         raise RuntimeError(f"Cannot connect to Docker daemon. Tried: {errors}")
 
     def _cli_available(self) -> bool:
-        """Check if docker CLI is available and can connect."""
+        """
+        Tests whether the `docker` CLI command is installed and can query daemon info.
+
+        Returns:
+          bool: True if `docker info` exits with code 0 within 5 seconds.
+        """
         try:
             result = subprocess.run(
                 ["docker", "info"],
                 capture_output=True,
-                timeout=5
+                timeout=5,
             )
             return result.returncode == 0
         except Exception:
             return False
 
-    async def _execute_via_cli(self, code: str, language: str, timeout: int, session_id: str = None) -> dict:
+    async def _execute_via_cli(
+        self,
+        code: str,
+        language: str,
+        timeout: int,
+        session_id: str = None,
+    ) -> dict:
         """
-        Execute code using docker CLI subprocess — works on Windows Docker Desktop
-        where the SDK socket connection fails but the CLI works fine.
+        Executes code using Docker CLI subprocess commands.
+
+        Architecture & Cross-Platform Value:
+          On Windows running Docker Desktop with WSL2, the Docker Python SDK often
+          encounters named pipe or localhost binding failures. Invoking the native
+          `docker run` CLI avoids these driver issues while maintaining full sandboxing.
         """
         language_configs = {
             "python":     {"image": "python:3.11-slim",   "ext": ".py",   "cmd": ["python", "-c", code]},
@@ -124,16 +193,18 @@ class CodeExecutor:
         config = language_configs.get(language.lower())
         if not config:
             return {
-                "success": False, "output": "",
+                "success": False,
+                "output": "",
                 "error": f"Unsupported language: {language}",
-                "execution_time": 0, "exit_code": -1,
+                "execution_time": 0,
+                "exit_code": -1,
             }
 
         start = time.time()
         tmp_dir = None
 
         try:
-            # For interpreted languages (Python, JS): pass code as CLI arg — no file needed
+            # Case 1: Interpreted languages (Python, JS) - pass code string directly as argument
             if config.get("cmd"):
                 docker_cmd = [
                     "docker", "run", "--rm",
@@ -163,8 +234,8 @@ class CodeExecutor:
                     exit_code = -1
                     timed_out = True
 
+            # Case 2: Compiled languages (Java, C++, Rust, Go) - write file and mount read-only
             else:
-                # Compiled languages: write to temp file, mount into container
                 tmp_dir = tempfile.mkdtemp()
                 fname = f"Main{config['ext']}"
                 fpath = os.path.join(tmp_dir, fname)
@@ -172,13 +243,10 @@ class CodeExecutor:
                     f.write(code)
 
                 if language.lower() == "cpp":
-                    # Compile to /tmp (writable tmpfs) — /code is read-only
                     inner_cmd = f"g++ -o /tmp/main /code/{fname} && /tmp/main"
                 elif language.lower() == "java":
-                    # Compile class files to /tmp, run from there
                     inner_cmd = f"javac -d /tmp /code/{fname} && java -cp /tmp Main"
                 elif language.lower() == "go":
-                    # go run streams directly — no output binary needed
                     inner_cmd = f"go run /code/{fname}"
                 elif language.lower() == "rust":
                     inner_cmd = f"rustc -o /tmp/main /code/{fname} && /tmp/main"
@@ -194,7 +262,7 @@ class CodeExecutor:
                     "--security-opt=no-new-privileges:true",
                     "--cap-drop=ALL",
                     "-v", f"{tmp_dir}:/code:ro",
-                    "--tmpfs=/tmp:size=64m",   # writable scratch space for compiled binaries
+                    "--tmpfs=/tmp:size=64m",   # Writable scratch RAM for compiled executable
                     config["image"],
                     "sh", "-c", inner_cmd,
                 ]
@@ -232,12 +300,14 @@ class CodeExecutor:
             if timed_out:
                 result["error"] = f"Execution timed out after {timeout}s."
 
-            # S3 snapshot upload
+            # Upload snapshot to S3 if session is tracked
             if session_id and s3_code_service.is_available():
                 try:
                     await s3_code_service.upload_code_snapshot(
-                        session_id=session_id, language=language,
-                        code=code, execution_result=result
+                        session_id=session_id,
+                        language=language,
+                        code=code,
+                        execution_result=result,
                     )
                 except Exception as e:
                     logger.error(f"S3 snapshot upload failed: {e}")
@@ -246,13 +316,15 @@ class CodeExecutor:
 
         except Exception as e:
             return {
-                "success": False, "output": "",
+                "success": False,
+                "output": "",
                 "error": str(e),
                 "execution_time": time.time() - start,
-                "exit_code": -1, "timed_out": False,
+                "exit_code": -1,
+                "timed_out": False,
             }
         finally:
-            # Clean up temp dir
+            # Purge temporary directory on host
             if tmp_dir:
                 import shutil
                 try:
@@ -265,15 +337,25 @@ class CodeExecutor:
         code: str,
         language: str,
         timeout: int = 10,
-        session_id: str = None
+        session_id: str = None,
     ) -> dict:
-        """Execute code in a Docker sandbox (SDK or CLI fallback)."""
+        """
+        Executes candidate code in a secure container sandbox.
 
-        # Use CLI fallback if SDK is not connected
+        Parameters:
+          code (str): Source code string.
+          language (str): Target runtime language.
+          timeout (int): Timeout in seconds (default: 10s).
+          session_id (Optional[str]): Active interview session identifier.
+
+        Returns:
+          dict: Result payload containing 'success', 'output', 'error', 'execution_time',
+                'memory_used_mb', and 'exit_code'.
+        """
+        # Cascade to CLI execution if Python SDK client is unavailable
         if self.client is None:
             if self._use_cli_fallback:
                 return await self._execute_via_cli(code, language, timeout, session_id)
-            # Completely unavailable
             return {
                 "success": False,
                 "output": "",
@@ -286,7 +368,7 @@ class CodeExecutor:
                 "timed_out": False,
             }
 
-        # Use SDK path
+        # Language configuration map for Docker SDK
         language_configs = {
             "python":     {"image": "python:3.11-slim",  "command": ["python", "-c"],  "file_extension": ".py"},
             "javascript": {"image": "node:20-slim",       "command": ["node",   "-e"],  "file_extension": ".js"},
@@ -305,10 +387,11 @@ class CodeExecutor:
         temp_file = None
 
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix=config["file_extension"], delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=config["file_extension"], delete=False) as f:
                 f.write(code)
                 temp_file = f.name
 
+            # Optional compilation phase for C++, Java, Rust
             if config.get("compile"):
                 compile_cmd = config.get("compile_command", [])
                 if compile_cmd:
@@ -317,29 +400,44 @@ class CodeExecutor:
                     compile_cmd = config["command"] + [temp_file]
                 try:
                     self.client.containers.run(
-                        config["image"], compile_cmd, remove=True,
-                        mem_limit="256m", memswap_limit="256m", cpu_quota=50000,
-                        pids_limit=50, timeout=timeout,
-                        security_opt=["no-new-privileges:true"], cap_drop=["ALL"],
+                        config["image"],
+                        compile_cmd,
+                        remove=True,
+                        mem_limit="256m",
+                        memswap_limit="256m",
+                        cpu_quota=50000,
+                        pids_limit=50,
+                        timeout=timeout,
+                        security_opt=["no-new-privileges:true"],
+                        cap_drop=["ALL"],
                     )
                 except Exception as e:
                     return {
-                        "success": False, "output": "",
+                        "success": False,
+                        "output": "",
                         "error": f"Compilation error: {str(e)}",
                         "execution_time": time.time() - start_time,
-                        "memory_used_mb": None, "exit_code": 1, "timed_out": False,
+                        "memory_used_mb": None,
+                        "exit_code": 1,
+                        "timed_out": False,
                     }
 
+            # Hardened sandbox security flags for container execution
             run_kwargs = dict(
-                detach=True, mem_limit="256m", memswap_limit="256m",
-                cpu_quota=50000, pids_limit=50, network_disabled=True,
+                detach=True,
+                mem_limit="256m",
+                memswap_limit="256m",
+                cpu_quota=50000,
+                pids_limit=50,
+                network_disabled=True,
                 security_opt=["no-new-privileges:true"],
-                cap_drop=["ALL"], read_only=True,
+                cap_drop=["ALL"],
+                read_only=True,
                 tmpfs={"/tmp": "size=32m,noexec,nosuid,nodev"},
             )
 
             if language.lower() in ("java", "cpp", "rust"):
-                run_kwargs["volumes"] = {'/tmp': {'bind': '/tmp', 'mode': 'rw'}}
+                run_kwargs["volumes"] = {"/tmp": {"bind": "/tmp", "mode": "rw"}}
                 run_kwargs["read_only"] = False
                 if language.lower() == "java":
                     cmd = ["java", "-cp", "/tmp", "Main"]
@@ -352,8 +450,10 @@ class CodeExecutor:
                 run_kwargs["tmpfs"] = {"/tmp": "size=32m,noexec"}
                 cmd = config["command"] + [code]
 
+            # Spawn sandboxed container
             container_obj = self.client.containers.run(config["image"], cmd, **run_kwargs)
 
+            # Wait for execution completion or timeout
             timed_out = False
             try:
                 result_data = container_obj.wait(timeout=timeout)
@@ -362,9 +462,11 @@ class CodeExecutor:
                 timed_out = True
                 exit_code = -1
 
+            # Harvest stdout and stderr logs
             raw_logs = container_obj.logs(stdout=True, stderr=True)
             output_text = raw_logs.decode("utf-8", errors="replace") if isinstance(raw_logs, bytes) else str(raw_logs)
 
+            # Sample peak memory utilization
             memory_used_mb = None
             try:
                 stats = container_obj.stats(stream=False)
@@ -375,11 +477,16 @@ class CodeExecutor:
 
         except Exception as e:
             return {
-                "success": False, "output": "", "error": str(e),
+                "success": False,
+                "output": "",
+                "error": str(e),
                 "execution_time": time.time() - start_time,
-                "memory_used_mb": None, "exit_code": -1, "timed_out": False,
+                "memory_used_mb": None,
+                "exit_code": -1,
+                "timed_out": False,
             }
         finally:
+            # Force removal of ephemeral container and temp file
             if container_obj:
                 try:
                     container_obj.remove(force=True)
@@ -397,8 +504,10 @@ class CodeExecutor:
                 "success": False,
                 "output": output_text.strip(),
                 "error": f"Execution timed out after {timeout}s.",
-                "execution_time": execution_time, "memory_used_mb": memory_used_mb,
-                "exit_code": exit_code, "timed_out": True,
+                "execution_time": execution_time,
+                "memory_used_mb": memory_used_mb,
+                "exit_code": exit_code,
+                "timed_out": True,
             }
         else:
             success = (exit_code == 0)
@@ -406,15 +515,20 @@ class CodeExecutor:
                 "success": success,
                 "output": output_text.strip(),
                 "error": output_text.strip() if not success else None,
-                "execution_time": execution_time, "memory_used_mb": memory_used_mb,
-                "exit_code": exit_code, "timed_out": timed_out,
+                "execution_time": execution_time,
+                "memory_used_mb": memory_used_mb,
+                "exit_code": exit_code,
+                "timed_out": timed_out,
             }
 
+        # S3 snapshot persistence
         if session_id and s3_code_service.is_available():
             try:
                 await s3_code_service.upload_code_snapshot(
-                    session_id=session_id, language=language,
-                    code=code, execution_result=result
+                    session_id=session_id,
+                    language=language,
+                    code=code,
+                    execution_result=result,
                 )
             except Exception as e:
                 logger.error(f"Failed to upload code snapshot to S3: {e}")
@@ -422,4 +536,5 @@ class CodeExecutor:
         return result
 
 
+# Singleton executor instance
 executor = CodeExecutor()

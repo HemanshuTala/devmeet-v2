@@ -1,5 +1,19 @@
 'use client';
 
+/**
+ * ============================================================================
+ * DevMeet Frontend - Date Picker Calendar Grid Component
+ * ============================================================================
+ * Custom styled calendar grid built on top of `react-day-picker`:
+ * 1. Accessibility:
+ *    - Full keyboard navigation and ARIA selected/disabled state support.
+ * 2. Visual Theme Integration:
+ *    - Integrates DevMeet Tailwind color tokens, ghost button states, and range selection pills.
+ * 3. Icon Controls:
+ *    - Smooth month navigation buttons via Lucide Chevron icons.
+ * ============================================================================
+ */
+
 import * as React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
@@ -8,6 +22,9 @@ import { buttonVariants } from '@/components/ui/button';
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
+/**
+ * Interactive calendar component for selecting dates and filtering analytics intervals.
+ */
 function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
   return (
     <DayPicker

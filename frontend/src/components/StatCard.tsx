@@ -1,18 +1,44 @@
+/**
+ * @file StatCard.tsx
+ * @description KPI Metric Summary Card Component with Trend Badges for DevMeet.
+ *
+ * Responsibilities:
+ * - Displays a high-level statistical metric (e.g. Total Interviews, Average Score, Completion Rate).
+ * - Themed icon box using color schemes ('blue' | 'green' | 'purple' | 'orange').
+ * - Supports trend indicators with directional arrows (↑ / ↓) and percentage/string badges.
+ * - Memoized with `React.memo` to avoid unnecessary re-renders in analytics and dashboard grids.
+ *
+ * @module components/StatCard
+ */
+
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
 
+/**
+ * Props accepted by the StatCard component.
+ */
 interface StatCardProps {
+  /** Metric category label (e.g., "TOTAL SESSIONS"). */
   label?: string;
-  title?: string;   // alias for label
+  /** Alternative alias for `label`. */
+  title?: string;
+  /** Primary numeric or formatted metric value (e.g. 42, "87%"). */
   value: string | number;
+  /** Lucide icon component to render in the card's badge. */
   icon: LucideIcon;
+  /** Color theme palette ('blue' | 'green' | 'purple' | 'orange'). Defaults to 'blue'. */
   color?: 'blue' | 'green' | 'purple' | 'orange';
+  /** String representation of change (e.g. "+15% from last week"). */
   change?: string;
+  /** Whether the change represents a positive/favorable metric movement (green) or unfavorable (red). */
   changePositive?: boolean;
-  trend?: number;   // numeric trend value (e.g. +12 → shown as "+12%")
+  /** Numeric delta value used to calculate formatted badge if `change` is omitted (e.g. +12 -> "+12%"). */
+  trend?: number;
+  /** Optional secondary subtitle or description text below the value. */
   subtitle?: string;
 }
 
+/** Color palette definitions for backgrounds, borders, and icon tones */
 const colorMap = {
   blue: {
     iconBg: '#eff6ff',
@@ -40,6 +66,13 @@ const colorMap = {
   },
 };
 
+/**
+ * Memoized StatCard Component.
+ *
+ * @component
+ * @param {StatCardProps} props
+ * @returns {JSX.Element} Metric card container with icon, typography, and trend pill.
+ */
 export default React.memo(function StatCard({
   label,
   title,
@@ -52,9 +85,9 @@ export default React.memo(function StatCard({
   subtitle,
 }: StatCardProps) {
   const c = colorMap[color];
-  // Support both label and title prop names
+  // Support both label and title prop aliases
   const displayLabel = label ?? title ?? '';
-  // Support both change (string) and trend (number) for the badge
+  // Support both explicit change string and numeric trend auto-formatting
   const changeText = change ?? (trend != null ? `${trend > 0 ? '+' : ''}${trend}%` : undefined);
   const isPositive = changePositive ?? (trend != null ? trend >= 0 : undefined);
 
@@ -73,7 +106,7 @@ export default React.memo(function StatCard({
       }}
       className="hover:border-[#d0d0d0] hover:shadow-md cursor-default"
     >
-      {/* Icon */}
+      {/* Icon Badge */}
       <div
         style={{
           width: 42,
@@ -90,8 +123,9 @@ export default React.memo(function StatCard({
         <Icon style={{ width: 18, height: 18, color: c.iconColor }} />
       </div>
 
-      {/* Text */}
+      {/* Typography & Metrics */}
       <div style={{ minWidth: 0 }}>
+        {/* Metric Label */}
         <p
           style={{
             fontSize: 11,
@@ -105,6 +139,8 @@ export default React.memo(function StatCard({
         >
           {displayLabel}
         </p>
+
+        {/* Primary Metric Value */}
         <p
           style={{
             fontSize: 28,
@@ -117,6 +153,8 @@ export default React.memo(function StatCard({
         >
           {value}
         </p>
+
+        {/* Optional Change / Trend Pill */}
         {changeText && (
           <span
             style={{
@@ -137,6 +175,8 @@ export default React.memo(function StatCard({
             <span>{changeText}</span>
           </span>
         )}
+
+        {/* Optional Subtitle */}
         {subtitle && (
           <p
             style={{

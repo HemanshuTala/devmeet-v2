@@ -64,3 +64,14 @@
 - [x] **Phase 10: Verification & Build Checks**
   - `npx tsc --noEmit` verified with 0 errors.
   - Verified build readiness.
+
+- [x] **Phase 11: Interview Startup & Proctoring Screen Stabilization**
+  - **Root Cause Analysis**: Identified 5 interrelated defects across client-side ML asset loading, fullscreen security gestures, undefined LiveKit identities, and blocking question generation; authored `INTERVIEW_STARTUP_ROOT_CAUSE.md`.
+  - **Unblocked Proctoring Camera**: Added 4.5s bounded timeout in `useProctoring.ts`. If ML downloads time out or fail, proctoring falls back gracefully to standard mode without blocking the camera preview.
+  - **Non-Blocking Proctor Overlays**: Updated `ProctorOverlays.tsx` to replace the opaque full-frame blocking spinner with a subtle, non-intrusive bottom status badge that clears automatically.
+  - **Guaranteed LiveKit Identity**: Added safe participant fallback in `useWebRTC.ts` and `VideoPanel.tsx`, preventing HTTP 400 Bad Request errors on token generation. Added 6s handshake timeout race and prevented remote relay disconnections from killing candidate camera stream.
+  - **Non-Blocking Studio Launch**: Decoupled `sessionApi.start` from question streaming in `interview/[id]/page.tsx`. Synchronously executed `enterFullscreen()` within the user click gesture. Transferred candidate into active studio within 900ms.
+  - **Candidate Self-Healing Recovery**: Added inline "Generate Question" retry button in `ChatPanel.tsx` if first turn generation fails.
+  - **Themed UI Experience**: Redesigned `InterviewStartScreen.tsx` with dot-matrix grid and diagnostic pre-flight cards; created `StudioLaunchingScreen.tsx` with animated neural pulse waves.
+  - **Codebase Integrity**: Fixed template literal syntax error in `lib/api.ts`, Radix draggable style cast in `RecentSessions.tsx`, and JSX runtime imports in `SecuritySection.tsx`.
+  - **Automated Verification**: `npx tsc --noEmit` passing with 0 errors. Authored `INTERVIEW_STARTUP_TEST_PLAN.md` and `INTERVIEW_STARTUP_FIX_LOG.md`.

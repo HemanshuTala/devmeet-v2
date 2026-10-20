@@ -1,14 +1,34 @@
+/**
+ * @file useWebRTC.ts (LiveKit WebRTC Video Streaming & Network Telemetry Hook)
+ * @description Manages WebRTC signaling, token acquisition from Video Service, LiveKit room connection,
+ * simulated network telemetry, periodic telemetry reporting, and signal quality classification.
+ * Supports both real LiveKit servers and local mock simulation mode for standalone offline development.
+ *
+ * Used by: VideoPanel
+ */
+
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { videoApi } from '@/lib/api';
 
+/** Connection lifecycle states */
 type ConnStatus = 'disconnected' | 'connecting' | 'connected' | 'failed';
 
+/** Signal quality descriptor with visual colors and status labels */
 interface SignalQuality {
   label: string;
   color: string;
   dot: string;
 }
 
+/**
+ * useWebRTC Hook.
+ *
+ * @param sessionId - Unique interview session identifier
+ * @param userId - Unique candidate user identifier
+ * @param userDisplayName - Candidate name displayed on video track
+ * @param permissionStatus - Browser media permission status ('granted' triggers connection)
+ * @param addLog - Logging callback for diagnostics
+ */
 export function useWebRTC(
   sessionId: string,
   userId: string,
@@ -23,10 +43,16 @@ export function useWebRTC(
   const [isMockMode, setIsMockMode] = useState(true);
   const roomRef = useRef<any>(null);
 
+  // Network telemetry metrics
   const [latency, setLatency] = useState(45);
   const [packetLoss, setPacketLoss] = useState(0.1);
   const [bandwidth, setBandwidth] = useState(4.2);
 
+  /**
+   * Connects to the LiveKit video room with retry logic (up to 3 attempts).
+   * Fetches room token from Video Service, instantiates LiveKit client Room,
+   * configures adaptive stream and dynacast, and listens for room events.
+   */
   const connectToVideoRoom = useCallback(async () => {
     if (permissionStatus !== 'granted') return;
     setConnStatus('connecting');
@@ -34,10 +60,13 @@ export function useWebRTC(
     const roomName = `session_${sessionId}`;
     let success = false;
 
+    const safeUserId = userId || `candidate_${sessionId.slice(0, 8)}`;
+    const safeDisplayName = userDisplayName || 'Candidate';
+
     for (let attempt = 1; attempt <= 3 && !success; attempt++) {
       try {
         addLog(`Attempt ${attempt}/3...`);
-        const res = await videoApi.getToken(roomName, userId, userDisplayName);
+        const res = await videoApi.getToken(roomName, safeUserId, safeDisplayName);
         const url: string = res.livekit_url;
         const token: string = res.token;
         const isMock: boolean = !!res.mock;
@@ -46,14 +75,17 @@ export function useWebRTC(
         setIsMockMode(isMock);
 
         if (!isMock && url && token) {
-          // Dynamically import livekit-client to avoid SSR issues
+          // Dynamically import livekit-client to prevent SSR hydration errors
           const { Room, RoomEvent } = await import('livekit-client').catch(() => ({
             Room: null,
             RoomEvent: null,
           }));
 
           if (Room && RoomEvent) {
-            const room = new Room();
+            const room = new Room({
+              adaptiveStream: true,
+              dynacast: true,
+            });
             roomRef.current = room;
 
             room.on(RoomEvent.Disconnected, () => {
@@ -69,7 +101,12 @@ export function useWebRTC(
               addLog('Reconnected to LiveKit room.');
             });
 
-            await room.connect(url, token);
+            // 6-second connection timeout race
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('LiveKit connection handshake timed out')), 6000)
+            );
+
+            await Promise.race([room.connect(url, token), timeoutPromise]);
             addLog(`Connected to LiveKit room: ${roomName}`);
           } else {
             addLog('livekit-client not available — running in simulation mode.');
@@ -83,16 +120,16 @@ export function useWebRTC(
       } catch (err: any) {
         addLog(`Attempt ${attempt} failed: ${err.message}`);
         setRetryCount(attempt);
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 600));
       }
     }
     if (!success) {
       setConnStatus('failed');
-      addLog('All attempts failed. Using audio-only fallback.');
+      addLog('LiveKit remote relay unavailable. Local camera & proctor active.');
     }
   }, [permissionStatus, sessionId, userId, userDisplayName, addLog]);
 
-  // Disconnect from LiveKit room on unmount
+  // Clean disconnection from LiveKit room on unmount
   useEffect(() => {
     return () => {
       if (roomRef.current) {
@@ -102,11 +139,15 @@ export function useWebRTC(
     };
   }, []);
 
+  // Connect automatically once media permissions are granted
   useEffect(() => {
     if (permissionStatus === 'granted') connectToVideoRoom();
   }, [permissionStatus, connectToVideoRoom]);
 
-  // Network quality simulation (used in mock mode; real stats come from LiveKit SDK in live mode)
+  /**
+   * Telemetry fluctuation loop:
+   * Periodically varies latency, packet loss, and bandwidth for realistic simulation stats.
+   */
   useEffect(() => {
     if (connStatus !== 'connected') return;
     const interval = setInterval(() => {
@@ -117,7 +158,10 @@ export function useWebRTC(
     return () => clearInterval(interval);
   }, [connStatus]);
 
-  // Report quality to backend
+  /**
+   * Periodic network quality reporting to Video Service:
+   * Reports telemetry every 10 seconds for session analytics and monitoring.
+   */
   useEffect(() => {
     if (connStatus !== 'connected') return;
     const roomName = `session_${sessionId}`;
@@ -131,6 +175,9 @@ export function useWebRTC(
     return () => clearInterval(interval);
   }, [connStatus, sessionId, userId, latency, packetLoss, bandwidth]);
 
+  /**
+   * Classifies network connection quality into human-readable tiers with color coding.
+   */
   const getSignalQuality = (): SignalQuality => {
     if (latency < 60 && packetLoss < 0.5 && bandwidth >= 3) return { label: 'Excellent', color: 'text-emerald-400', dot: 'bg-emerald-400' };
     if (latency < 100 && packetLoss < 1.5 && bandwidth >= 1.5) return { label: 'Good', color: 'text-blue-400', dot: 'bg-blue-400' };

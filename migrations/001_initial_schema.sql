@@ -1,10 +1,28 @@
--- DevMeet v2.0 Database Schema
--- Initial migration
+-- ============================================================================
+-- DevMeet v2.0 PostgreSQL Database Architecture — Migration 001 (Initial Schema)
+-- ============================================================================
+-- This migration bootstraps the relational schema for DevMeet:
+-- 1. Extensions:
+--    - Enables "uuid-ossp" for server-side cryptographically secure UUIDv4 generation.
+-- 2. Domain Entities:
+--    - user_profiles: Core authentication and candidate portfolio identity.
+--    - user_plans: Candidate subscription entitlements ('free', 'pro', 'enterprise').
+--    - usage_quotas: Daily/monthly interview counters and reset tracking.
+--    - sessions: Orchestrated interview sessions with status lifecycle state machine.
+--    - conversation_turns: Sequential AI and candidate dialogue turns.
+--    - code_submissions: Candidate code execution outputs, test counts, memory/time limits.
+--    - feedback_reports: Comprehensive AI evaluation scores (0-100 rubric) and JSON breakdown.
+--    - audit_logs: Platform-wide security audit trail tracking admin and user interventions.
+-- 3. Referential Integrity & Performance:
+--    - ON DELETE CASCADE propagates user/session deletions cleanly.
+--    - Dedicated indexes on emails, session states, turn ordering, and audit timestamps.
+-- ============================================================================
 
--- Enable UUID extension
+-- Enable native UUID extension for primary key generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- User Profiles Table
+-- ─── User Profiles Table ─────────────────────────────────────────────────────
+-- Stores registered candidate credentials, display names, profile metadata, and notification flags.
 CREATE TABLE user_profiles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -20,7 +38,8 @@ CREATE TABLE user_profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- User Plans Table
+-- ─── User Plans Table ────────────────────────────────────────────────────────
+-- Tracks the candidate's active subscription tier (Free, Pro, Enterprise).
 CREATE TABLE user_plans (
     user_id UUID PRIMARY KEY REFERENCES user_profiles(id) ON DELETE CASCADE,
     plan VARCHAR(20) NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'enterprise')),
@@ -28,7 +47,8 @@ CREATE TABLE user_plans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Usage Quotas Table
+-- ─── Usage Quotas Table ──────────────────────────────────────────────────────
+-- Enforces tier-based rate limits (e.g. Free tier 3 interviews per month).
 CREATE TABLE usage_quotas (
     user_id UUID PRIMARY KEY REFERENCES user_profiles(id) ON DELETE CASCADE,
     interviews_today SMALLINT NOT NULL DEFAULT 0,
@@ -38,7 +58,8 @@ CREATE TABLE usage_quotas (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Sessions Table
+-- ─── Sessions Table ──────────────────────────────────────────────────────────
+-- Represents an individual candidate interview session and its state machine progression.
 CREATE TABLE sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
@@ -52,7 +73,8 @@ CREATE TABLE sessions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Conversation Turns Table
+-- ─── Conversation Turns Table ────────────────────────────────────────────────
+-- Stores conversational dialogue turns exchanged between the candidate and the AI interviewer.
 CREATE TABLE conversation_turns (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -63,7 +85,8 @@ CREATE TABLE conversation_turns (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Code Submissions Table
+-- ─── Code Submissions Table ──────────────────────────────────────────────────
+-- Records code executions evaluated inside the isolated Docker sandbox environment.
 CREATE TABLE code_submissions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -80,7 +103,8 @@ CREATE TABLE code_submissions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Feedback Reports Table
+-- ─── Feedback Reports Table ──────────────────────────────────────────────────
+-- Contains AI scoring rubrics (0-100 scale), breakdown text, and PDF presigned links.
 CREATE TABLE feedback_reports (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     session_id UUID UNIQUE NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -96,7 +120,8 @@ CREATE TABLE feedback_reports (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Audit Logs Table
+-- ─── Audit Logs Table ────────────────────────────────────────────────────────
+-- Immutable audit ledger for forensic security tracking and compliance.
 CREATE TABLE audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
@@ -109,7 +134,8 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Indexes
+-- ─── High-Performance B-Tree Indexes ──────────────────────────────────────────
+-- Optimize frequent filter queries, foreign key lookups, and chronological sorting
 CREATE INDEX idx_user_profiles_email ON user_profiles(email);
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX idx_sessions_status ON sessions(status);

@@ -1,10 +1,28 @@
+/**
+ * ============================================================================
+ * DevMeet Frontend - Text Input Component Primitive
+ * ============================================================================
+ * Standardized single-line text input field used across candidate forms,
+ * search boxes, and setting dialogs.
+ *
+ * Capabilities:
+ * - Forwarded ref support (`React.forwardRef`) for React Hook Form integration.
+ * - Semantic error ring styling (`error: true` triggers rose-colored validation borders).
+ * - Focus-visible ring highlights matching the DevMeet blue design system.
+ * ============================================================================
+ */
+
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  /** When true, highlights input with error border styling */
   error?: boolean;
 }
 
+/**
+ * Text input component supporting HTML5 input types.
+ */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, error, ...props }, ref) => (
     <input

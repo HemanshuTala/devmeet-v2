@@ -1,15 +1,39 @@
+/**
+ * @file loader.tsx
+ * @description Interactive Brand Loading Spinner and Fullscreen Progress Overlay.
+ *
+ * Provides a modern, animated loading indicator powered by Framer Motion:
+ * 1. `FancyBrainLoader`: Concentric ripple waves pulsing around a central neural AI node.
+ * 2. `BouncingDots`: Three-dot staggered bouncing wave indicator.
+ * 3. Stepwise cycling status messages ("Connecting to services...", "Loading your data...", etc.).
+ * 4. Modal/Fullscreen overlay option with background blur and card elevation.
+ *
+ * @module components/ui/loader
+ */
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+/**
+ * Props accepted by the Loader component.
+ */
 interface LoaderProps {
+  /** Size preset scaling the central brain node and bounding box ('sm' | 'md' | 'lg' | 'xl'). Defaults to 'md'. */
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Optional custom CSS classes applied to the root container. */
   className?: string;
+  /** When true, renders inside a fixed full-viewport overlay with blurred backdrop. */
   fullscreen?: boolean;
+  /** Static text to display below the loader. When omitted, cycles through `LOAD_STEPS`. */
   text?: string;
 }
 
+/**
+ * Sequential loading messages displayed to the user when no custom static text is provided.
+ * Cycles every 1600ms to convey active system progress during prolonged async operations.
+ */
 const LOAD_STEPS = [
   'Connecting to services...',
   'Loading your data...',
@@ -17,14 +41,24 @@ const LOAD_STEPS = [
   'Almost ready...',
 ];
 
-/* ─── Fancy Ripple/Brain Loader ───────────────────────────────────────────── */
+/**
+ * FancyBrainLoader Component.
+ *
+ * Renders the central AI icon with expanding concentric ripple rings.
+ *
+ * @param {Object} props
+ * @param {'sm' | 'md' | 'lg' | 'xl'} [props.size='md'] - Dimensions preset.
+ * @returns {JSX.Element} Animated ripple & pulse icon container.
+ */
 function FancyBrainLoader({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' }) {
+  // Determine outer container dimensions based on size preset
   const dim =
     size === 'sm' ? 'w-10 h-10'
     : size === 'md' ? 'w-16 h-16'
     : size === 'lg' ? 'w-24 h-24'
     : 'w-32 h-32';
 
+  // Determine inner SVG dimensions
   const iconDim =
     size === 'sm' ? 14
     : size === 'md' ? 20
@@ -33,7 +67,7 @@ function FancyBrainLoader({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' })
 
   return (
     <div className={`relative flex items-center justify-center ${dim} mb-2`}>
-      {/* Concentric expanding ripple rings */}
+      {/* Concentric expanding ripple rings with staggered delay (0s, 0.65s, 1.3s) */}
       {[0, 1, 2].map((i) => (
         <motion.div
           key={i}
@@ -52,7 +86,7 @@ function FancyBrainLoader({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' })
         />
       ))}
 
-      {/* Central brain/AI node gradient with pulse scale animation */}
+      {/* Central brain/AI node gradient with smooth heartbeat scale pulse */}
       <motion.div
         className="relative z-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20"
         style={{
@@ -69,6 +103,7 @@ function FancyBrainLoader({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' })
           ease: 'easeInOut',
         }}
       >
+        {/* Custom AI / Neural Network Node vector graphic */}
         <svg
           width={iconDim}
           height={iconDim}
@@ -90,7 +125,13 @@ function FancyBrainLoader({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' })
   );
 }
 
-/* ─── Wave Bouncing Dots (fancy progress replacement) ──────────────────────── */
+/**
+ * BouncingDots Component.
+ *
+ * Renders three staggered bouncing dots for secondary motion feedback.
+ *
+ * @returns {JSX.Element}
+ */
 function BouncingDots() {
   return (
     <div className="flex gap-1.5 items-center justify-center py-2 h-4">
@@ -113,22 +154,32 @@ function BouncingDots() {
   );
 }
 
-/* ─── Main Loader ────────────────────────────────────────────────────────── */
+/**
+ * Primary Loader Component for DevMeet.
+ *
+ * @component
+ * @param {LoaderProps} props - Configuration options.
+ * @returns {JSX.Element} Inline or Fullscreen modal loading widget.
+ */
 export function Loader({ size = 'md', className = '', fullscreen = false, text }: LoaderProps) {
+  // Step index for looping status messages when static `text` is not provided
   const [stepIdx, setStepIdx] = useState(0);
 
+  // Set up periodic step change timer (1600ms per step)
   useEffect(() => {
-    if (text) return;
+    if (text) return; // Skip cycling if caller supplied explicit status text
     const id = setInterval(() => {
       setStepIdx((p) => (p + 1) % LOAD_STEPS.length);
     }, 1600);
     return () => clearInterval(id);
   }, [text]);
 
+  // Main loader body containing brain graphic, bouncing dots, and text transition
   const content = (
     <div className={`flex flex-col items-center gap-4 ${className}`}>
       <FancyBrainLoader size={size} />
 
+      {/* Hide bouncing dots on miniature 'sm' size to prevent visual clutter */}
       {size !== 'sm' && <BouncingDots />}
 
       <div style={{ minHeight: 20, textAlign: 'center' }}>
@@ -153,6 +204,7 @@ export function Loader({ size = 'md', className = '', fullscreen = false, text }
     </div>
   );
 
+  // When fullscreen is enabled, render in a fixed viewport-spanning backdrop with elevated white card
   if (fullscreen) {
     return (
       <div

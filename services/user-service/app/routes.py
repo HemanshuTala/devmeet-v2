@@ -1,3 +1,26 @@
+"""
+User Service API Routes and Handlers.
+=====================================
+Prefix: `/api/v1/users`
+This module defines the REST API endpoints for user profile management,
+preferences, subscription plans, quota consumption, GDPR data portability,
+account soft deletion, and public leaderboard rankings.
+
+Key Endpoints:
+--------------
+- GET  `/me`               : Retrieves candidate profile details.
+- PUT  `/me`               : Updates profile (display name, bio, target companies, skills).
+- GET  `/me/quota`         : Checks daily and monthly interview quota remaining.
+- POST `/me/quota/increment`: Atomically consumes an interview credit (called by orchestrator).
+- GET  `/me/plan`          : Retrieves current billing tier.
+- PUT  `/me/plan`          : Upgrades/downgrades plan tier mid-cycle.
+- POST `/me/avatar`        : Uploads profile picture with virus scanning via `file-service`.
+- PUT  `/{user_id}/plan`   : Internal webhook endpoint called by `payment-service`.
+- GET  `/me/export`        : GDPR Article 20 data export.
+- DELETE `/me`             : GDPR Article 17 Right to Erasure (soft delete & PII scrub).
+- GET  `/leaderboard`      : Public community rankings by average interview score.
+"""
+
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -11,12 +34,21 @@ from .database import db
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 security = HTTPBearer()
 
+# Microservice endpoints resolved via environment variables or default local ports
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
 FILE_SERVICE_URL = os.getenv("FILE_SERVICE_URL", "http://localhost:8011")
 
 
 async def verify_token(token: str) -> dict:
-    """Verify token with Auth Service"""
+    """
+    Validates a JWT Bearer token by forwarding it to Auth Service (`auth-service:8001`).
+
+    Parameters:
+        token (str): Raw JWT token string from Authorization header.
+
+    Returns:
+        dict: User profile dictionary if valid, or None if expired/invalid.
+    """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -31,6 +63,12 @@ async def verify_token(token: str) -> dict:
 
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    FastAPI dependency that validates the caller's JWT token and returns authenticated user data.
+    
+    Raises:
+        HTTPException(401): If token is invalid or rejected by Auth Service.
+    """
     token = credentials.credentials
     user = await verify_token(token)
     
@@ -45,6 +83,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @router.get("/me", response_model=UserProfileResponse)
 async def get_profile(current_user: dict = Depends(get_current_user)):
+    """
+    Retrieves the full profile details of the authenticated candidate.
+    """
     user = await db.get_user_by_id(current_user["id"])
     
     if not user:
@@ -73,7 +114,11 @@ async def update_profile(
     profile_data: UserProfileUpdate,
     current_user: dict = Depends(get_current_user)
 ):
-    # Build updates dict with only non-None fields
+    """
+    Applies partial updates to the candidate's profile.
+    
+    Filters out None attributes to only persist explicitly supplied fields.
+    """
     updates = {}
     if profile_data.display_name is not None:
         updates["display_name"] = profile_data.display_name
@@ -109,6 +154,12 @@ async def update_profile(
 
 @router.get("/me/quota", response_model=UserQuotaResponse)
 async def get_quota(current_user: dict = Depends(get_current_user)):
+    """
+    Retrieves current interview session consumption and remaining credits.
+    
+    Calculates `remaining_today` and `remaining_month` against plan limits.
+    Returns -1 for remaining limits when the user is on an unlimited plan (Pro/Enterprise).
+    """
     quota = await db.get_user_quota(current_user["id"])
     
     if not quota:
@@ -133,6 +184,9 @@ async def get_quota(current_user: dict = Depends(get_current_user)):
 
 @router.get("/me/plan", response_model=UserPlanResponse)
 async def get_plan(current_user: dict = Depends(get_current_user)):
+    """
+    Retrieves candidate's current subscription plan record.
+    """
     plan = await db.get_user_plan(current_user["id"])
     
     if not plan:
@@ -149,6 +203,7 @@ async def get_plan(current_user: dict = Depends(get_current_user)):
 
 
 class PlanUpgradeRequest(BaseModel):
+    """Payload schema for requesting a plan tier upgrade or downgrade."""
     plan: str  # "free", "pro", or "enterprise"
 
 
@@ -158,10 +213,14 @@ async def upgrade_plan(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    USER-02: Mid-cycle plan upgrade/downgrade.
-    On upgrade: resets daily/monthly quota counters so the user immediately
-    benefits from higher limits without waiting for the next billing cycle.
-    On downgrade: keeps current quota counts (limits apply on next check).
+    USER-02: Handles self-serve mid-cycle plan upgrades and downgrades.
+    
+    On Upgrade (e.g. Free -> Pro):
+    - Resets `interviews_today` and `interviews_this_month` to 0 so the user immediately
+      benefits from higher allowances without waiting for the next billing cycle.
+    
+    On Downgrade:
+    - Retains existing usage counters; stricter limits will take effect on next interview.
     """
     new_plan = request.plan.lower()
     if new_plan not in ("free", "pro", "enterprise"):
@@ -182,17 +241,16 @@ async def upgrade_plan(
     PLAN_RANK = {"free": 0, "pro": 1, "enterprise": 2}
     is_upgrade = PLAN_RANK.get(new_plan, 0) > PLAN_RANK.get(current_plan, 0)
 
-    # Update the plan tier
+    # Update subscription record
     await db.update_user_plan(current_user["id"], new_plan)
 
-    # On upgrade, reset quota counters so user gets full limits immediately
+    # On upgrade, reset quota counters immediately
     if is_upgrade:
         try:
             await db.reset_quota(current_user["id"])
         except Exception:
-            pass  # Non-critical; quota will still update on next increment
+            pass
 
-    # Return updated quota
     quota = await db.get_user_quota(current_user["id"])
     limits = await db.get_plan_limits(new_plan)
 
@@ -218,6 +276,12 @@ async def upgrade_plan(
 
 @router.post("/me/quota/increment")
 async def increment_quota(current_user: dict = Depends(get_current_user)):
+    """
+    Consumes 1 interview session credit.
+    
+    Called by `orchestrator-service` when a candidate launches a new interview session.
+    Returns HTTP 429 Too Many Requests if the candidate has exhausted their daily or monthly allowance.
+    """
     try:
         quota = await db.increment_quota(current_user["id"])
         limits = await db.get_plan_limits(quota["plan"])
@@ -250,9 +314,15 @@ async def upload_avatar(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    USER-01: Upload avatar with virus scan via file service.
+    USER-01: Handles candidate avatar image upload with virus scanning.
+    
+    Security Controls:
+    1. MIME Type Whitelist: Restricts to jpeg, png, gif, and webp images.
+    2. Size Limit: Rejects uploads larger than 5 Megabytes.
+    3. Multi-service Delegation: Streams bytes to `file-service` with `virus_scan=true`.
+    4. Database Update: Saves the returned signed S3/CDN URL into candidate's profile.
     """
-    # Validate file type
+    # 1. Validate MIME type
     allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
     if file.content_type not in allowed_types:
         raise HTTPException(
@@ -260,7 +330,7 @@ async def upload_avatar(
             detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}"
         )
     
-    # Validate file size (max 5MB)
+    # 2. Enforce 5MB file size limit
     max_size = 5 * 1024 * 1024  # 5MB
     content = await file.read()
     if len(content) > max_size:
@@ -269,7 +339,7 @@ async def upload_avatar(
             detail="File size exceeds 5MB limit"
         )
     
-    # Upload to file service with virus scan
+    # 3. Forward to file service for scanning and persistence
     try:
         async with httpx.AsyncClient() as client:
             files = {"file": (file.filename, content, file.content_type)}
@@ -295,7 +365,7 @@ async def upload_avatar(
                     detail="File service did not return a URL"
                 )
             
-            # Update user profile with new avatar URL
+            # 4. Save avatar URL in PostgreSQL
             await db.update_user_profile(current_user["id"], {"avatar_url": avatar_url})
             
             return {
@@ -320,9 +390,10 @@ async def upload_avatar(
 @router.put("/{user_id}/plan")
 async def update_user_plan_internal(user_id: str, body: dict):
     """
-    Internal endpoint — called by payment-service after a successful Stripe webhook.
-    Updates the user's subscription plan tier.
-    No user JWT required; secured by internal network (service mesh / K8s namespace).
+    Internal service-to-service endpoint called by `payment-service` upon Stripe webhook confirmation.
+    
+    Updates the candidate's subscription tier without requiring an end-user JWT.
+    Protected at the network/gateway layer (inaccessible from external public internet).
     """
     new_plan = body.get("plan", "free")
     if new_plan not in ("free", "pro", "enterprise"):
@@ -339,8 +410,10 @@ async def update_user_plan_internal(user_id: str, body: dict):
 @router.get("/me/export")
 async def export_my_data(current_user: dict = Depends(get_current_user)):
     """
-    GDPR Article 20: Export all personal data associated with this account.
-    Returns a JSON dump of profile, preferences, and session counts.
+    GDPR Article 20: Data Portability Export.
+    
+    Generates a structured, downloadable JSON archive containing all personal metadata,
+    candidate settings, skills, target companies, plan history, and usage metrics.
     """
     user = await db.get_user_by_id(current_user["id"])
     if not user:
@@ -381,10 +454,10 @@ async def export_my_data(current_user: dict = Depends(get_current_user)):
 @router.delete("/me")
 async def delete_my_account(current_user: dict = Depends(get_current_user)):
     """
-    USER-04: GDPR Article 17 - Right to Erasure.
-    Anonymizes all personal fields on the user's account.
-    Account is soft-deleted (anonymized), not hard-deleted.
-    Data is retained for 30 days before permanent deletion.
+    USER-04: GDPR Article 17 - Right to Erasure / Account Deletion.
+    
+    Anonymizes all personal identifying fields and marks the account as soft-deleted.
+    Terminates any active interview sessions and queues final data purging after 30 days.
     """
     try:
         result = await db.soft_delete_user(current_user["id"])
@@ -406,8 +479,10 @@ async def delete_my_account(current_user: dict = Depends(get_current_user)):
 @router.get("/leaderboard", response_model=List[LeaderboardEntry])
 async def get_leaderboard(limit: int = 25, current_user: dict = Depends(get_current_user)):
     """
-    USER-06: Leaderboard of users who opted into public profiles.
-    Ranked by average feedback score across completed sessions.
+    USER-06: Global Community Leaderboard.
+    
+    Returns public candidate profiles ranked by average interview feedback score.
+    The `limit` parameter is clamped between 1 and 100 to protect server resources.
     """
     entries = await db.get_leaderboard(min(max(limit, 1), 100))
     return entries

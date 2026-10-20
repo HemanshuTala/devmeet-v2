@@ -1,3 +1,28 @@
+/**
+ * @file page.tsx
+ * @description Central Administrator Control Console for DevMeet v2.0.
+ *
+ * Capabilities:
+ * 1. Role-Based Access Control (RBAC):
+ *    - Validates caller authentication and checks admin privileges via [useIsAdmin](file:///e:/AI%20INTERVIEW/frontend/src/hooks/useIsAdmin.ts).
+ *    - Renders an "Access Restricted" lock card if unauthenticated or non-admin.
+ * 2. Platform Telemetry & Analytics:
+ *    - Queries `adminApi.getStats()` to display KPI summary cards ([AdminStatCards](file:///e:/AI%20INTERVIEW/frontend/src/components/admin/AdminStatCards.tsx)).
+ * 3. User Directory & Management:
+ *    - Lists registered users with client-side name/email and subscription plan filtering.
+ *    - User status toggle: Blocks/unblocks user accounts via `adminApi.blockUser` / `unblockUser`.
+ *    - Plan upgrade/downgrade: Reassigns tiers ('free' | 'pro' | 'enterprise') via `adminApi.changePlan`.
+ *    - Account impersonation: Acquires temporary impersonation JWT via `adminApi.impersonateUser`.
+ *    - GDPR account erasure: Permanently anonymizes personal identification data via `adminApi.deleteUser`.
+ * 4. Audit Trail & Compliance:
+ *    - Fetches platform audit logs with timestamp, actor ID, IP address, and resource type.
+ *    - Generates downloadable CSV exports directly in the browser.
+ * 5. System Topology:
+ *    - Inspects microservice operational statuses ([AdminSystemHealth](file:///e:/AI%20INTERVIEW/frontend/src/components/admin/AdminSystemHealth.tsx)).
+ *
+ * @module app/admin/page
+ */
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -26,17 +51,22 @@ import AdminAuditLogsTable, { AuditLog } from '@/components/admin/AdminAuditLogs
 import AdminSystemHealth from '@/components/admin/AdminSystemHealth';
 
 /**
- * System Administration Console.
- * Orchestrates platform analytics, user privilege management, and immutable audit inspection.
+ * System Administration Console Component.
+ *
+ * @component
+ * @returns {JSX.Element} Administrative dashboard or restricted access fallback.
  */
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading, refreshUser } = useAuth();
   const router = useRouter();
   const hasAdminAccess = useIsAdmin();
 
+  // Administrative dataset states
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
+  // UI state management
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +77,9 @@ export default function AdminPage() {
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [pendingPlan, setPendingPlan] = useState<Record<string, string>>({});
 
+  /**
+   * Fetches high-level metrics, registered users, and audit records concurrently from the admin service.
+   */
   const fetchAll = useCallback(async () => {
     setRefreshing(true);
     setError(null);
@@ -67,10 +100,12 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Fetch data on initial mount when caller is verified admin
   useEffect(() => {
     if (isAuthenticated && hasAdminAccess) fetchAll();
   }, [isAuthenticated, hasAdminAccess, fetchAll]);
 
+  // Client-side filtering across user search queries and subscription tiers
   const filteredUsers = users.filter((u) => {
     const q = searchQuery.toLowerCase();
     const matchQ =
@@ -79,6 +114,12 @@ export default function AdminPage() {
     return matchQ && matchPlan;
   });
 
+  /**
+   * Toggles account active/blocked status.
+   *
+   * @param {string} userId - User identifier.
+   * @param {boolean} block - True to block, false to unblock.
+   */
   const handleBlock = async (userId: string, block: boolean) => {
     setActionLoading(userId);
     try {
@@ -93,6 +134,11 @@ export default function AdminPage() {
     }
   };
 
+  /**
+   * Commits an updated subscription tier for a specific user.
+   *
+   * @param {string} userId - User identifier.
+   */
   const handlePlanChange = async (userId: string) => {
     const plan = pendingPlan[userId];
     if (!plan) return;
@@ -114,6 +160,12 @@ export default function AdminPage() {
     }
   };
 
+  /**
+   * Anonymizes user record for GDPR "Right to be Forgotten" compliance.
+   *
+   * @param {string} userId - User identifier.
+   * @param {string} email - User email for confirmation prompt.
+   */
   const handleDelete = async (userId: string, email: string) => {
     if (!confirm(`Anonymize ${email}? This action permanently clears personal data.`)) return;
     setActionLoading(`del-${userId}`);
@@ -128,6 +180,11 @@ export default function AdminPage() {
     }
   };
 
+  /**
+   * Initiates administrative user impersonation by generating a temporary access token.
+   *
+   * @param {string} userId - Target candidate user identifier.
+   */
   const handleImpersonate = async (userId: string) => {
     setActionLoading(`imp-${userId}`);
     try {
@@ -144,6 +201,9 @@ export default function AdminPage() {
     }
   };
 
+  /**
+   * Formats the active audit log table records into a CSV document and triggers client download.
+   */
   const exportCSV = () => {
     const headers = ['ID', 'Action', 'User ID', 'Resource', 'IP', 'Created At'];
     const rows = auditLogs.map((l) => [
@@ -163,6 +223,7 @@ export default function AdminPage() {
     a.click();
   };
 
+  // Render centered spinner while authentication session is rehydrating
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -174,6 +235,7 @@ export default function AdminPage() {
     );
   }
 
+  // Deny access if user is unauthenticated or does not possess the staff admin role
   if (!isAuthenticated || !hasAdminAccess) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -220,10 +282,11 @@ export default function AdminPage() {
             </div>
           </div>
 
+          {/* Refresh action */}
           <button
             onClick={fetchAll}
             disabled={refreshing}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
             Refresh Data
@@ -240,7 +303,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Global Statistics Cards */}
+        {/* Global Statistics KPI Cards */}
         <AdminStatCards stats={stats} loading={loading} />
 
         {/* Subnavigation Tabs */}
@@ -253,7 +316,7 @@ export default function AdminPage() {
             <button
               key={id}
               onClick={() => setActiveTab(id as any)}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === id
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'

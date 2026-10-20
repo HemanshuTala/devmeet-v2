@@ -1,20 +1,34 @@
 'use client';
 
+/**
+ * @file page.tsx (Candidate & Admin Login Page)
+ * @description Primary authentication page for DevMeet.
+ * Split-screen layout:
+ * - Left panel (desktop): Hero testimonial, value proposition, and key statistics pills.
+ * - Right panel: Centered authentication container embedding `LoginForm`
+ *   (supports email/password authentication, guest login, and OAuth provider buttons).
+ */
+
 import Link from 'next/link';
 import { Brain, Code2, Zap } from 'lucide-react';
 import { LoginForm } from '@/components/auth/LoginForm';
 
+/** Trust metrics displayed on the hero side panel */
 const STATS = [
   { icon: <Zap className="w-4 h-4 text-yellow-300" />, label: '98% Success Rate' },
   { icon: <Brain className="w-4 h-4 text-blue-300" />, label: 'AI-Powered' },
   { icon: <Code2 className="w-4 h-4 text-cyan-300" />, label: '10K+ Users' },
 ];
 
+/**
+ * LoginPage Component.
+ */
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex bg-slate-50">
-      {/* Left panel */}
+      {/* ── Left Hero Panel (hidden on mobile, visible on lg+ screens) ── */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-blue-600 flex-col justify-between p-12">
+        {/* Subtle geometric dot grid pattern overlay */}
         <div
           aria-hidden
           className="absolute inset-0 opacity-15"
@@ -23,6 +37,8 @@ export default function LoginPage() {
             backgroundSize: '32px 32px',
           }}
         />
+
+        {/* Brand logo link */}
         <Link href="/" className="relative z-10 flex items-center gap-2">
           <div className="w-9 h-9 rounded-lg bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center">
             <Brain className="w-5 h-5 text-white" />
@@ -30,6 +46,7 @@ export default function LoginPage() {
           <span className="text-xl font-bold text-white tracking-tight">DevMeet</span>
         </Link>
 
+        {/* Marketing quote and statistics badges */}
         <div className="relative z-10 space-y-6">
           <blockquote className="text-4xl font-bold text-white leading-tight">
             Ace every{' '}
@@ -54,18 +71,21 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {/* Legal copyright footer */}
         <p className="relative z-10 text-blue-200/60 text-xs">
           © {new Date().getFullYear()} DevMeet. All rights reserved.
         </p>
       </div>
 
-      {/* Right panel */}
+      {/* ── Right Authentication Container ── */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+        {/* Mobile brand header */}
         <Link href="/" className="lg:hidden flex items-center gap-2 mb-10">
           <Brain className="w-6 h-6 text-blue-600" />
           <span className="text-2xl font-bold gradient-text">DevMeet</span>
         </Link>
 
+        {/* Authentication Card Form */}
         <div className="w-full max-w-md bg-white border border-blue-100/80 shadow-2xl shadow-blue-500/5 rounded-2xl p-8 md:p-10">
           <LoginForm />
         </div>

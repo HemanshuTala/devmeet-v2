@@ -12,7 +12,7 @@ const PLANS = [
     period: '/ month',
     description: 'Essential mock interviews for students and early-career candidates.',
     features: [
-      '3 complete mock interviews / month',
+      '5 free mock interviews',
       'Standard DSA & algorithm questions',
       'Browser Web Speech recognition',
       'Basic STAR feedback summaries',

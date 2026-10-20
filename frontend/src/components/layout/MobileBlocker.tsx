@@ -1,19 +1,42 @@
+/**
+ * @file MobileBlocker.tsx
+ * @description Viewport Constraint Guard Screen for Small Devices in DevMeet.
+ *
+ * DevMeet's interview room requires a minimum screen width (>=1024px) because
+ * the Monaco code editor, LiveKit video streams, proctoring HUD, and real-time AI chat
+ * require concurrent multi-pane desktop layouts.
+ *
+ * Behavior:
+ * - Hidden by default (`display: 'none'`).
+ * - Activated via global CSS media query rules (`@media (max-width: 1023px) { #mobile-blocker { display: flex !important; } }`).
+ * - Displays a polite advisory card requesting the user switch to a Laptop or Desktop or rotate orientation.
+ *
+ * @module components/layout/MobileBlocker
+ */
+
 'use client';
 
 import { Monitor, Laptop, Brain } from 'lucide-react';
 
+/** Device badges shown as recommended hardware platforms */
 const DEVICES = [
   { icon: Laptop, label: 'Laptop' },
   { icon: Monitor, label: 'Desktop' },
 ];
 
+/**
+ * MobileBlocker Component.
+ *
+ * @component
+ * @returns {JSX.Element} Full-viewport overlay activated on narrow mobile/tablet screens.
+ */
 export function MobileBlocker() {
   return (
     <div
       id="mobile-blocker"
       aria-hidden="true"
       style={{
-        display: 'none', // overridden by CSS on small screens
+        display: 'none', // Overridden by media query in global CSS on small screens (< 1024px)
         position: 'fixed',
         inset: 0,
         zIndex: 99999,
@@ -28,7 +51,7 @@ export function MobileBlocker() {
         touchAction: 'none',
       }}
     >
-      {/* Subtle background pattern */}
+      {/* Subtle radial dot grid pattern */}
       <div
         aria-hidden
         style={{
@@ -41,7 +64,7 @@ export function MobileBlocker() {
         }}
       />
 
-      {/* Card */}
+      {/* Advisory Card */}
       <div
         style={{
           position: 'relative',
@@ -60,7 +83,7 @@ export function MobileBlocker() {
           gap: '20px',
         }}
       >
-        {/* Logo */}
+        {/* Brand Logo Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div
             style={{
@@ -87,7 +110,7 @@ export function MobileBlocker() {
           </span>
         </div>
 
-        {/* Icon badge */}
+        {/* Monitor Icon Badge */}
         <div
           style={{
             width: 68,
@@ -103,7 +126,7 @@ export function MobileBlocker() {
           <Monitor style={{ width: 30, height: 30, color: '#2563eb' }} />
         </div>
 
-        {/* Heading */}
+        {/* Informational Message */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <h1
             style={{
@@ -131,7 +154,7 @@ export function MobileBlocker() {
           </p>
         </div>
 
-        {/* Device badges */}
+        {/* Supported Platform Badges */}
         <div
           style={{
             display: 'flex',
@@ -162,7 +185,7 @@ export function MobileBlocker() {
           ))}
         </div>
 
-        {/* Footer hint */}
+        {/* Orientation / Zoom Tip */}
         <p
           style={{
             fontSize: '0.75rem',

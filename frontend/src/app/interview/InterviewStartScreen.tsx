@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * @file InterviewStartScreen.tsx (Pre-Flight Studio Calibration & Start Screen)
+ * @description Pre-interview lobby displayed when entering a newly created session.
+ * Displays session parameters (track, difficulty, duration, company focus),
+ * runs through a pre-flight system readiness checklist (proctoring, LLM engine, media stream, sandbox),
+ * offers strategy tips, supports keyboard launch via Enter key, and gives option to cancel session.
+ */
+
 import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -25,16 +33,27 @@ import {
 } from 'lucide-react';
 import { DIFFICULTY_BADGE, TYPE_LABEL } from './constants';
 
+/**
+ * Props passed to InterviewStartScreen.
+ */
 interface InterviewStartScreenProps {
+  /** Session record containing track, difficulty, and company tags */
   session: any;
+  /** True while the session start request and first question generation are running */
   isStarting: boolean;
+  /** Error message if room setup failed */
   chatError: string | null;
+  /** Callback to launch the interview */
   onStart: () => void;
+  /** Callback to return to dashboard */
   onBack: () => void;
+  /** Optional callback to cancel and mark session cancelled */
   onCancel?: () => void;
+  /** True while session cancellation request is in progress */
   isCancelling?: boolean;
 }
 
+/** Pre-flight system verification checks shown on the lobby card */
 const READINESS_CHECKS = [
   {
     icon: ShieldCheck,
@@ -66,6 +85,9 @@ const READINESS_CHECKS = [
   },
 ];
 
+/**
+ * InterviewStartScreen Component.
+ */
 export default function InterviewStartScreen({
   session,
   isStarting,
@@ -75,7 +97,7 @@ export default function InterviewStartScreen({
   onCancel,
   isCancelling,
 }: InterviewStartScreenProps) {
-  // Allow starting via Enter key press
+  // Allow starting via Enter key press for accessibility and fast workflow
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' && !isStarting && !isCancelling) {
@@ -109,7 +131,7 @@ export default function InterviewStartScreen({
         />
       </div>
 
-      {/* Top bar */}
+      {/* Top bar: Back button & latency status indicator */}
       <header className="max-w-3xl w-full mx-auto flex items-center justify-between mb-4 z-10">
         <button
           onClick={onBack}

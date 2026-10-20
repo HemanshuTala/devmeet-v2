@@ -69,7 +69,6 @@ jobs:
           S3_BUCKET: test-bucket
           RABBITMQ_HOST: localhost
           RABBITMQ_PORT: "5672"
-          KAFKA_BROKERS: localhost:9092
           ELASTICSEARCH_HOST: http://localhost:9200
           RAZORPAY_KEY_ID: rzp_test_dummy
           RAZORPAY_KEY_SECRET: dummy_secret
@@ -87,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [video-service, notification-service]
+        service: [video-service]
     steps:
       - uses: actions/checkout@v4
 
@@ -189,9 +188,6 @@ jobs:
           - service: video-service
             context: services/video-service
             port: 8006
-          - service: notification-service
-            context: services/notification-service
-            port: 8008
           # Nginx gateway
           - service: api-gateway
             context: services/api-gateway
@@ -263,7 +259,7 @@ jobs:
             # Pull latest images for all services including frontend
             for svc in auth-service user-service orchestrator-service \
                         ai-interviewer-service code-execution-service \
-                        video-service feedback-service notification-service \
+                        video-service feedback-service \
                         analytics-service admin-service file-service \
                         payment-service search-service api-gateway frontend; do
               echo "Pulling devmeet-$svc..."

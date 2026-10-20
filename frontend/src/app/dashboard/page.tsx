@@ -1,3 +1,27 @@
+/**
+ * @file page.tsx
+ * @description Candidate Dashboard Overview & Performance Hub for DevMeet.
+ *
+ * Responsibilities:
+ * 1. Authentication Protection:
+ *    - Validates candidate authentication state via [useRequireAuth](file:///e:/AI%20INTERVIEW/frontend/src/hooks/useRequireAuth.ts).
+ * 2. Asynchronous Data Orchestration:
+ *    - Queries all candidate sessions via [useSessions](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useSessions.ts).
+ *    - Queries candidate tier quota via [useQuota](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useUser.ts).
+ *    - Queries score trajectories via [useUserScoreTrend](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useAnalytics.ts).
+ *    - Queries 90-day dashboard aggregates via [useUserDashboard](file:///e:/AI%20INTERVIEW/frontend/src/hooks/queries/useAnalytics.ts).
+ * 3. Daily Practice Streak Calculation:
+ *    - Implements timezone-aware consecutive daily practice streak calculation (`computeStreak`).
+ * 4. Company Filtering:
+ *    - Dynamically generates company filter chips based on `s.target_company`.
+ * 5. Dynamic Chart Bundling:
+ *    - Code-splits and lazy-loads heavy Recharts visualization components ([TrendChart](file:///e:/AI%20INTERVIEW/frontend/src/app/dashboard/TrendChart.tsx) and [SkillRadar](file:///e:/AI%20INTERVIEW/frontend/src/app/dashboard/SkillRadar.tsx)) via `next/dynamic` (`ssr: false`).
+ * 6. Quick Launchers & Recent Tables:
+ *    - Mounts [QuickSelect](file:///e:/AI%20INTERVIEW/frontend/src/app/dashboard/QuickSelect.tsx), [RecentSessions](file:///e:/AI%20INTERVIEW/frontend/src/app/dashboard/RecentSessions.tsx), and [ConsistencyGrid](file:///e:/AI%20INTERVIEW/frontend/src/app/dashboard/ConsistencyGrid.tsx).
+ *
+ * @module app/dashboard/page
+ */
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -16,7 +40,6 @@ import {
   Trophy,
   Flame,
   Award,
-  ArrowRight,
 } from 'lucide-react';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
@@ -28,24 +51,43 @@ import ConsistencyGrid from './ConsistencyGrid';
 import QuickSelect from './QuickSelect';
 import RecentSessions from './RecentSessions';
 
+/**
+ * Lazy-loaded TrendChart component to reduce initial bundle size and optimize LCP.
+ */
 const TrendChart = dynamic(() => import('./TrendChart'), {
   ssr: false,
   loading: () => <div className="h-64 w-full animate-pulse bg-slate-100 rounded-2xl" />,
 });
 
+/**
+ * Lazy-loaded SkillRadar component to reduce initial bundle size.
+ */
 const SkillRadar = dynamic(() => import('./SkillRadar'), {
   ssr: false,
   loading: () => <div className="h-64 w-full animate-pulse bg-slate-100 rounded-2xl" />,
 });
 
+/**
+ * Checks if a given timestamp falls within the current calendar month.
+ *
+ * @param {string} dateStr - Raw date string.
+ * @returns {boolean}
+ */
 function isThisMonth(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
   return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 }
 
+/**
+ * Computes consecutive daily practice streak in candidate's local time zone.
+ *
+ * @param {any[]} sessions - Sessions array.
+ * @returns {number} Consecutive daily practice streak count.
+ */
 function computeStreak(sessions: any[]) {
   if (sessions.length === 0) return 0;
+  // Resolve candidate's browser time zone
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const toLocalDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -55,15 +97,25 @@ function computeStreak(sessions: any[]) {
   let streak = 0;
   const current = new Date();
   let checkDate = current.toLocaleDateString('en-CA', { timeZone: tz });
+
+  // Walk backwards day-by-day while dates exist in set
   while (dates.has(checkDate)) {
     streak++;
     current.setDate(current.getDate() - 1);
     checkDate = current.toLocaleDateString('en-CA', { timeZone: tz });
   }
+
+  // Grace baseline for candidates who practiced today or have past sessions
   if (streak === 0 && sessions.length > 0) return 1;
   return streak;
 }
 
+/**
+ * DashboardPage Component.
+ *
+ * @component
+ * @returns {JSX.Element} Authenticated Candidate Dashboard.
+ */
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
@@ -74,6 +126,7 @@ export default function DashboardPage() {
   const { data: scoreTrendData } = useUserScoreTrend(trendDays);
   const { data: dashboardData } = useUserDashboard(90);
 
+  // Extract unique sorted companies for chip filtering
   const companyOptions = useMemo(() => {
     const companies = new Set<string>();
     sessions.forEach((s: any) => {
@@ -82,22 +135,26 @@ export default function DashboardPage() {
     return Array.from(companies).sort();
   }, [sessions]);
 
+  // Filter sessions by selected target company
   const filteredSessions = useMemo(() => {
     if (companyFilter === 'all') return sessions;
     return sessions.filter((s: any) => s.target_company === companyFilter);
   }, [sessions, companyFilter]);
 
+  // KPI aggregates
   const totalSessions = filteredSessions.length;
   const completedSessions = filteredSessions.filter((s: any) => s.status === 'completed').length;
   const dsaSessions = filteredSessions.filter((s: any) => s.interview_type === 'dsa').length;
   const streakDays = useMemo(() => computeStreak(filteredSessions), [filteredSessions]);
 
+  // Top 5 recent sessions
   const recentSessions = useMemo(() => {
     return [...filteredSessions]
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 5);
   }, [filteredSessions]);
 
+  // Trend data formatting
   const trendData = useMemo(() => {
     const apiTrend = scoreTrendData?.trend;
     if (apiTrend && apiTrend.length > 0) {
@@ -116,6 +173,7 @@ export default function DashboardPage() {
     }));
   }, [filteredSessions, scoreTrendData]);
 
+  // 5-axis competency score matrix calculation
   const radarScores = useMemo(() => {
     if (dashboardData?.type_breakdown && Object.keys(dashboardData.type_breakdown).length > 0) {
       const breakdown = dashboardData.type_breakdown;
@@ -144,6 +202,7 @@ export default function DashboardPage() {
     };
   }, [filteredSessions, dashboardData]);
 
+  // Loading skeleton while verifying user authentication
   if (authLoading || !user) {
     return (
       <DashboardShell>
@@ -186,6 +245,7 @@ export default function DashboardPage() {
               </p>
             </div>
 
+            {/* Hero Quick Actions */}
             <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
               <Link
                 href="/dashboard/create-session"
@@ -242,7 +302,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Metric Cards Grid */}
+        {/* Metric KPI Cards Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
             label="Total Interviews"
@@ -270,7 +330,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Quick Start Launcher */}
+        {/* Quick Start Launcher Section */}
         <QuickSelect />
 
         {/* Analytics & Radar Grid */}
@@ -308,30 +368,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Consistency Grid & Recent Sessions */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h3 className="text-base font-bold text-slate-900 tracking-tight">Recent Interviews</h3>
-              <Link
-                href="/dashboard/history"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
-              >
-                <span>View All History</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-            <RecentSessions sessions={recentSessions} isLoading={sessionsLoading} />
-          </div>
+        {/* Activity Heatmap — full-width so the 24-week grid has breathing room */}
+        <ConsistencyGrid sessions={sessions} streakDays={streakDays} />
 
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs space-y-4">
-            <div className="border-b border-slate-100 pb-4">
-              <h3 className="text-base font-bold text-slate-900 tracking-tight">Activity Heatmap</h3>
-              <p className="text-xs text-slate-500">Daily practice consistency</p>
-            </div>
-            <ConsistencyGrid sessions={sessions} streakDays={streakDays} />
-          </div>
-        </div>
+        {/* Recent Interview Sessions — full-width for the Kanban / List view */}
+        <RecentSessions sessions={recentSessions} isLoading={sessionsLoading} />
       </div>
     </DashboardShell>
   );

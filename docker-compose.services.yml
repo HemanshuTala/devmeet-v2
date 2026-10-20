@@ -23,6 +23,8 @@ services:
     build: ./services/user-service
     ports:
       - "8002:8002"
+    volumes:
+      - ./services/user-service/app:/app/app
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -199,6 +201,8 @@ services:
     build: ./services/payment-service
     ports:
       - "8012:8012"
+    volumes:
+      - ./services/payment-service/app:/app/app
     env_file:
       - .env
     environment:
@@ -237,8 +241,6 @@ services:
       - PORT=3000
       - HOSTNAME=0.0.0.0
     restart: unless-stopped
-    depends_on:
-      - api-gateway
 
   api-gateway:
     build: ./services/api-gateway

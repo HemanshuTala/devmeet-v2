@@ -5,7 +5,7 @@ $Gateway = $env:GATEWAY_URL
 if (-not $Gateway) { $Gateway = "http://localhost:8000" }
 
 $ts = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-$email = "smoketest_${ts}@devmeet.test"
+$email = "smoketest_${ts}@example.com"
 $password = "SmokeTest123!"
 
 Write-Host "=== DevMeet E2E Smoke Test ===" -ForegroundColor Cyan
@@ -30,14 +30,14 @@ function Test-Step {
 }
 
 # 1. Health check
-Test-Step "Auth service healthy" {
-    $r = Invoke-RestMethod -Uri "$Gateway/api/v1/auth/health" -Method Get -TimeoutSec 5
+Test-Step "API Gateway healthy" {
+    $r = Invoke-RestMethod -Uri "$Gateway/health" -Method Get -TimeoutSec 5
     if (-not $r.status) { throw "No status field" }
 }
 
 # 2. Register
 $token = Test-Step "Register new user" {
-    $body = @{ email = $email; password = $password; full_name = "Smoke Test" } | ConvertTo-Json
+    $body = @{ email = $email; password = $password; display_name = "Smoke Test" } | ConvertTo-Json
     $r = Invoke-RestMethod -Uri "$Gateway/api/v1/auth/register" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10
     if (-not $r.access_token) { throw "No access_token in response" }
     $r.access_token
@@ -96,8 +96,23 @@ Test-Step "Fetch payment plans" {
 
 # 8. Check AI service health
 Test-Step "AI Interviewer service healthy" {
-    $r = Invoke-RestMethod -Uri "$Gateway/api/v1/ai/health" -Method Get -TimeoutSec 5
+    $aiUrl = if ($Gateway -match "localhost") { "http://localhost:8004/health" } else { "$Gateway/health" }
+    $r = Invoke-RestMethod -Uri $aiUrl -Method Get -TimeoutSec 5
     if (-not $r.status) { throw "No status" }
+}
+
+# 9. Check Video service health via Gateway
+Test-Step "Video service healthy via Gateway" {
+    $r = Invoke-RestMethod -Uri "$Gateway/api/v1/video/health" -Method Get -TimeoutSec 5
+    if ($r.status -ne "healthy") { throw "Status not healthy: $($r.status)" }
+}
+
+# 10. Check LiveKit token generation via Gateway
+Test-Step "Mint LiveKit room access token" {
+    $body = @{ room_name = "smoke_room_$ts"; participant_identity = "user_$ts" } | ConvertTo-Json
+    $r = Invoke-RestMethod -Uri "$Gateway/api/v1/video/token" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 5
+    if (-not $r.token) { throw "No token returned" }
+    if (-not $r.livekit_url) { throw "No livekit_url returned" }
 }
 
 Write-Host "`n=== Results ===" -ForegroundColor Cyan

@@ -1,5 +1,23 @@
+/**
+ * @file loading.tsx
+ * @description Next.js App Router Root Suspense Loading Screen for DevMeet.
+ *
+ * Rendered by Next.js automatically while the root page or server components are streaming:
+ * - Full-height viewport container with CSS variable background (`var(--color-bg)`).
+ * - DevMeet brand code logo.
+ * - Staggered width skeleton shimmer bars simulating incoming content loading.
+ *
+ * @module app/loading
+ */
+
 'use client';
 
+/**
+ * Root Loading Fallback Component.
+ *
+ * @component
+ * @returns {JSX.Element} Centered brand logo and skeleton shimmer bars.
+ */
 export default function Loading() {
   return (
     <div
@@ -19,7 +37,7 @@ export default function Loading() {
           gap: 32,
         }}
       >
-        {/* Logo */}
+        {/* Brand Icon & Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div
             style={{
@@ -49,7 +67,7 @@ export default function Loading() {
           </span>
         </div>
 
-        {/* Shimmer skeleton bars */}
+        {/* Shimmer skeleton loading bars */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 200 }}>
           <div className="skeleton-shimmer" style={{ height: 12, borderRadius: 6 }} />
           <div className="skeleton-shimmer" style={{ height: 12, borderRadius: 6, width: '75%' }} />

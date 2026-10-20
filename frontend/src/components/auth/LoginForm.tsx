@@ -1,3 +1,20 @@
+/**
+ * @file LoginForm.tsx
+ * @description Primary User Authentication and MFA Challenge Form for DevMeet.
+ *
+ * Responsibilities:
+ * - Client-side validation powered by React Hook Form & Zod schema ([loginSchema](file:///e:/AI%20INTERVIEW/frontend/src/lib/validations/auth.ts)).
+ * - OAuth social login callback parameter extraction (`access_token` in URL search parameters).
+ * - Multi-Factor Authentication (MFA / 2FA) multi-step workflow:
+ *   - Automatically pivots to MFA challenge screen when backend returns `mfa_required: true`.
+ *   - Supports 6-digit TOTP authenticator codes or alphanumeric backup codes.
+ * - Security risk telemetry alert display when unusual device/location login is flagged.
+ * - Account lockout detection (HTTP 423 from auth-service after consecutive failed attempts).
+ * - Password masking toggle with Lucide Eye/EyeOff icons.
+ *
+ * @module components/auth/LoginForm
+ */
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -16,22 +33,35 @@ import { ErrorAlert } from '@/components/feedback/ErrorAlert';
 import { ApiError } from '@/lib/api-errors';
 import { Loader } from '@/components/ui/loader';
 
+/**
+ * LoginForm Component.
+ *
+ * @component
+ * @returns {JSX.Element} Login or MFA challenge interactive form.
+ */
 export function LoginForm() {
   const router = useRouter();
   const { login, verifyMfaLogin, refreshUser } = useAuth();
+
+  // Form interaction and visibility states
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
+
+  // Multi-Factor Authentication (MFA) states
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [useBackupCode, setUseBackupCode] = useState(false);
+  const [mfaSubmitting, setMfaSubmitting] = useState(false);
+
+  // Anomaly & unusual login warning banner state
   const [securityAlert, setSecurityAlert] = useState<{
     risk_level: string;
     reasons: string[];
     location: string;
   } | null>(null);
-  const [mfaSubmitting, setMfaSubmitting] = useState(false);
 
+  // React Hook Form instance with Zod schema validation
   const {
     register,
     handleSubmit,
@@ -41,6 +71,10 @@ export function LoginForm() {
     defaultValues: { email: '', password: '' },
   });
 
+  /**
+   * Effect handling OAuth social callback:
+   * Inspects URL parameters for an `access_token` returned by third-party OAuth providers (Google, GitHub).
+   */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('access_token');
@@ -58,24 +92,35 @@ export function LoginForm() {
       });
   }, [router, refreshUser]);
 
+  /**
+   * Primary credentials submission handler.
+   *
+   * @param {LoginFormValues} values - Validated email and password.
+   */
   const onSubmit = async (values: LoginFormValues) => {
     setServerError(null);
     setIsLocked(false);
     setSecurityAlert(null);
     try {
       const result = await login(values);
+
+      // Check if user has Two-Factor Authentication enabled
       if ('mfa_required' in result && result.mfa_required && result.mfa_token) {
         setMfaToken(result.mfa_token);
         toast.info('Enter your authenticator code to continue.');
         return;
       }
+
+      // Check if the backend flagged this login attempt as high risk
       if ('security_alert' in result && result.security_alert) {
         setSecurityAlert(result.security_alert as any);
       }
+
       toast.success('Welcome back!');
       router.push('/dashboard');
     } catch (err: unknown) {
       const status = err instanceof ApiError ? err.status : null;
+      // HTTP 423 indicates account locked due to excessive failed attempts
       if (status === 423) {
         setIsLocked(true);
         setServerError(
@@ -88,6 +133,11 @@ export function LoginForm() {
     }
   };
 
+  /**
+   * Submits the 6-digit TOTP authenticator code or emergency backup code.
+   *
+   * @param {React.FormEvent} e - Form submission event.
+   */
   const onMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mfaToken || !mfaCode.trim()) return;
@@ -109,6 +159,7 @@ export function LoginForm() {
     }
   };
 
+  // Render MFA Challenge Form if an intermediate MFA token is active
   if (mfaToken) {
     return (
       <div className="space-y-6">
@@ -142,6 +193,7 @@ export function LoginForm() {
             {mfaSubmitting ? 'Verifying…' : 'Verify & Sign In'}
           </Button>
 
+          {/* Toggle between standard TOTP and Emergency Backup Code */}
           <button
             type="button"
             className="text-xs text-blue-600 hover:text-blue-700 font-medium"
@@ -153,6 +205,7 @@ export function LoginForm() {
             {useBackupCode ? 'Use authenticator app instead' : 'Use a backup code instead'}
           </button>
 
+          {/* Return back to email/password screen */}
           <button
             type="button"
             className="block text-xs text-slate-500 hover:text-slate-700"
@@ -168,6 +221,7 @@ export function LoginForm() {
     );
   }
 
+  // Render Primary Credentials Form
   return (
     <div className="space-y-6">
       {isSubmitting && <Loader fullscreen text="Signing you in..." />}
@@ -176,6 +230,7 @@ export function LoginForm() {
         <p className="text-slate-500 text-sm">Sign in to continue your interview prep.</p>
       </div>
 
+      {/* Security alert notification if unusual login detected */}
       {securityAlert && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <div className="flex items-center gap-2 font-semibold mb-1">
@@ -188,6 +243,7 @@ export function LoginForm() {
         </div>
       )}
 
+      {/* Server error or lockout message */}
       {serverError && (
         <ErrorAlert
           message={serverError}
@@ -196,6 +252,7 @@ export function LoginForm() {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+        {/* Email Field */}
         <div className="space-y-1.5">
           <Label htmlFor="email">Email address</Label>
           <Input
@@ -212,6 +269,7 @@ export function LoginForm() {
           )}
         </div>
 
+        {/* Password Field with Show/Hide Toggle */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
@@ -244,11 +302,13 @@ export function LoginForm() {
           )}
         </div>
 
+        {/* Submit Button */}
         <Button type="submit" className="w-full h-11 font-semibold" disabled={isSubmitting}>
           {isSubmitting ? 'Signing in…' : 'Sign In'}
         </Button>
       </form>
 
+      {/* Register Redirection Link */}
       <p className="text-center text-sm text-slate-500">
         Don&apos;t have an account?{' '}
         <Link href="/register" className="text-blue-600 font-semibold hover:text-blue-700">

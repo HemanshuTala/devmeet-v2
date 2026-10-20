@@ -1,5 +1,15 @@
 'use client';
 
+/**
+ * @file page.tsx (Dashboard Interview History Page)
+ * @description Comprehensive interview history and audit log for the current authenticated candidate.
+ * Displays all past mock interviews with multi-attribute filtering (interview type, difficulty,
+ * lifecycle status, date range, and free-text search for company or focus area).
+ *
+ * Provides instant actions to view detailed post-session feedback, launch session replay,
+ * or resume active/created sessions directly in the interview studio.
+ */
+
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -18,6 +28,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
+/**
+ * Formats an ISO datetime string into human-friendly representation (e.g. "Oct 24, 2026, 04:30 PM").
+ *
+ * @param dateStr - Raw ISO date string from the API
+ * @returns Formatted date string, or em-dash if parsing fails
+ */
 function formatDate(dateStr: string) {
   try {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -32,6 +48,12 @@ function formatDate(dateStr: string) {
   }
 }
 
+/**
+ * Formats a duration in minutes into a concise hour/minute format (e.g. "45m", "1h 15m").
+ *
+ * @param minutes - Total session duration in minutes
+ * @returns Concise human-readable duration string
+ */
 function formatDuration(minutes: number) {
   if (!minutes) return '—';
   if (minutes < 60) return `${minutes}m`;
@@ -40,13 +62,19 @@ function formatDuration(minutes: number) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+/**
+ * Skeleton loading view displayed while authentication and session history data are fetching.
+ */
 function HistorySkeleton() {
   return (
     <div className="space-y-8">
+      {/* Header bar skeleton */}
       <div className="flex items-center justify-between">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-9 w-32 rounded-xl" />
       </div>
+
+      {/* Top metrics summary cards skeleton */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-3">
@@ -55,6 +83,8 @@ function HistorySkeleton() {
           </div>
         ))}
       </div>
+
+      {/* Filter toolbar and list skeleton */}
       <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <Skeleton className="h-10 w-full rounded-xl" />
@@ -72,12 +102,20 @@ function HistorySkeleton() {
   );
 }
 
+/**
+ * Main Interview History Page Component.
+ * Fetches user sessions via React Query, handles client-side filtering, and renders metrics and session cards.
+ */
 export default function HistoryPage() {
   const router = useRouter();
+
+  // Authentication barrier: redirect unauthenticated users to /login
   const { isLoading: authLoading } = useRequireAuth();
+
+  // Fetch full session history from backend orchestrator
   const { data: sessions = [], isLoading: loading, error, refetch } = useSessions();
 
-  // Filters
+  // Filter state
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [difficultyFilter, setDifficultyFilter] = useState('all');
@@ -85,16 +123,24 @@ export default function HistoryPage() {
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
 
+  /**
+   * Memoized client-side filter computation.
+   * Evaluates text search (company/focus area), categorical filters, and optional date range boundaries.
+   */
   const filteredSessions = useMemo(() => {
     return sessions.filter((session) => {
+      // 1. Text match across company name or focus area
       const matchesQuery =
         !query ||
         session.target_company?.toLowerCase().includes(query.toLowerCase()) ||
         session.focus_area?.toLowerCase().includes(query.toLowerCase());
+
+      // 2. Exact categorical matches or 'all' wildcard
       const matchesType = typeFilter === 'all' || session.interview_type === typeFilter;
       const matchesDifficulty = difficultyFilter === 'all' || session.difficulty === difficultyFilter;
       const matchesStatus = statusFilter === 'all' || session.status === statusFilter;
 
+      // 3. Date range match: normalize time boundaries for exact calendar day comparison
       const sessionDate = new Date(session.created_at);
       const fromStart = dateFrom ? new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate(), 0, 0, 0, 0) : null;
       const toEnd = dateTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23, 59, 59, 999) : null;
@@ -106,7 +152,7 @@ export default function HistoryPage() {
     });
   }, [sessions, query, typeFilter, difficultyFilter, statusFilter, dateFrom, dateTo]);
 
-  // Statistics summaries
+  // Aggregate summary metrics across all user sessions
   const totalSessions = sessions.length;
   const completedSessions = sessions.filter((s) => s.status === 'completed').length;
   const inProgressSessions = sessions.filter((s) => s.status === 'in_progress' || s.status === 'created').length;
@@ -119,6 +165,7 @@ export default function HistoryPage() {
     );
   }
 
+  // Determine if any filter condition is currently divergent from default
   const hasActiveFilters = Boolean(query || typeFilter !== 'all' || difficultyFilter !== 'all' || statusFilter !== 'all' || dateFrom || dateTo);
 
   return (
@@ -153,7 +200,7 @@ export default function HistoryPage() {
             </Button>
           </div>
 
-          {/* Quick Metrics */}
+          {/* Quick Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
               <div>
@@ -186,7 +233,7 @@ export default function HistoryPage() {
             </div>
           </div>
 
-          {/* Filter Bar */}
+          {/* Filter and Search Bar */}
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
@@ -212,7 +259,7 @@ export default function HistoryPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {/* Search input */}
+              {/* Search text input */}
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 z-10" />
                 <input
@@ -224,7 +271,7 @@ export default function HistoryPage() {
                 />
               </div>
 
-              {/* Type select */}
+              {/* Interview type filter dropdown */}
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="bg-slate-50 border-slate-200/80 text-xs font-semibold rounded-xl h-9">
                   <SelectValue placeholder="Interview Type" />
@@ -237,7 +284,7 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
 
-              {/* Difficulty select */}
+              {/* Difficulty filter dropdown */}
               <Select value={difficultyFilter} onValueChange={setDifficultyFilter}>
                 <SelectTrigger className="bg-slate-50 border-slate-200/80 text-xs font-semibold rounded-xl h-9">
                   <SelectValue placeholder="Difficulty" />
@@ -250,7 +297,7 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
 
-              {/* Status select */}
+              {/* Status filter dropdown */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="bg-slate-50 border-slate-200/80 text-xs font-semibold rounded-xl h-9">
                   <SelectValue placeholder="Status" />
@@ -264,15 +311,16 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
 
-              {/* Date pickers */}
+              {/* Date pickers (from/to) */}
               <DatePicker value={dateFrom} onChange={setDateFrom} placeholder="From date" />
               <DatePicker value={dateTo} onChange={setDateTo} placeholder="To date" />
             </div>
           </div>
 
-          {/* Sessions List */}
+          {/* Sessions List Container */}
           <div className="bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-sm">
             {error ? (
+              /* Network or API Error state */
               <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
                 <AlertCircle className="w-10 h-10 text-rose-500 mb-3" />
                 <h3 className="text-slate-900 font-bold text-sm mb-1">Failed to load history</h3>
@@ -282,6 +330,7 @@ export default function HistoryPage() {
                 </Button>
               </div>
             ) : filteredSessions.length === 0 ? (
+              /* Empty state (either no sessions overall, or zero matches under current filters) */
               <div className="flex flex-col items-center justify-center py-16 px-4 text-center space-y-4">
                 <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
                   <History className="w-7 h-7" />
@@ -318,6 +367,7 @@ export default function HistoryPage() {
                 )}
               </div>
             ) : (
+              /* Populated Sessions Grid */
               <div className="divide-y divide-slate-100">
                 {/* Desktop Table Header */}
                 <div className="hidden md:grid grid-cols-[1.2fr_1fr_1fr_1.5fr_1fr_1.3fr_1.2fr] gap-4 px-6 py-3.5 bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[11px] font-black uppercase tracking-wider">
@@ -335,17 +385,17 @@ export default function HistoryPage() {
                     key={session.id}
                     className="px-6 py-4 hover:bg-slate-50/60 transition-colors flex flex-col md:grid md:grid-cols-[1.2fr_1fr_1fr_1.5fr_1fr_1.3fr_1.2fr] gap-4 items-center"
                   >
-                    {/* Mode */}
+                    {/* Interview Mode Badge */}
                     <div className="flex items-center gap-2">
                       <SessionBadge variant="type" value={session.interview_type} />
                     </div>
 
-                    {/* Difficulty */}
+                    {/* Difficulty Badge */}
                     <div>
                       <SessionBadge variant="difficulty" value={session.difficulty} />
                     </div>
 
-                    {/* Status */}
+                    {/* Status Badge */}
                     <div>
                       <SessionBadge variant="status" value={session.status} />
                     </div>
@@ -368,13 +418,13 @@ export default function HistoryPage() {
                       <span>{formatDuration(session.duration_minutes)}</span>
                     </div>
 
-                    {/* Date */}
+                    {/* Session creation timestamp */}
                     <div className="flex items-center gap-1.5 text-slate-500 text-xs font-medium">
                       <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>{formatDate(session.created_at)}</span>
                     </div>
 
-                    {/* Actions */}
+                    {/* Contextual Action Links */}
                     <div className="text-right w-full md:w-auto flex md:justify-end gap-3 items-center pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
                       {session.status === 'completed' ? (
                         <div className="flex items-center gap-3">

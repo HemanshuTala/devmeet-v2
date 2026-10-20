@@ -13,7 +13,7 @@ export function LandingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 border-b border-slate-200/60 backdrop-blur-xl bg-white/80 shadow-sm transition-all">
+    <header className="fixed top-0 inset-x-0 z-50 border-b border-slate-200/60 backdrop-blur-xl bg-white/80 shadow-sm transition-all" role="banner">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
@@ -122,7 +122,7 @@ export function LandingHeader() {
           </motion.div>
         )}
       </AnimatePresence>
-    </nav>
+    </header>
   );
 }
 

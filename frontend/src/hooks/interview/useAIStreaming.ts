@@ -1,17 +1,59 @@
+/**
+ * ============================================================================
+ * DevMeet Frontend - Real-Time AI Question Streaming & SSE Hook
+ * ============================================================================
+ * Coordinates real-time Server-Sent Events (SSE) token streaming from the
+ * AI Interviewer microservice, dynamic typing indicators, voice synthesis (TTS),
+ * and turn persistence.
+ *
+ * Key Architectural Responsibilities:
+ * 1. Server-Sent Events (SSE) Stream Processing:
+ *    - Issues `POST /api/v1/interview/question/stream` with active session context
+ *      and formatted conversation dialogue history.
+ *    - Reads raw byte chunks using `ReadableStreamDefaultReader` and `TextDecoder`.
+ *    - Buffers partial lines, parses `data: {...}` JSON packets, and extracts streaming tokens.
+ * 2. Progressive UI Rendering:
+ *    - Appends incoming tokens to the active message in real-time, giving candidates
+ *      an interactive, lifelike interviewer experience.
+ * 3. Text-to-Speech Integration:
+ *    - Once the question stream completes (`parsed.done: true`), speaks the final question
+ *      aloud using `speak()` unless the candidate has muted the session (`isMuted: true`).
+ * 4. Asynchronous Turn Persistence:
+ *    - Saves the completed question, hints, and follow-ups to the database
+ *      via `sessionApi.saveTurn()`.
+ * ============================================================================
+ */
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiClient, aiApi, sessionApi } from '@/lib/api';
 import { speak } from '@/lib/speech';
 import { type ChatMessage, extractStreamingQuestion } from '@/app/interview/utils';
 
+/**
+ * Custom React hook managing streaming question generation from the AI Interviewer service.
+ *
+ * @param opts.session - Active interview session entity.
+ * @param opts.isMuted - Boolean flag indicating whether voice audio is muted.
+ * @param opts.onError - Callback delivering human-readable error messages.
+ */
 export function useAIStreaming(opts: {
   session: any;
   isMuted: boolean;
   onError: (msg: string) => void;
 }) {
+  // Ordered conversation chat messages
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // True while tokens are streaming from the LLM
   const [isAiTyping, setIsAiTyping] = useState(false);
+  // Extracted progressive hints for the current question
   const [hints, setHints] = useState<string[]>([]);
 
+  /**
+   * Initiates question generation and streams tokens directly into chat messages.
+   *
+   * @param history - Previous chat messages to maintain context.
+   * @param currentSession - Optional session entity override.
+   */
   const generateQuestion = useCallback(
     async (history: ChatMessage[], currentSession?: any) => {
       const activeSession = currentSession || opts.session;
@@ -20,6 +62,7 @@ export function useAIStreaming(opts: {
       setIsAiTyping(true);
       opts.onError('');
 
+      // Normalize message roles for LLM chat format (interviewer -> assistant, candidate -> user)
       const conversationHistory = history.map((m) => ({
         role: m.role === 'interviewer' ? 'assistant' : 'user',
         content: m.content,
@@ -38,9 +81,14 @@ export function useAIStreaming(opts: {
       const streamUrl = aiApi.streamQuestionUrl();
       const streamId = crypto.randomUUID();
 
-      setMessages((prev) => [...prev, { id: streamId, role: 'interviewer', content: '', timestamp: new Date() }]);
+      // Placeholder bubble for streaming response
+      setMessages((prev) => [
+        ...prev,
+        { id: streamId, role: 'interviewer', content: '', timestamp: new Date() },
+      ]);
 
       try {
+        // Enforce a 60-second fetch timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -61,6 +109,7 @@ export function useAIStreaming(opts: {
         }
         if (!response.body) throw new Error('No response body stream available.');
 
+        // Stream reader and UTF-8 decoder
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
@@ -70,11 +119,13 @@ export function useAIStreaming(opts: {
         let finalFollowUps: string[] = [];
         let parseErrorCount = 0;
 
+        // Process incoming binary chunks
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
+          // Retain incomplete trailing line in buffer
           buffer = lines.pop() || '';
 
           for (const line of lines) {
@@ -82,17 +133,22 @@ export function useAIStreaming(opts: {
             if (!cleanLine.startsWith('data: ')) continue;
             const jsonStr = cleanLine.substring(6).trim();
             if (!jsonStr) continue;
+
             try {
               const parsed = JSON.parse(jsonStr);
               if (parsed.error) {
                 opts.onError(parsed.error);
                 return;
               }
+              // Progressively append token to message bubble
               if (parsed.token) {
                 accumulatedText += parsed.token;
                 const display = extractStreamingQuestion(accumulatedText);
-                setMessages((prev) => prev.map((m) => (m.id === streamId ? { ...m, content: display } : m)));
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === streamId ? { ...m, content: display } : m)),
+                );
               }
+              // Stream completion packet
               if (parsed.done) {
                 finalQuestion = extractStreamingQuestion(parsed.question || accumulatedText);
                 finalHints = parsed.hints || [];
@@ -101,7 +157,12 @@ export function useAIStreaming(opts: {
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === streamId
-                        ? { ...m, content: finalQuestion, hints: finalHints, follow_ups: finalFollowUps }
+                        ? {
+                            ...m,
+                            content: finalQuestion,
+                            hints: finalHints,
+                            follow_ups: finalFollowUps,
+                          }
                         : m,
                     ),
                   );
@@ -109,7 +170,6 @@ export function useAIStreaming(opts: {
               }
               parseErrorCount = 0;
             } catch (err) {
-              // Only count actual JSON syntax errors
               if (jsonStr.startsWith('{') && !jsonStr.endsWith('}')) {
                 parseErrorCount++;
                 if (parseErrorCount >= 15) throw new Error('Streaming connection dropped unexpectedly.');
@@ -118,6 +178,7 @@ export function useAIStreaming(opts: {
           }
         }
 
+        // Process any trailing bytes remaining in buffer
         if (buffer?.trim().startsWith('data: ')) {
           try {
             const parsed = JSON.parse(buffer.trim().substring(6).trim());
@@ -136,7 +197,12 @@ export function useAIStreaming(opts: {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === streamId
-                    ? { ...m, content: finalQuestion, hints: finalHints, follow_ups: finalFollowUps }
+                    ? {
+                        ...m,
+                        content: finalQuestion,
+                        hints: finalHints,
+                        follow_ups: finalFollowUps,
+                      }
                     : m,
                 ),
               );
@@ -156,8 +222,10 @@ export function useAIStreaming(opts: {
           throw new Error('Received invalid or empty question from AI service.');
         }
 
+        // Speak question via browser TTS unless candidate has muted audio
         if (!opts.isMuted) speak(finalQuestion);
 
+        // Persist turn in backend database asynchronously
         const contentToSave =
           finalHints.length > 0 || finalFollowUps.length > 0
             ? JSON.stringify({ question: finalQuestion, hints: finalHints, follow_up_questions: finalFollowUps })
@@ -169,6 +237,7 @@ export function useAIStreaming(opts: {
       } catch (err: any) {
         const msg = err instanceof Error ? err.message : 'Failed to stream AI response.';
         opts.onError(msg);
+        // Remove empty placeholder message bubble on error
         setMessages((prev) => {
           const found = prev.find((m) => m.id === streamId);
           return found && !found.content ? prev.filter((m) => m.id !== streamId) : prev;

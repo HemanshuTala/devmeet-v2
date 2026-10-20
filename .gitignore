@@ -79,3 +79,9 @@ temp/
 *.tmp
 *.tar.gz
 .env.production
+
+# Test output & Playwright
+test-results/
+playwright-report/
+blob-report/
+

@@ -1,7 +1,24 @@
 'use client';
 
-/* __next_internal_client_entry_do_not_use__ SecuritySection auto */ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+/**
+ * ============================================================================
+ * DevMeet Frontend - Candidate Security & Two-Factor Authentication Settings
+ * ============================================================================
+ * Manages identity protection, email confirmation, and Multi-Factor Auth (MFA):
+ * 1. Email Verification:
+ *    - Sends 6-digit confirmation OTPs via Auth Service with a 60-second cooldown timer.
+ * 2. Time-Based One-Time Password (TOTP) Enrollment:
+ *    - Fetches provisioning URI / secret for Google Authenticator, 1Password, or Authy.
+ *    - Validates test TOTP code to finalize enrollment.
+ * 3. Emergency Backup Codes:
+ *    - Displays single-use alphanumeric emergency backup codes for account recovery.
+ * 4. MFA Deactivation:
+ *    - Requires live TOTP verification code to revoke two-factor authentication.
+ * ============================================================================
+ */
+
 import { useState, useEffect } from "react";
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { Shield, Mail, Smartphone, Loader2, CheckCircle, Copy } from "lucide-react";
 import { authApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";

@@ -31,13 +31,13 @@ SERVICES=(
   "devmeet-code-execution-service"
   "devmeet-video-service"
   "devmeet-feedback-service"
-  "devmeet-notification-service"
   "devmeet-analytics-service"
   "devmeet-admin-service"
   "devmeet-file-service"
   "devmeet-payment-service"
   "devmeet-search-service"
   "devmeet-api-gateway"
+  "devmeet-frontend"
 )
 
 echo ""

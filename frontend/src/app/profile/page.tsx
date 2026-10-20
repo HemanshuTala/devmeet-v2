@@ -1,5 +1,17 @@
 'use client';
 
+/**
+ * @file page.tsx (Candidate Profile Management Page)
+ * @description Central profile hub for authenticated candidates.
+ * Architecture:
+ * - Left column: Permanent Identity Card (avatar upload with S3 storage, member since date, account status,
+ *   subscription badge, skills preview, quote).
+ * - Right column: Tab-driven sub-views:
+ *   1. `ProfileTab`: Display name, bio, skills, and target companies with inline edit mode.
+ *   2. `PreferencesTab`: Notification toggles, public leaderboard discovery, password change form.
+ *   3. `BillingTab`: Subscription tier details, feature comparisons, and Stripe checkout CTA.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Mail, Calendar, User, Shield, X, Camera, Loader2, Settings, CreditCard } from 'lucide-react';
 import { authApi, userApi } from '@/lib/api';
@@ -12,11 +24,22 @@ import ProfileTab from './ProfileTab';
 import PreferencesTab from './PreferencesTab';
 import BillingTab from './BillingTab';
 
+/**
+ * Returns candidate initial monogram for avatar fallback.
+ *
+ * @param name - Candidate display name or email
+ * @returns Single uppercase letter
+ */
 function getInitials(name?: string | null): string {
   if (!name) return '?';
   return name.trim().charAt(0).toUpperCase();
 }
 
+/**
+ * Formats account registration date into readable English (e.g., "October 24, 2026").
+ *
+ * @param dateStr - Raw ISO date string
+ */
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -26,10 +49,13 @@ function formatDate(dateStr?: string | null): string {
   });
 }
 
+/**
+ * ProfilePage Component.
+ */
 export default function ProfilePage() {
   const { user, isLoading: authLoading, refreshUser } = useAuth();
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // ── Profile State ──
   const [profile, setProfile] = useState<any>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'billing'>('profile');
@@ -37,9 +63,11 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // TanStack React Query mutations & cache hooks
   const { data: planData } = usePlan();
   const updateProfileMutation = useUpdateProfile();
 
+  // Controlled form states
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
@@ -47,6 +75,7 @@ export default function ProfilePage() {
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [profilePublic, setProfilePublic] = useState(false);
 
+  // Password update form states
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -56,9 +85,12 @@ export default function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
 
-  // ── Effects ────────────────────────────────────────────────────────────────
+  // Enforce route authentication
   useRequireAuth();
 
+  /**
+   * Hydrates controlled form fields from profile response.
+   */
   const populateForm = useCallback((p: any) => {
     setDisplayName(p?.display_name ?? '');
     setBio(p?.bio ?? '');
@@ -82,18 +114,24 @@ export default function ProfilePage() {
     }
   }, [profileData, populateForm]);
 
+  // Toast alert dismiss timer
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  /**
+   * Cancels edit mode and resets form inputs back to current saved profile values.
+   */
   function handleCancelEdit() {
     if (profile) populateForm(profile);
     setIsEditing(false);
   }
 
+  /**
+   * Saves updated personal details (name, bio, skills, target companies) to User Service.
+   */
   async function handleSaveProfile() {
     if (!displayName.trim()) {
       showToast('error', 'Display name cannot be empty.');
@@ -120,6 +158,9 @@ export default function ProfilePage() {
     }
   }
 
+  /**
+   * Commits partial preference updates (reminders or public toggle) without entering edit mode.
+   */
   async function handlePreferenceSave(patch: any) {
     try {
       const updated = await updateProfileMutation.mutateAsync(patch);
@@ -130,6 +171,10 @@ export default function ProfilePage() {
     }
   }
 
+  /**
+   * Uploads candidate avatar image to User / File microservice.
+   * Enforces 5MB size limit and image/jpeg, image/png, image/webp MIME types.
+   */
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -156,6 +201,9 @@ export default function ProfilePage() {
     }
   }
 
+  /**
+   * Handles password change submission with client-side length and equality validation.
+   */
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
     setPasswordError('');
@@ -184,9 +232,9 @@ export default function ProfilePage() {
     }
   }
 
-  // ── Loading guard ──────────────────────────────────────────────────────────
   const currentPlan = planData?.plan ?? 'free';
 
+  // Loading skeleton during query resolution
   if (authLoading || isLoadingProfile || profileQueryLoading) {
     return (
       <DashboardShell maxWidth="max-w-6xl">
@@ -250,7 +298,7 @@ export default function ProfilePage() {
 
   return (
     <DashboardShell maxWidth="max-w-6xl">
-      {/* Toast Alert */}
+      {/* Toast Alert Popover */}
       {toast && (
         <div
           className={`fixed top-6 right-6 z-50 flex items-center gap-3 rounded-xl border px-5 py-3 shadow-2xl backdrop-blur-md animate-fade-in-up font-semibold text-sm ${
@@ -275,7 +323,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header Bar */}
       <div className="mb-2">
         <h1 className="text-3xl font-bold gradient-text">My Profile</h1>
         <p className="text-slate-500 text-sm mt-1 font-medium">
@@ -283,11 +331,12 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      {/* Main Grid */}
+      {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left Column: Identity Card */}
+        {/* ── Left Column: Identity Card ── */}
         <div className="lg:col-span-1 animate-fade-in-up delay-100">
           <div className="bg-white border border-blue-100 p-6 rounded-2xl shadow-sm flex flex-col items-center text-center gap-4">
+            {/* Avatar container with hover camera icon for upload */}
             <div className="relative group">
               <div className="h-24 w-24 rounded-full bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-200/50 ring-4 ring-blue-50 overflow-hidden">
                 {profile.avatar_url ? (
@@ -323,6 +372,7 @@ export default function ProfilePage() {
               <div className="absolute bottom-1 right-1 h-4 w-4 rounded-full bg-emerald-400 ring-2 ring-white shadow" />
             </div>
 
+            {/* Display Name & Email */}
             <div>
               <h2 className="text-xl font-bold text-slate-900">
                 {profile.display_name ?? 'Anonymous'}
@@ -333,6 +383,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* Subscription badge */}
             <span
               className={`text-xs font-bold px-3 py-1 rounded-full border ${
                 currentPlan === 'pro'
@@ -347,6 +398,7 @@ export default function ProfilePage() {
 
             <div className="w-full h-px bg-blue-50" />
 
+            {/* Metadata summary (registration date & active status) */}
             <div className="w-full grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-blue-50 bg-slate-50 p-3">
                 <div className="flex items-center justify-center gap-1.5 text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1 select-none">
@@ -364,6 +416,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* Bio quote */}
             {profile.bio && (
               <>
                 <div className="w-full h-px bg-blue-50" />
@@ -371,6 +424,7 @@ export default function ProfilePage() {
               </>
             )}
 
+            {/* Skills tag pills preview */}
             {(profile.skills ?? []).length > 0 && (
               <>
                 <div className="w-full h-px bg-blue-50" />
@@ -391,9 +445,9 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Right Column: Tab View */}
+        {/* ── Right Column: Tab View ── */}
         <div className="lg:col-span-2 animate-fade-in-up delay-200">
-          {/* Tab Selector */}
+          {/* Tab Selection Header */}
           <div className="flex gap-1 rounded-xl border border-blue-100 bg-white p-1 mb-5 shadow-sm">
             {[
               { id: 'profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
@@ -406,7 +460,7 @@ export default function ProfilePage() {
                   setActiveTab(tab.id as 'profile' | 'preferences' | 'billing');
                   if (isEditing) handleCancelEdit();
                 }}
-                className={`flex-1 rounded-lg py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                className={`flex-1 rounded-lg py-2 text-sm font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
                   activeTab === tab.id
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                     : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
@@ -418,6 +472,7 @@ export default function ProfilePage() {
             ))}
           </div>
 
+          {/* Active Tab View */}
           {activeTab === 'profile' && (
             <ProfileTab
               isEditing={isEditing}

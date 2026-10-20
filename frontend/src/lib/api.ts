@@ -449,9 +449,9 @@ export const videoApi = {
     request<any>('/api/v1/video/token', json('POST', { room_name, participant_identity, participant_name })),
   preflight: (payload: unknown) => request<any>('/api/v1/video/preflight', json('POST', payload)),
   startRecording: (room_name: string, user_id: string, consent: boolean) =>
-    request('/api/v1/video/recording/start', json('POST', { room_name, user_id, consent })),
+    request(`/api/v1/video/room/${room_name}/recording/start`, json('POST', { room_name, user_id, consent })),
   stopRecording: (room_name: string, user_id: string) =>
-    request('/api/v1/video/recording/stop', json('POST', { room_name, user_id })),
+    request(`/api/v1/video/room/${room_name}/recording/stop`, json('POST', { room_name, user_id })),
   reportNetworkQuality: (room_name: string, user_id: string, quality: unknown) =>
     request(`/api/v1/video/room/${room_name}/quality`, json('POST', { participant_identity: user_id, metrics: quality })),
 };
@@ -462,6 +462,6 @@ export const videoApi = {
 export const feedbackApi = {
   get: (sessionId: string) => request<any>(`/api/v1/feedback/${sessionId}`),
   generate: (sessionId: string, payload?: Record<string, unknown>) =>
-    request<any>(`/api/v1/feedback/generate', json('POST', { session_id: sessionId, ...payload })),
+    request<any>('/api/v1/feedback/generate', json('POST', { session_id: sessionId, ...payload })),
   downloadPdf: (sessionId: string) => request<Blob>(`/api/v1/feedback/${sessionId}/pdf`, { headers: { Accept: 'application/pdf' } }),
 };

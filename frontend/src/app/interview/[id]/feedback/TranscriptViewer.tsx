@@ -1,8 +1,24 @@
 'use client';
 
+/**
+ * @file TranscriptViewer.tsx (Searchable Dialogue Transcript Reviewer)
+ * @description Accordion-based transcript viewer enabling candidates to audit the entire interview dialog.
+ * Features:
+ * - Free-text search matching across questions and responses
+ * - Sender role filtering (All / AI Interviewer / You)
+ * - Expandable turn cards showing complete text and submitted code blocks
+ * - Automated complexity assessment tips on candidate responses for DSA tracks
+ */
+
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, ChevronDown, ChevronUp, Bot, User, TrendingUp } from 'lucide-react';
 
+/**
+ * Parses markdown inline code blocks within dialogue messages.
+ *
+ * @param text - Message text
+ * @returns Array of rendered spans and code tags
+ */
 function renderWithCodeBlocks(text: string) {
   const parts = text.split(/(`[^`]+`)/g);
   return parts.map((part, i) =>
@@ -16,22 +32,36 @@ function renderWithCodeBlocks(text: string) {
   );
 }
 
+/**
+ * Single turn record from session transcript.
+ */
 interface Turn {
   id?: string;
   role: string;
   content: string;
 }
 
+/**
+ * Props passed to TranscriptViewer.
+ */
 interface TranscriptViewerProps {
+  /** Complete ordered list of conversational turns */
   turns: Turn[];
+  /** Interview category track ('dsa' | 'behavioral' | 'system_design') */
   interviewType: string;
 }
 
+/**
+ * TranscriptViewer Component.
+ */
 export default function TranscriptViewer({ turns, interviewType }: TranscriptViewerProps) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'interviewer' | 'candidate'>('all');
   const [openTurnIndex, setOpenTurnIndex] = useState<number | null>(null);
 
+  /**
+   * Memoized filter computing search keyword match and role filter.
+   */
   const filteredTurns = useMemo(() => {
     return turns
       .map((t, i) => ({ ...t, originalIndex: i }))
@@ -47,6 +77,7 @@ export default function TranscriptViewer({ turns, interviewType }: TranscriptVie
 
   return (
     <section className="bg-white border border-blue-100 rounded-2xl shadow-sm overflow-hidden">
+      {/* Header bar with search input and role filter pills */}
       <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <h3 className="text-slate-800 font-bold flex items-center gap-2">
           <Search className="w-4 h-4 text-blue-500" />
@@ -57,6 +88,7 @@ export default function TranscriptViewer({ turns, interviewType }: TranscriptVie
         </h3>
 
         <div className="flex gap-2 ml-auto flex-wrap">
+          {/* Keyword search input */}
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -68,6 +100,7 @@ export default function TranscriptViewer({ turns, interviewType }: TranscriptVie
             />
           </div>
 
+          {/* Sender role filter buttons */}
           <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-0.5">
             <Filter className="w-3 h-3 text-slate-400 ml-1.5" />
             {(['all', 'interviewer', 'candidate'] as const).map((f) => (
@@ -85,6 +118,7 @@ export default function TranscriptViewer({ turns, interviewType }: TranscriptVie
         </div>
       </div>
 
+      {/* Accordion list of dialogue turns */}
       <div className="divide-y divide-blue-50 max-h-[500px] overflow-y-auto">
         {filteredTurns.map((turn) => {
           const isOpen = openTurnIndex === turn.originalIndex;
@@ -92,6 +126,7 @@ export default function TranscriptViewer({ turns, interviewType }: TranscriptVie
 
           return (
             <div key={turn.id || turn.originalIndex} className="bg-white hover:bg-slate-50/50 transition-colors">
+              {/* Collapsed turn summary bar */}
               <button
                 onClick={() => setOpenTurnIndex(isOpen ? null : turn.originalIndex)}
                 className="w-full px-4 py-3 flex items-center justify-between text-left gap-4 bg-white/60 rounded-t-xl"
@@ -113,6 +148,7 @@ export default function TranscriptViewer({ turns, interviewType }: TranscriptVie
                 {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />}
               </button>
 
+              {/* Expanded turn content view */}
               {isOpen && (
                 <div className="px-4 pb-4 pt-2 border-t border-blue-100">
                   <div className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed font-sans">
@@ -134,6 +170,7 @@ export default function TranscriptViewer({ turns, interviewType }: TranscriptVie
         })}
       </div>
 
+      {/* Filter summary status line */}
       {filteredTurns.length > 0 && filteredTurns.length < turns.length && (
         <p className="text-xs text-slate-400 text-center font-medium py-3">
           Showing {filteredTurns.length} of {turns.length} turns

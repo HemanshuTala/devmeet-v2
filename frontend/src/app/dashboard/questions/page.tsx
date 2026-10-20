@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * @file page.tsx (Dashboard Question Bank Explorer)
+ * @description Curated Question Bank browser allowing candidates to explore practice questions
+ * across DSA, System Design, and Behavioral domains. Supports multi-faceted filtering
+ * (search text, difficulty, interview category, company tags), instant one-click launch
+ * into a live mock interview session with pre-populated parameters, and random question generation.
+ */
+
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -27,6 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import SessionBadge from '@/components/SessionBadge';
 import { toast } from 'sonner';
 
+/** Filter options for Interview Type dropdown */
 const TYPE_OPTIONS = [
   { value: '', label: 'All Types' },
   { value: 'dsa', label: 'DSA' },
@@ -34,6 +43,7 @@ const TYPE_OPTIONS = [
   { value: 'system_design', label: 'System Design' },
 ];
 
+/** Filter options for Difficulty dropdown */
 const DIFFICULTY_OPTIONS = [
   { value: '', label: 'All Difficulties' },
   { value: 'easy', label: 'Easy' },
@@ -41,6 +51,15 @@ const DIFFICULTY_OPTIONS = [
   { value: 'hard', label: 'Hard' },
 ];
 
+/**
+ * Individual Question Card component.
+ * Displays title, difficulty & domain badges, truncated problem summary,
+ * topic and company tags, and an action button to practice the question.
+ *
+ * @param question - Question data model returned by Search service
+ * @param onPractice - Callback triggered when the candidate selects "Practice This Question"
+ * @param practicing - True if this specific question is currently initiating a session
+ */
 function QuestionCard({
   question,
   onPractice,
@@ -64,8 +83,10 @@ function QuestionCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Truncated question prompt / synopsis */}
         <p className="text-sm text-slate-600 line-clamp-3 leading-relaxed">{question.description}</p>
 
+        {/* Topic tags (algorithms, data structures) and company badges */}
         {((question.tags?.length ?? 0) > 0 || (question.company_tags?.length ?? 0) > 0) && (
           <div className="flex flex-wrap gap-1.5">
             {question.tags?.slice(0, 4).map((tag) => (
@@ -83,6 +104,7 @@ function QuestionCard({
           </div>
         )}
 
+        {/* Practice launch trigger */}
         <Button
           size="sm"
           className="w-full gap-2 font-semibold"
@@ -101,23 +123,35 @@ function QuestionCard({
   );
 }
 
+/**
+ * Main Question Bank Page Component.
+ * Implements debounced text search, filter controls, query synchronization with the Search microservice,
+ * and quick-practice session routing.
+ */
 export default function QuestionsPage() {
   const router = useRouter();
+
+  // Authentication barrier
   const { isLoading: authLoading } = useRequireAuth();
 
+  // Filter input states
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
+
+  // Debounced search text state to avoid overloading the backend on every keystroke
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [practicingId, setPracticingId] = useState<string | null>(null);
   const [randomLoading, setRandomLoading] = useState(false);
 
+  // Debounce search query changes by 350ms
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim()), 350);
     return () => clearTimeout(t);
   }, [query]);
 
+  // Construct search query parameters for React Query hook
   const searchParams = useMemo(
     () => ({
       q: debouncedQuery || undefined,
@@ -130,6 +164,7 @@ export default function QuestionsPage() {
     [debouncedQuery, typeFilter, difficultyFilter, companyFilter]
   );
 
+  // Fetch matched questions using TanStack Query
   const { data, isLoading, error, refetch, isFetching } = useQuestionSearch(
     searchParams,
     !authLoading
@@ -138,6 +173,11 @@ export default function QuestionsPage() {
   const questions = data?.questions ?? [];
   const total = data?.total ?? 0;
 
+  /**
+   * Prepares and routes the user into session creation wizard with question parameters pre-populated.
+   *
+   * @param question - The selected practice problem
+   */
   const handlePractice = async (question: SearchQuestion) => {
     setPracticingId(question.id ?? null);
     try {
@@ -152,6 +192,10 @@ export default function QuestionsPage() {
     }
   };
 
+  /**
+   * Fetches a random question matching the current type and difficulty filters from the search service,
+   * then immediately routes to the interview setup wizard.
+   */
   const handleRandom = async () => {
     setRandomLoading(true);
     try {
@@ -165,6 +209,7 @@ export default function QuestionsPage() {
     }
   };
 
+  // Skeleton shimmer view displayed while authentication is validating
   if (authLoading) return (
     <DashboardShell maxWidth="max-w-7xl">
       <div className="flex flex-col gap-6 animate-fade-in">
@@ -207,6 +252,7 @@ export default function QuestionsPage() {
 
   return (
     <DashboardShell maxWidth="max-w-7xl">
+      {/* Page Title & Random Selection CTA */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <Link
@@ -229,7 +275,9 @@ export default function QuestionsPage() {
         </Button>
       </div>
 
+      {/* Filter and Search Bar Controls */}
       <div className="bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200/60 transition-all duration-200 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Search input field */}
         <div className="relative md:col-span-2">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
           <input
@@ -240,6 +288,8 @@ export default function QuestionsPage() {
             className="input-field w-full pl-9"
           />
         </div>
+
+        {/* Interview type filter select */}
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-slate-400 shrink-0" />
           <select
@@ -254,6 +304,8 @@ export default function QuestionsPage() {
             ))}
           </select>
         </div>
+
+        {/* Difficulty filter select */}
         <select
           value={difficultyFilter}
           onChange={(e) => setDifficultyFilter(e.target.value)}
@@ -267,6 +319,7 @@ export default function QuestionsPage() {
         </select>
       </div>
 
+      {/* Results Count & Clear Filters Row */}
       <div className="flex items-center justify-between text-sm text-slate-500 font-medium">
         <span>
           {isFetching && !isLoading ? 'Updating…' : `${total} question${total === 1 ? '' : 's'} found`}
@@ -287,6 +340,7 @@ export default function QuestionsPage() {
         )}
       </div>
 
+      {/* Error state display */}
       {error && (
         <div className="space-y-3">
           <ErrorAlert message="Failed to load questions. Check that the search service is running." />
@@ -296,6 +350,7 @@ export default function QuestionsPage() {
         </div>
       )}
 
+      {/* Questions Results Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (

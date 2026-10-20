@@ -1,9 +1,21 @@
 'use client';
 
+/**
+ * @file TypingIndicator.tsx (AI Interviewer Thinking / Streaming Indicator)
+ * @description Animated component displayed in the chat panel while the AI interviewer is
+ * generating its next question or evaluation response. Shows a pulsing brain avatar,
+ * a 5-bar audio-wave animation, and a "thinking" status label.
+ * Uses Framer Motion with staggered delays to create a fluid wave effect.
+ */
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Brain } from 'lucide-react';
 
+/**
+ * TypingIndicator Component.
+ * Rendered as an animated message bubble while `isAiTyping` is true.
+ */
 export default function TypingIndicator() {
   return (
     <motion.div
@@ -13,7 +25,7 @@ export default function TypingIndicator() {
       transition={{ duration: 0.3, ease: 'easeOut' }}
       className="flex items-start gap-3"
     >
-      {/* AI Avatar */}
+      {/* AI Avatar with pulsing glow ring */}
       <div className="relative flex-shrink-0">
         <motion.div
           className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -26,7 +38,8 @@ export default function TypingIndicator() {
         >
           <Brain className="w-4 h-4 text-white" />
         </motion.div>
-        {/* Live status dot */}
+
+        {/* Online status dot with ping animation */}
         <motion.span
           className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white"
           style={{ background: '#22c55e' }}
@@ -35,7 +48,7 @@ export default function TypingIndicator() {
         />
       </div>
 
-      {/* Bubble */}
+      {/* Bubble containing animated audio-wave bars */}
       <div className="flex flex-col gap-1">
         <div
           className="px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm border"
@@ -44,7 +57,7 @@ export default function TypingIndicator() {
             borderColor: 'rgba(37, 99, 235, 0.12)',
           }}
         >
-          {/* Animated wave bars */}
+          {/* 5-bar staggered waveform — middle bar is tallest for visual emphasis */}
           <div className="flex items-center gap-[4px] py-1 h-5">
             {[0, 1, 2, 3, 4].map((i) => (
               <motion.div
@@ -71,6 +84,8 @@ export default function TypingIndicator() {
             ))}
           </div>
         </div>
+
+        {/* Thinking label with slow opacity pulse */}
         <motion.span
           className="text-[10px] text-slate-500 font-medium pl-1"
           animate={{ opacity: [0.4, 1, 0.4] }}

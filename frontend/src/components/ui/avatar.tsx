@@ -1,9 +1,26 @@
 'use client';
 
+/**
+ * ============================================================================
+ * DevMeet Frontend - Radix UI Avatar Primitive Wrapper
+ * ============================================================================
+ * Accessible profile picture component providing image display with automatic
+ * text fallback (candidate initials) while images load or on network failure.
+ *
+ * Components:
+ * - `Avatar`: Root circle container.
+ * - `AvatarImage`: Remote image with aspect-ratio preservation.
+ * - `AvatarFallback`: Accessible background fallback displaying candidate initials.
+ * ============================================================================
+ */
+
 import * as React from 'react';
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import { cn } from '@/lib/utils';
 
+/**
+ * Root container for candidate profile picture avatar.
+ */
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
@@ -16,6 +33,9 @@ const Avatar = React.forwardRef<
 ));
 Avatar.displayName = AvatarPrimitive.Root.displayName;
 
+/**
+ * Image element that renders remote candidate avatar image.
+ */
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
@@ -28,6 +48,9 @@ const AvatarImage = React.forwardRef<
 ));
 AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
+/**
+ * Fallback badge displaying initials when image is unpopulated or fails to load.
+ */
 const AvatarFallback = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Fallback>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>

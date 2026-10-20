@@ -1,7 +1,29 @@
+/**
+ * @file global-error.tsx
+ * @description Next.js App Router Global Catch-All Error Boundary for DevMeet.
+ *
+ * Special Next.js Convention:
+ * - Catches fatal errors thrown inside the root `app/layout.tsx` or top-level providers.
+ * - Because it replaces the root layout when an error occurs, it MUST define its own `<html>` and `<body>` tags.
+ * - Logs fatal exceptions for error reporting and telemetry.
+ * - Provides a "Try again" action (`reset()`) to attempt re-rendering the root segment without a full page reload.
+ *
+ * @module app/global-error
+ */
+
 'use client';
 
 import { useEffect } from 'react';
 
+/**
+ * GlobalError Component.
+ *
+ * @component
+ * @param {Object} props
+ * @param {Error & { digest?: string }} props.error - Fatal error instance with optional Next.js digest hash.
+ * @param {() => void} props.reset - Next.js router function to re-attempt rendering the failed segment.
+ * @returns {JSX.Element} Minimal standalone HTML document with fatal error UI.
+ */
 export default function GlobalError({
   error,
   reset,
@@ -9,6 +31,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Log fatal unhandled exceptions to console or telemetry services
   useEffect(() => {
     console.error('Global error:', error);
   }, [error]);
@@ -21,6 +44,7 @@ export default function GlobalError({
             <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>⚠️</div>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Something went wrong</h1>
             <p style={{ color: '#94a3b8', marginBottom: '2rem' }}>{error.message || 'An unexpected error occurred.'}</p>
+            {/* Re-render recovery button */}
             <button
               onClick={reset}
               style={{

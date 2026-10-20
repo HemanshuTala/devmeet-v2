@@ -1,5 +1,28 @@
 'use client';
 
+/**
+ * @file page.tsx (Interview Room Studio Master Orchestrator)
+ * @description Master container component for the live AI mock interview experience.
+ * Coordinates the full interview lifecycle from pre-flight hardware calibration to post-interview scorecard generation:
+ *
+ * 1. Pre-Flight Device Check (`DeviceCheckScreen`):
+ *    Verifies camera, microphone, and browser support before granting room access.
+ * 2. Start Screen Lobby (`InterviewStartScreen`):
+ *    Displays session specs, calibration diagnostics, and initiates room startup.
+ * 3. Studio Launching Splash (`StudioLaunchingScreen`):
+ *    Smooth animated transition while transitioning backend session to `in_progress`.
+ * 4. Active Interview Studio:
+ *    - Fullscreen enforcement and blur/tab-switch anti-cheating monitoring (`useCheatingDetection`).
+ *    - Bidirectional AI conversational turns with SSE token streaming (`useAIStreaming`).
+ *    - Speech recognition (STT) and voice synthesis (TTS) integration (`useSpeechRecognition`, `speak`).
+ *    - Dynamic layout switching:
+ *      * DSA / Coding mode: Left split = Chat & compact video; Right split = Microsoft Monaco Editor & sandbox runner.
+ *      * Behavioral / System Design: Left split = Chat; Right split = Tabs (Full WebRTC Video & AI Avatar / Strategy Tips).
+ *    - Code sandbox compilation and test execution via Docker microservice (`executionApi`).
+ *    - Automated AFK detection (2-minute idle alert).
+ *    - Periodic keepalive heartbeat and declarative session timer (`useSessionTimer`).
+ */
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,18 +52,22 @@ import { useCheatingDetection } from '@/hooks/interview/useCheatingDetection';
 import { useAIStreaming } from '@/hooks/interview/useAIStreaming';
 import { useSpeechRecognition } from '@/hooks/interview/useSpeechRecognition';
 
+/**
+ * InterviewRoomPage Component.
+ * The primary workspace connecting candidate inputs, AI streaming, and proctoring.
+ */
 export default function InterviewRoomPage() {
   const router = useRouter();
   const params = useParams();
   const sessionId = params.id as string;
   const { user } = useAuth();
 
-  // ── Session state ──
+  // ── Session metadata state ──
   const [session, setSession] = useState<any>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // ── Chat / input state ──
+  // ── Chat & conversational state ──
   const [input, setInput] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
   const [showHints, setShowHints] = useState(false);
@@ -49,7 +76,7 @@ export default function InterviewRoomPage() {
   const isPausedRef = useRef(false);
   const speechBaseTextRef = useRef('');
 
-  // ── Code editor state ──
+  // ── In-browser code editor & execution state ──
   const [language, setLanguage] = useState('python');
   const [code, setCode] = useState(LANGUAGE_OPTIONS.python.defaultCode);
   const [executionResult, setExecutionResult] = useState<any>(null);
@@ -58,7 +85,7 @@ export default function InterviewRoomPage() {
   const [userPlan, setUserPlan] = useState('free');
   const [asyncExecution, setAsyncExecution] = useState(true);
 
-  // ── UI state ──
+  // ── UI modal & workflow flags ──
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -67,24 +94,31 @@ export default function InterviewRoomPage() {
   const [showVideoFeed, setShowVideoFeed] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
 
-  // ── Device check gate ──
+  // ── Pre-flight device check gate ──
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
-  // ── AFK detection ──
+  // ── Idle / AFK Detection Timer (triggers warning if user is idle > 2 minutes) ──
   const [showAfkWarning, setShowAfkWarning] = useState(false);
   const afkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Resets the 2-minute inactivity timer whenever user types, speaks, or runs code.
+   */
   const resetAfkTimer = useCallback(() => {
     if (afkTimerRef.current) clearTimeout(afkTimerRef.current);
     setShowAfkWarning(false);
     afkTimerRef.current = setTimeout(() => setShowAfkWarning(true), 120000);
   }, []);
+
   useEffect(() => () => { if (afkTimerRef.current) clearTimeout(afkTimerRef.current); }, []);
 
   const isDSA = session?.interview_type === 'dsa';
 
-  // ── Custom hooks ──
+  // ── Custom Hooks ──
+  // Timer & heartbeat keepalive
   const timer = useSessionTimer(sessionId);
 
+  // Anti-cheating & proctoring (tab-switch and paste event listener)
   const cheating = useCheatingDetection(sessionId, {
     elapsedSeconds: timer.elapsedSeconds,
     stopTimer: timer.stopTimer,
@@ -93,25 +127,26 @@ export default function InterviewRoomPage() {
     onSessionUpdate: setSession,
   });
 
+  // LLM conversational streaming via SSE/WebSocket
   const streaming = useAIStreaming({
     session,
     isMuted,
     onError: (msg) => setChatError(msg ? 'AI interviewer is temporarily unavailable. Please try again.' : null),
   });
 
+  // Browser Web Speech API hook
   const speech = useSpeechRecognition();
 
-  // ── Mark body as interview-active (hides mobile blocker, enables fullscreen) ──
+  // ── Body class marking: locks scroll and hides global mobile blockers ──
   useEffect(() => {
     document.body.classList.add('interview-active');
     return () => {
       document.body.classList.remove('interview-active');
-      // Exit fullscreen when leaving the interview route
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     };
   }, []);
 
-  // ── Fullscreen: enter when interview starts, allow exit only after it ends ──
+  // ── Fullscreen API Management ──
   const enterFullscreen = useCallback(() => {
     const el = document.documentElement;
     if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
@@ -123,7 +158,7 @@ export default function InterviewRoomPage() {
 
   const [isFullscreen, setIsFullscreen] = useState(true);
 
-  // Track fullscreen state to provide safe user-gesture re-entry
+  // Monitor fullscreen change events to surface the recovery banner if candidate leaves fullscreen
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -133,7 +168,7 @@ export default function InterviewRoomPage() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // ── Audio unlock on first gesture ──
+  // ── Audio Context Unlock: Enables TTS auto-play on first user interaction ──
   useEffect(() => {
     userApi.getQuota().then((q) => setUserPlan(q.plan)).catch(() => {});
     let unlocked = false;
@@ -150,7 +185,7 @@ export default function InterviewRoomPage() {
     };
   }, []);
 
-  // ── Declarative timer sync ──
+  // ── Synchronize timer with session lifecycle state ──
   useEffect(() => {
     if (session?.status === 'in_progress' && !sessionPaused) {
       if (!timer.timerRef.current) timer.startTimer();
@@ -160,11 +195,12 @@ export default function InterviewRoomPage() {
     return () => timer.stopTimer();
   }, [session?.id, session?.status, sessionPaused]);
 
-  // ── Page visibility: pause on hide, resume on show ──
+  // ── Visibility Change Listener: Auto-pause session when candidate leaves tab ──
   useEffect(() => {
     if (!session || (session.status !== 'in_progress' && session.status !== 'paused')) return;
     const handleVisibility = async () => {
       if (document.hidden) {
+        // Tab hidden or blurred: record cheating violation and pause session
         speech.stopRecording();
         isPausedRef.current = true;
         setSessionPaused(true);
@@ -172,6 +208,7 @@ export default function InterviewRoomPage() {
         cheating.triggerCheatingViolation('tab_switch');
         sessionApi.pause(session.id, timer.elapsedSeconds).catch(() => {});
       } else {
+        // Tab regained focus: attempt seamless resumption
         if (!isPausedRef.current) return;
         isPausedRef.current = false;
         try {
@@ -189,7 +226,7 @@ export default function InterviewRoomPage() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [session, timer.elapsedSeconds]);
 
-  // ── Load session ──
+  // ── Session Data Fetching & Hydration on Initial Mount ──
   useEffect(() => {
     if (!sessionId) return;
     (async () => {
@@ -200,8 +237,20 @@ export default function InterviewRoomPage() {
         setSession(s);
         cheating.setTabSwitchCount(s.tab_switch_count || 0);
         cheating.setPasteCount(s.paste_count || 0);
-        if (s.status === 'completed' || s.status === 'cancelled') { router.replace('/dashboard'); return; }
-        if (s.status === 'created') { setPageLoading(false); return; }
+
+        // Redirect already-finished sessions away from studio
+        if (s.status === 'completed' || s.status === 'cancelled') {
+          router.replace('/dashboard');
+          return;
+        }
+
+        // Fresh session waiting for user to click Start
+        if (s.status === 'created') {
+          setPageLoading(false);
+          return;
+        }
+
+        // Active or paused session: hydrate conversation history and start heartbeat
         if (s.status === 'in_progress' || s.status === 'paused') {
           timer.setElapsedSeconds(s.elapsed_seconds || 0);
           try {
@@ -228,12 +277,17 @@ export default function InterviewRoomPage() {
     };
   }, [sessionId]);
 
-  // ── Handlers ──
+  // ── Workflow Action Handlers ──
+
+  /**
+   * Starts the interview session from the lobby start screen.
+   * Requests fullscreen, triggers API status change, and kicks off AI question generation.
+   */
   const handleStart = useCallback(async () => {
     if (!session || isStarting) return;
     setIsStarting(true);
     setChatError(null);
-    enterFullscreen(); // Synchronous user gesture execution
+    enterFullscreen(); // User gesture required for browser fullscreen
 
     try {
       // 1. Transition backend session to in_progress
@@ -263,6 +317,9 @@ export default function InterviewRoomPage() {
     }
   }, [session, isStarting, timer, streaming, router, enterFullscreen]);
 
+  /**
+   * Sends candidate's typed or spoken message to the AI interviewer.
+   */
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || streaming.isAiTyping || !session) return;
@@ -276,12 +333,15 @@ export default function InterviewRoomPage() {
     await streaming.generateQuestion(updated);
   }, [input, streaming, session, speech, resetAfkTimer]);
 
+  /**
+   * Cancels a pending or active session and navigates back to dashboard.
+   */
   const handleCancel = useCallback(async () => {
     if (!session) return;
     setIsCancelling(true);
     try {
       await sessionApi.cancel(session.id);
-      exitFullscreen(); // Release fullscreen on cancel
+      exitFullscreen();
       router.push('/dashboard');
     } catch {
       setChatError('Failed to cancel session.');
@@ -289,6 +349,9 @@ export default function InterviewRoomPage() {
     }
   }, [session, router, exitFullscreen]);
 
+  /**
+   * Confirms early interview termination, calls completion API, and routes to scorecard report.
+   */
   const handleEndConfirm = useCallback(async () => {
     if (!session) return;
     setIsEnding(true);
@@ -297,7 +360,7 @@ export default function InterviewRoomPage() {
       analyticsApi.track('session_completed', user?.id, session.id, { interview_type: session.interview_type, difficulty: session.difficulty, duration_seconds: timer.elapsedSeconds }).catch(() => {});
       timer.stopTimer();
       timer.stopHeartbeat();
-      exitFullscreen(); // Release fullscreen when interview ends
+      exitFullscreen();
       router.push(`/interview/${session.id}/feedback`);
     } catch (err: any) {
       setChatError(err?.message || 'Failed to end interview.');
@@ -306,6 +369,9 @@ export default function InterviewRoomPage() {
     }
   }, [session, router, timer, user?.id, exitFullscreen]);
 
+  /**
+   * Requests progressive AI hints without spoiling the complete solution.
+   */
   const handleRequestHint = useCallback(async () => {
     if (!session || hintLoading) return;
     const lastQ = [...streaming.messages].reverse().find((m) => m.role === 'interviewer');
@@ -348,6 +414,9 @@ export default function InterviewRoomPage() {
     }
   }, [session, streaming.messages, code, isDSA, hintLoading, userPlan]);
 
+  /**
+   * Dispatches code execution to the Docker sandbox (used by "Run" button).
+   */
   const handleRunCode = useCallback(async () => {
     setIsRunning(true);
     setExecutionResult(null);
@@ -369,6 +438,9 @@ export default function InterviewRoomPage() {
     }
   }, [code, language, asyncExecution, session?.id]);
 
+  /**
+   * Submits candidate's completed code solution to the AI interviewer for review and follow-up.
+   */
   const handleSubmitCode = useCallback(async () => {
     if (!session || isRunning || isSubmittingCode) return;
     setIsSubmittingCode(true);
@@ -404,18 +476,27 @@ export default function InterviewRoomPage() {
     }
   }, [session, language, code, asyncExecution, isRunning, isSubmittingCode, streaming]);
 
+  /**
+   * Switches programming language and swaps in the starter template.
+   */
   const handleLanguageChange = useCallback((lang: string) => {
     setLanguage(lang);
     setCode(LANGUAGE_OPTIONS[lang].defaultCode);
     setExecutionResult(null);
   }, []);
 
+  /**
+   * Pauses the interview session and stops timers.
+   */
   const handlePause = useCallback(async () => {
     if (!session || sessionPaused) return;
     try { await sessionApi.pause(session.id, timer.elapsedSeconds); timer.stopTimer(); setSessionPaused(true); isPausedRef.current = true; }
     catch (err: any) { setChatError(err?.message || 'Failed to pause session'); }
   }, [session, sessionPaused, timer]);
 
+  /**
+   * Resumes a paused interview session.
+   */
   const handleResume = useCallback(async () => {
     if (!session || !sessionPaused) return;
     try {
@@ -428,6 +509,9 @@ export default function InterviewRoomPage() {
     } catch { setChatError('Failed to resume session. The 30-minute pause window may have expired.'); }
   }, [session, sessionPaused, timer]);
 
+  /**
+   * Toggles speech synthesis (TTS) playback of AI interviewer questions.
+   */
   const handleToggleMute = useCallback(() => {
     if (isMuted) {
       setIsMuted(false);
@@ -439,17 +523,17 @@ export default function InterviewRoomPage() {
     }
   }, [isMuted, streaming.messages]);
 
-  // ── Render: device check gate ──
+  // ── Render Phase 1: Pre-flight device check gate ──
   if (!deviceCheckDone) {
     return <DeviceCheckScreen onProceed={() => setDeviceCheckDone(true)} sessionMode={session?.interview_type} />;
   }
 
-  // ── Render: interview studio launching transition ──
+  // ── Render Phase 2: Animated studio launch splash ──
   if (isStarting) {
     return <StudioLaunchingScreen session={session} />;
   }
 
-  // ── Render: initial page loading ──
+  // ── Render Phase 3: Initial session data loading ──
   if (pageLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] relative overflow-hidden px-4">
@@ -478,7 +562,7 @@ export default function InterviewRoomPage() {
     );
   }
 
-  // ── Render: error ──
+  // ── Render Phase 4: Network or API failure ──
   if (pageError || !session) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
@@ -491,14 +575,15 @@ export default function InterviewRoomPage() {
     );
   }
 
-  // ── Render: not started ──
+  // ── Render Phase 5: Created session waiting in lobby ──
   if (session.status === 'created') {
     return <InterviewStartScreen session={session} isStarting={isStarting} chatError={chatError} onStart={handleStart} onBack={() => router.push('/dashboard')} onCancel={handleCancel} isCancelling={isCancelling} />;
   }
 
-  // ── Render: in progress ──
+  // ── Render Phase 6: Active live mock interview studio ──
   return (
     <div className="h-screen bg-[#f4f6fb] flex flex-col overflow-hidden text-slate-800">
+      {/* Top Header bar with time limits, proctoring violations counter, and exit controls */}
       <InterviewHeader
         session={session}
         elapsedSeconds={timer.elapsedSeconds}
@@ -511,7 +596,7 @@ export default function InterviewRoomPage() {
         onEnd={() => setShowEndConfirm(true)}
       />
 
-      {/* Fullscreen Recovery Banner */}
+      {/* Fullscreen Recovery Notification Banner */}
       {!isFullscreen && session?.status === 'in_progress' && (
         <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between text-xs font-semibold z-30 shrink-0 shadow-sm animate-fade-in-up">
           <div className="flex items-center gap-2">
@@ -528,7 +613,9 @@ export default function InterviewRoomPage() {
         </div>
       )}
 
+      {/* Main Workspace Split View */}
       <main className="flex flex-1 overflow-hidden">
+        {/* Left column: Conversational Chat and Voice Transcription */}
         <ChatPanel
           session={session}
           messages={streaming.messages}
@@ -569,7 +656,9 @@ export default function InterviewRoomPage() {
           onRetry={() => { setChatError(null); streaming.generateQuestion(streaming.messages); }}
         />
 
+        {/* Right column: Dynamic based on interview domain */}
         {isDSA ? (
+          /* DSA Mode: Microsoft Monaco Editor with test runner */
           <CodeEditorPanel
             code={code}
             language={language}
@@ -584,15 +673,16 @@ export default function InterviewRoomPage() {
             triggerCheatingViolation={cheating.triggerCheatingViolation}
           />
         ) : (
+          /* Behavioral / System Design: Video stream & strategy tips tabs */
           <section className="flex flex-col border-l border-slate-200 bg-white" style={{ width: '45%' }}>
             <Tabs value={rightPanelTab} onValueChange={setRightPanelTab} className="flex flex-col flex-1 overflow-hidden">
-          <div className="bg-white border-b border-slate-200 flex-shrink-0">
+              <div className="bg-white border-b border-slate-200 flex-shrink-0">
                 <TabsList className="w-full h-11 bg-white border-b border-slate-200 px-4 gap-4 justify-start rounded-none p-0 inline-flex items-center text-slate-400">
                   {['video', 'tips'].map((tab) => (
                     <TabsTrigger
                       key={tab}
                       value={tab}
-                    className="relative h-full inline-flex items-center justify-center text-xs font-bold capitalize rounded-none px-1 bg-transparent hover:text-slate-700 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none transition-colors border-none outline-none focus-visible:ring-0"
+                      className="relative h-full inline-flex items-center justify-center text-xs font-bold capitalize rounded-none px-1 bg-transparent hover:text-slate-700 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none transition-colors border-none outline-none focus-visible:ring-0"
                     >
                       <span className="relative z-10 flex items-center gap-1.5 h-full">
                         {tab === 'video' ? (
@@ -629,11 +719,12 @@ export default function InterviewRoomPage() {
         )}
       </main>
 
-      {/* Modals */}
+      {/* Confirmation Dialogs and Proctoring Violation Modals */}
       {showEndConfirm && (
         <ConfirmModal onConfirm={handleEndConfirm} onCancel={() => setShowEndConfirm(false)} isLoading={isEnding} />
       )}
 
+      {/* AFK Idle Notification */}
       {showAfkWarning && session?.status === 'in_progress' && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4 flex items-center gap-4 shadow-xl shadow-amber-500/10 max-w-md w-full mx-4">
           <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0"><Clock className="w-5 h-5 text-amber-600" /></div>
@@ -645,6 +736,7 @@ export default function InterviewRoomPage() {
         </motion.div>
       )}
 
+      {/* Security alert modal */}
       {cheating.showViolationModal && <ViolationModal message={cheating.violationMessage} onDismiss={cheating.dismissViolation} />}
     </div>
   );

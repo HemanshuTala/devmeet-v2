@@ -282,8 +282,6 @@ services:
       - PORT=3000
       - HOSTNAME=0.0.0.0
     restart: unless-stopped
-    depends_on:
-      - api-gateway
 
   # ── Nginx API Gateway ──────────────────────────────────────────────────────
   api-gateway:
@@ -303,7 +301,6 @@ services:
       - file-service
       - payment-service
       - search-service
-      - frontend
 
 volumes:
   postgres_data:

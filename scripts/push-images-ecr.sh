@@ -43,13 +43,13 @@ declare -A SERVICES=(
   ["code-execution-service"]="services/code-execution-service"
   ["video-service"]="services/video-service"
   ["feedback-service"]="services/feedback-service"
-  ["notification-service"]="services/notification-service"
   ["analytics-service"]="services/analytics-service"
   ["admin-service"]="services/admin-service"
   ["file-service"]="services/file-service"
   ["payment-service"]="services/payment-service"
   ["search-service"]="services/search-service"
   ["api-gateway"]="services/api-gateway"
+  ["frontend"]="frontend"
 )
 
 pushed=0

@@ -1,5 +1,12 @@
 'use client';
 
+/**
+ * @file page.tsx (Forgot Password Request Page)
+ * @description Candidate password recovery screen.
+ * Captures user email address and triggers a password reset email via Auth service.
+ * Displays immediate confirmation UI instructing the user to check their inbox.
+ */
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { Brain, ChevronLeft, Loader2, Mail } from 'lucide-react';
@@ -9,17 +16,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ErrorAlert } from '@/components/feedback/ErrorAlert';
 
+/**
+ * ForgotPasswordPage Component.
+ * Manages form state, submission feedback, loading spinner, and the confirmation screen.
+ */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
+  /**
+   * Handles submission of password reset request.
+   *
+   * @param e - React form submission event
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
+      // Dispatches reset token creation and email trigger in Auth service
       await authApi.requestPasswordReset(email.trim());
       setSent(true);
     } catch (err: unknown) {
@@ -32,12 +49,14 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12">
       <div className="w-full max-w-md">
+        {/* Navigation back to standard sign in */}
         <Link href="/login" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 font-semibold mb-8">
           <ChevronLeft className="w-4 h-4" />
           Back to sign in
         </Link>
 
         <div className="bg-white border border-blue-100/80 rounded-2xl shadow-2xl shadow-blue-500/5 p-8 md:p-10">
+          {/* Brand header */}
           <div className="flex items-center gap-2.5 mb-6">
             <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
               <Brain className="w-5 h-5 text-white" />
@@ -46,6 +65,7 @@ export default function ForgotPasswordPage() {
           </div>
 
           {sent ? (
+            /* Success confirmation screen */
             <div className="space-y-4 text-center">
               <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
                 <Mail className="w-7 h-7 text-emerald-600" />
@@ -60,6 +80,7 @@ export default function ForgotPasswordPage() {
               </Link>
             </div>
           ) : (
+            /* Email entry form */
             <>
               <h1 className="text-2xl font-bold text-slate-900 mb-1">Forgot password?</h1>
               <p className="text-slate-500 text-sm mb-6">

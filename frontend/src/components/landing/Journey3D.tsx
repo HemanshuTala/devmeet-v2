@@ -1,21 +1,53 @@
+/**
+ * @file Journey3D.tsx
+ * @description Interactive 3D Perspective Product Storyboard for DevMeet Landing Page.
+ *
+ * Responsibilities:
+ * 1. 3D Card Parallax & Gyroscopic Tilt:
+ *    - Utilizes CSS 3D perspective (`perspective: 1200px`) and `transformStyle: 'preserve-3d'`.
+ *    - Tracks mouse cursor coordinates relative to card bounds (`(clientX - left) / width - 0.5`).
+ *    - Computes real-time tilt angles (`rotateX` / `rotateY`) and elevations (`translateZ(20px)` and `translateZ(30px)`).
+ *    - Smooth cubic-bezier spring return transition upon mouse leave.
+ * 2. Product Narrative Showcase:
+ *    - Stage 1: "Pick the Arena" (format, track, company difficulty presets).
+ *    - Stage 2: "Proctor Gatekeeper" (tab visibility, anti-cheating, background noise meters).
+ *    - Stage 3: "Live AI Challenges" (speech synthesis, sandboxed Docker execution, dynamic hints).
+ *    - Stage 4: "Recruiter Pipeline" (Ashby/Greenhouse ATS syncing, WeasyPrint PDF reports).
+ *
+ * @module components/landing/Journey3D
+ */
+
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Brain, ShieldCheck, Cpu, Database, Sparkles, Send, Laptop, CheckCircle2 } from 'lucide-react';
 
+/**
+ * Stage data structure defining each card's content, theme, and simulated UI terminal.
+ */
 interface Stage {
+  /** Unique stage identifier (1 to 4). */
   id: number;
+  /** Primary stage title. */
   title: string;
+  /** Uppercase tag badge. */
   badge: string;
+  /** Summary description of the stage functionality. */
   description: string;
+  /** Lucide icon component. */
   icon: React.ComponentType<{ className?: string }>;
+  /** Tailwind gradient string for icon background. */
   accentColor: string;
+  /** Border color and hover highlight styling. */
   borderColor: string;
+  /** Key feature bullet points. */
   details: string[];
+  /** Mock interactive terminal or UI widget rendered at bottom of card. */
   mockData: React.ReactNode;
 }
 
+/** Product journey narrative stages */
 const STAGES: Stage[] = [
   {
     id: 1,
@@ -117,25 +149,45 @@ const STAGES: Stage[] = [
   },
 ];
 
+/**
+ * Journey3D Landing Component.
+ *
+ * @component
+ * @returns {JSX.Element} Four-card interactive 3D perspective grid.
+ */
 export default function Journey3D() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  /**
+   * Calculates cursor position vector relative to the hovered card and applies 3D rotation transform.
+   *
+   * @param {React.MouseEvent} e - Mouse move event.
+   * @param {number} index - Index of the targeted stage card.
+   */
   const handleMouseMove = useCallback((e: React.MouseEvent, index: number) => {
     const card = cardRefs.current[index];
     if (!card) return;
 
     const rect = card.getBoundingClientRect();
+    // Normalized coordinates ranging from -0.5 (left/top) to +0.5 (right/bottom)
     const mouseX = (e.clientX - rect.left) / rect.width - 0.5;
     const mouseY = (e.clientY - rect.top) / rect.height - 0.5;
 
+    // Convert mouse deltas to degrees of rotation (up to 18 deg)
     const rotateX = -mouseY * 18;
     const rotateY = mouseX * 18;
 
+    // Apply hardware-accelerated 3D transform with immediate response
     card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.03, 1.03, 1.03) translateZ(10px)`;
     card.style.transition = 'none';
   }, []);
 
+  /**
+   * Resets card transform with smooth cubic-bezier easing when mouse leaves the card boundary.
+   *
+   * @param {number} index - Index of the card being unhovered.
+   */
   const handleMouseLeave = useCallback((index: number) => {
     const card = cardRefs.current[index];
     if (card) {
@@ -147,9 +199,11 @@ export default function Journey3D() {
 
   return (
     <section className="py-20 bg-slate-50 relative overflow-hidden">
+      {/* Background ambient light gradient */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-6 relative z-10">
+        {/* Section Heading */}
         <div className="text-center mb-16">
           <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 border border-blue-200">
             Interactive Product Story
@@ -162,6 +216,7 @@ export default function Journey3D() {
           </p>
         </div>
 
+        {/* 3D Perspective Card Grid */}
         <div
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
           style={{ perspective: '1200px' }}
@@ -179,6 +234,7 @@ export default function Journey3D() {
                 style={{ transformStyle: 'preserve-3d' }}
                 className={`bg-white border ${stage.borderColor} rounded-3xl p-6 flex flex-col justify-between shadow-md hover:shadow-2xl transition-all duration-350 cursor-pointer h-[440px]`}
               >
+                {/* Upper Layer: Elevated by translateZ(20px) */}
                 <div style={{ transform: 'translateZ(20px)', transformStyle: 'preserve-3d' }}>
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest">
@@ -208,6 +264,7 @@ export default function Journey3D() {
                   </ul>
                 </div>
 
+                {/* Bottom Layer: Simulated Terminal Widget Elevated by translateZ(30px) */}
                 <div
                   className="mt-6"
                   style={{ transform: 'translateZ(30px)' }}

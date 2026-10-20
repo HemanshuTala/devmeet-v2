@@ -24,17 +24,11 @@ S3 Bucket: `<YOUR_S3_BUCKET_NAME>`
 
 Before deploying, confirm these are done:
 
-- [ ] `.env` file is fully filled in (check yours — it already is ✅)
-
-- [ ] AWS credentials are active and have required permissions
-
-- [ ] SES email `<YOUR_EMAIL>` is verified in AWS SES eu-north-1
-
-- [ ] S3 bucket `<YOUR_S3_BUCKET_NAME>` exists in eu-north-1
-
+- [ ] `.env` file is filled in with your new AWS account keys and secrets
+- [ ] AWS credentials are active (`aws configure`)
+- [ ] S3 bucket `<YOUR_S3_BUCKET_NAME>` exists in `eu-north-1`
 - [ ] ECR repositories created (run `scripts/setup-ecr.sh`)
-
-- [ ] Docker images built and pushed to ECR (run `scripts/push-images-ecr.sh`)
+- [ ] Docker images built and pushed to ECR (run `scripts/push-images-ecr.sh` or via GitHub Actions)
 
 ---
 
@@ -45,17 +39,14 @@ Your IAM user/role needs these policies:
 ```
 AmazonEC2FullAccess          (or targeted EC2 permissions)
 AmazonECR-FullAccess
-AmazonS3FullAccess           (scoped to <YOUR_S3_BUCKET_NAME>)
-AmazonSESFullAccess          (scoped to eu-north-1)
-AmazonEKSClusterPolicy       (Option B only)
-AmazonEKSWorkerNodePolicy    (Option B only)
+AmazonS3FullAccess           (scoped to your S3 bucket)
 ```
 
 ---
 
 ## Step 0: Create ECR Repositories
 
-Run this once to create all 14 ECR repos:
+Run this once from your local machine to create all ECR repos (12 services + api-gateway + frontend):
 
 ```bash
 # On your local machine (with AWS CLI configured)
@@ -67,7 +58,7 @@ AWS_REGION=eu-north-1 bash scripts/setup-ecr.sh
 Then build and push all images:
 
 ```bash
-# Build for Linux (required even if you're on Windows/Mac)
+# Build and push to ECR
 AWS_REGION=eu-north-1 IMAGE_TAG=latest bash scripts/push-images-ecr.sh
 ```
 
@@ -75,36 +66,30 @@ AWS_REGION=eu-north-1 IMAGE_TAG=latest bash scripts/push-images-ecr.sh
 
 ---
 
-## Option A: EC2 + Docker Compose (Recommended for start)
+## Option A: EC2 + Docker Compose (Recommended)
 
 ### Step 1: Launch EC2 Instance
 
-**Recommended instance type:** `t3.2xlarge` (8 vCPU, 32GB RAM)
+**Recommended instance type:** `t3.large` (2 vCPU, 8GB RAM) or `t3.xlarge` (4 vCPU, 16GB RAM)
 
-- 13 microservices + infra (postgres, redis, rabbitmq, kafka, elasticsearch) need at least 16GB
-- `t3.xlarge` (16GB) works for testing but will be tight
+> Unnecessary services (Kafka, Zookeeper, Elasticsearch, Grafana, Prometheus, Notification) have been removed, drastically reducing memory requirements down to ~3–4GB!
 
 **Via AWS Console:**
 
 1. Go to EC2 → Launch Instance
-
 2. **AMI:** Amazon Linux 2023 (x86_64)
-
-3. **Instance type:** `t3.2xlarge`
-
+3. **Instance type:** `t3.large` or `t3.xlarge`
 4. **Key pair:** Create new → `<YOUR_KEY_PAIR_NAME>` → download `.pem`
-
 5. **Security group:** Create new `devmeet-sg` with these inbound rules:
 
    | Port | Protocol | Source | Purpose |
    | --- | --- | --- | --- |
-   | 22 | TCP | Your IP | SSH |
-   | 80 | TCP | 0.0.0.0/0 | HTTP (API Gateway) |
-   | 443 | TCP | 0.0.0.0/0 | HTTPS (if you add TLS) |
+   | 22 | TCP | Your IP | SSH access |
+   | 80 | TCP | 0.0.0.0/0 | HTTP (API Gateway & Frontend) |
+   | 443 | TCP | 0.0.0.0/0 | HTTPS (TLS) |
 
-6. **Storage:** 50 GB gp3
-
-7. Launch
+6. **Storage:** 40 GB gp3
+7. Launch!
 
 **Via AWS CLI:**
 

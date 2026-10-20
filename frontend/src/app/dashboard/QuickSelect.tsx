@@ -1,3 +1,20 @@
+/**
+ * @file QuickSelect.tsx
+ * @description Rapid Interview Session Launcher Cards Component for DevMeet Dashboard.
+ *
+ * Responsibilities:
+ * - Displays 3 primary interview track cards:
+ *   1. DSA (Data Structures & Algorithms): LeetCode algorithms, complexity, code execution.
+ *   2. Behavioral: STAR methodology, situational leadership, soft skills.
+ *   3. System Design: Scalability, database architecture, trade-offs.
+ * - One-click difficulty shortcuts: Clicking an individual difficulty pill (Easy, Medium, Hard)
+ *   instantly launches `/dashboard/create-session?type={type}&difficulty={difficulty}`.
+ * - Interactive hover states: Top border glow, SVG background grid pattern, and floating action arrow.
+ * - Secondary links to Question Bank and Custom Session creator.
+ *
+ * @module app/dashboard/QuickSelect
+ */
+
 'use client';
 
 import React from 'react';
@@ -6,8 +23,10 @@ import { useRouter } from 'next/navigation';
 import { Code2, MessageSquare, Layout, Plus, BookOpen, ArrowRight } from 'lucide-react';
 import SessionBadge from '@/components/SessionBadge';
 
+/** Valid interview track types */
 type InterviewType = 'dsa' | 'behavioral' | 'system_design';
 
+/** Props accepted by individual track cards */
 interface InterviewCardProps {
   type: InterviewType;
   title: string;
@@ -18,6 +37,7 @@ interface InterviewCardProps {
   delay: string;
 }
 
+/** Theme descriptors and associated competency skill tags */
 const cardThemes = {
   dsa: {
     gradientBorder: 'bg-blue-600',
@@ -42,6 +62,13 @@ const cardThemes = {
   },
 };
 
+/**
+ * InterviewTypeCard Component.
+ *
+ * @component
+ * @param {InterviewCardProps} props
+ * @returns {JSX.Element} Interactive card launching a tailored interview setup.
+ */
 function InterviewTypeCard({
   type,
   title,
@@ -79,6 +106,7 @@ function InterviewTypeCard({
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-[0.05] transition-opacity duration-300 pointer-events-none -z-10 rounded-3xl ${theme.bgGradient}`} />
 
       <div className="w-full">
+        {/* Card Header with Icon and Skill Tags */}
         <div className="flex items-center justify-between mb-5">
           <div
             className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm transition-all duration-300 ${theme.iconBg} text-white`}
@@ -98,6 +126,7 @@ function InterviewTypeCard({
         <p className="text-slate-500 text-xs mb-6 leading-relaxed font-medium line-clamp-3">{description}</p>
       </div>
 
+      {/* Footer with Direct Difficulty Launchers */}
       <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100/80 w-full relative z-10">
         <div className="flex flex-wrap gap-1.5">
           {difficulties.map((d) => (
@@ -121,6 +150,12 @@ function InterviewTypeCard({
   );
 }
 
+/**
+ * QuickSelect Component.
+ *
+ * @component
+ * @returns {JSX.Element} Grid section of three interview launcher cards.
+ */
 export default function QuickSelect() {
   return (
     <section className="space-y-5">
@@ -129,6 +164,7 @@ export default function QuickSelect() {
           <h2 className="text-xl font-bold text-slate-900">Start New Interview</h2>
           <p className="text-slate-500 text-sm mt-0.5 font-medium">Choose your interview type to begin</p>
         </div>
+        {/* Quick Links */}
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard/questions"
@@ -147,6 +183,7 @@ export default function QuickSelect() {
         </div>
       </div>
 
+      {/* 3-Column Launcher Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <InterviewTypeCard
           type="dsa"

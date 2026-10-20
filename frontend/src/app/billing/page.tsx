@@ -1,3 +1,27 @@
+/**
+ * @file page.tsx
+ * @description Subscription Tiers, Razorpay Payment Gateway & Invoice History Page for DevMeet.
+ *
+ * Responsibilities:
+ * 1. Razorpay Payment Gateway Integration:
+ *    - Dynamically loads `https://checkout.razorpay.com/v1/checkout.js` on demand via `loadRazorpayScript()`.
+ *    - Creates server checkout order (`paymentApi.createCheckoutSession(planId)`).
+ *    - Launches the official Razorpay Checkout modal for UPI, credit/debit cards, and NetBanking.
+ *    - Verifies payment signatures securely on backend (`paymentApi.verifyPayment`).
+ *    - Development mock mode fallback: dispatches `paymentApi.mockWebhook` when payment gateway is mocked.
+ * 2. Subscription Management:
+ *    - Fetches active subscription state and plans via `paymentApi.getSubscription()` & `getPlans()`.
+ *    - Displays active subscription banner with cancellation confirmation dialog (`paymentApi.cancelSubscription`).
+ * 3. Monthly / Annual Billing Toggle:
+ *    - Provides interactive switch with automatic 20% discount calculation.
+ * 4. Transaction Audit History:
+ *    - Displays past payment events and invoice timestamps ([BillingHistoryTable](file:///e:/AI%20INTERVIEW/frontend/src/components/billing/BillingHistoryTable.tsx)).
+ * 5. Frequently Asked Questions:
+ *    - Mounts candidate billing FAQ accordion ([BillingFaq](file:///e:/AI%20INTERVIEW/frontend/src/components/billing/BillingFaq.tsx)).
+ *
+ * @module app/billing/page
+ */
+
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
@@ -33,7 +57,9 @@ declare global {
 }
 
 /**
- * Loads the external Razorpay Checkout SDK script dynamically.
+ * Loads the external Razorpay Checkout SDK script dynamically into `document.body`.
+ *
+ * @returns {Promise<boolean>} True if script loaded or already available, false on network failure.
  */
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -49,6 +75,9 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
+/**
+ * Skeleton placeholder for the billing page while fetching plans and subscription.
+ */
 function BillingSkeleton() {
   return (
     <div className="space-y-10">
@@ -76,11 +105,15 @@ function BillingSkeleton() {
   );
 }
 
+/**
+ * Primary Billing Page Content component (wrapped in Suspense to safely consume `useSearchParams`).
+ */
 function BillingPageContent() {
   const { user } = useAuth();
   const { isLoading: authGuardLoading } = useRequireAuth();
   const searchParams = useSearchParams();
 
+  // State management
   const [plans, setPlans] = useState<any[]>([]);
   const [subscription, setSubscription] = useState<any>(null);
   const [billingHistory, setBillingHistory] = useState<any[]>([]);
@@ -90,6 +123,9 @@ function BillingPageContent() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isAnnual, setIsAnnual] = useState(false);
 
+  /**
+   * Reads URL query parameters to surface feedback on return from external checkout flows.
+   */
   useEffect(() => {
     const payment = searchParams.get('payment');
     if (payment === 'success' || payment === 'mock_success') {
@@ -99,6 +135,9 @@ function BillingPageContent() {
     }
   }, [searchParams]);
 
+  /**
+   * Fetches plans, active subscription, and invoice history from the payment microservice.
+   */
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -121,10 +160,17 @@ function BillingPageContent() {
     if (!authGuardLoading) fetchData();
   }, [authGuardLoading, fetchData]);
 
+  /**
+   * Initiates payment order creation and triggers the Razorpay modal.
+   *
+   * @param {string} planId - Target subscription plan identifier ('pro' | 'enterprise').
+   */
   const handleUpgrade = async (planId: string) => {
     setUpgrading(planId);
     try {
       const order = await paymentApi.createCheckoutSession(planId);
+
+      // Handle local mock mode if Razorpay live keys are not configured in environment
       if (order.mode === 'mock') {
         if (user?.id) {
           await paymentApi.mockWebhook(user.id, planId, 'payment.captured');
@@ -133,12 +179,15 @@ function BillingPageContent() {
         }
         return;
       }
+
+      // Load external Razorpay script
       const loaded = await loadRazorpayScript();
       if (!loaded) {
         toast.error('Failed to load Razorpay SDK.');
         return;
       }
 
+      // Configure Razorpay checkout options
       const options = {
         key: order.razorpay_key_id,
         amount: order.amount,
@@ -164,6 +213,7 @@ function BillingPageContent() {
         },
         modal: { ondismiss: () => setUpgrading(null) },
       };
+
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err: any) {
@@ -174,6 +224,9 @@ function BillingPageContent() {
     }
   };
 
+  /**
+   * Cancels active subscription and reverts account to Free tier.
+   */
   const handleCancel = async () => {
     setCancelling(true);
     try {
@@ -211,7 +264,7 @@ function BillingPageContent() {
               Accelerate your tech career with AI-driven mock interviews, real-time code execution, and STAR behavioral evaluation. Secure instant checkout via Razorpay.
             </p>
 
-            {/* Monthly / Annual Toggle */}
+            {/* Monthly / Annual Billing Toggle Switch */}
             <div className="pt-4 flex items-center justify-center gap-3">
               <span className={`text-xs font-bold ${!isAnnual ? 'text-slate-900' : 'text-slate-400'}`}>
                 Monthly Billed
@@ -219,7 +272,7 @@ function BillingPageContent() {
               <button
                 onClick={() => setIsAnnual(!isAnnual)}
                 aria-label="Toggle annual billing discount"
-                className="w-14 h-7 bg-blue-600 rounded-full p-1 transition-colors relative flex items-center shadow-inner"
+                className="w-14 h-7 bg-blue-600 rounded-full p-1 transition-colors relative flex items-center shadow-inner cursor-pointer"
               >
                 <motion.div
                   animate={{ x: isAnnual ? 28 : 0 }}
@@ -236,7 +289,7 @@ function BillingPageContent() {
             </div>
           </div>
 
-          {/* Active Subscription Notice */}
+          {/* Active Subscription Status Banner */}
           {currentPlan !== 'free' && (
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
@@ -263,14 +316,14 @@ function BillingPageContent() {
               </div>
               <button
                 onClick={() => setShowCancelConfirm(true)}
-                className="text-xs font-extrabold text-rose-600 hover:text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                className="text-xs font-extrabold text-rose-600 hover:text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
               >
                 Cancel Subscription
               </button>
             </motion.div>
           )}
 
-          {/* Cancel Confirmation Modal */}
+          {/* Cancellation Confirmation Modal */}
           <AnimatePresence>
             {showCancelConfirm && (
               <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -292,14 +345,14 @@ function BillingPageContent() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowCancelConfirm(false)}
-                      className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+                      className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
                     >
                       Keep Subscription
                     </button>
                     <button
                       onClick={handleCancel}
                       disabled={cancelling}
-                      className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 shadow-md shadow-rose-500/20"
+                      className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 shadow-md shadow-rose-500/20 cursor-pointer"
                     >
                       {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                       Confirm Cancel
@@ -310,7 +363,7 @@ function BillingPageContent() {
             )}
           </AnimatePresence>
 
-          {/* Plan Cards Grid */}
+          {/* Plan Comparison Cards Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
             {plans.map((plan) => (
               <PlanCard
@@ -324,7 +377,7 @@ function BillingPageContent() {
             ))}
           </div>
 
-          {/* Payment Trust Banner */}
+          {/* Security & Payment Trust Banner */}
           <div className="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-wrap items-center justify-around gap-6 text-xs text-slate-600 font-bold shadow-xs">
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-500" />
@@ -366,6 +419,14 @@ function BillingPageContent() {
   );
 }
 
+/**
+ * BillingPage Root Component.
+ *
+ * Wrapped in Suspense boundary for `useSearchParams` hook compatibility.
+ *
+ * @component
+ * @returns {JSX.Element}
+ */
 export default function BillingPage() {
   return (
     <Suspense fallback={<PageLoader label="Loading billing..." />}>

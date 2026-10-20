@@ -1,14 +1,49 @@
+"""
+DevMeet Admin Service - Database Layer (PostgreSQL with Mock Fallback)
+======================================================================
+This module manages direct relational database interactions for system administration,
+monitoring, moderation, and auditing in DevMeet.
+
+Key Architectural Responsibilities:
+1. High-Performance Asynchronous Connection Pooling:
+   - Uses `asyncpg` for non-blocking binary-protocol communication with PostgreSQL.
+   - Manages bounded pool sizes (min 2, max 10) to prevent connection starvation.
+2. Dual-Mode Operation (Production Postgres vs. Mock Fallback):
+   - Gracefully degrades to an in-memory mock repository if PostgreSQL credentials or
+     network connectivity fail, ensuring admin dashboards and unit tests run seamlessly.
+3. System Administration Operations:
+   - User Management: Paginated searching, filtering by subscription plan, and block status.
+   - Moderation & Enforcement: Blocking/unblocking users and cancelling runaway sessions.
+   - GDPR Compliance: Soft-deletion of accounts via irreversible PII anonymization.
+   - Cross-Service Audit Logging: Persisting immutable audit trail records for compliance.
+   - System Health & Analytics Aggregation: SQL CTEs (Common Table Expressions) calculating
+     active users, revenue estimates, conversion metrics, and session statuses.
+"""
+
 import os
 import asyncpg
 import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 
+
 class AdminDatabase:
+    """
+    Asynchronous database manager for administrative operations, audit trails,
+    and business KPI monitoring.
+    """
+
     def __init__(self):
+        """
+        Initializes connection state attributes and pre-populates default in-memory
+        mock data for testing or disconnected environments.
+        """
+        # Connection pool instance handle
         self.pool: Optional[asyncpg.Pool] = None
+        # Flag indicating whether live PostgreSQL connection is active
         self.use_db = False
-        # Mock database cache fallback
+
+        # In-memory mock database cache fallback when Postgres is unreachable
         self.mock_users: List[dict] = [
             {
                 "id": "11111111-1111-1111-1111-111111111111",
@@ -38,6 +73,8 @@ class AdminDatabase:
                 "is_blocked": True
             }
         ]
+
+        # Initial seed of mock audit events
         self.mock_audit_logs: List[dict] = [
             {
                 "id": "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1",
@@ -62,7 +99,12 @@ class AdminDatabase:
         ]
 
     async def connect(self):
+        """
+        Initializes the asyncpg connection pool using environment configurations.
+        Falls back to in-memory mode on network error or authentication failure.
+        """
         try:
+            # Establish async connection pool with configured pool boundaries
             self.pool = await asyncpg.create_pool(
                 host=os.getenv("POSTGRES_HOST", "localhost"),
                 port=int(os.getenv("POSTGRES_PORT", "5432")),
@@ -76,10 +118,14 @@ class AdminDatabase:
             self.use_db = True
             print("Admin DB: Successfully connected to PostgreSQL")
         except Exception as e:
+            # Gracefully degrade rather than crashing service startup
             print(f"Admin DB: Failed to connect: {e}. Running in mock mode.")
             self.use_db = False
 
     async def disconnect(self):
+        """
+        Closes all active database connections in the asyncpg pool during shutdown.
+        """
         if self.pool:
             await self.pool.close()
 
@@ -91,23 +137,42 @@ class AdminDatabase:
         limit: int = 50,
         offset: int = 0,
     ) -> List[dict]:
+        """
+        Retrieves a filtered, paginated list of registered users with session counts and plans.
+
+        Args:
+            search (str, optional): Search substring matching email or display name.
+            plan (str, optional): Subscription tier ('free', 'pro', 'enterprise').
+            is_blocked (bool, optional): Filter by account ban status.
+            limit (int): Max records per page.
+            offset (int): Starting record index.
+
+        Returns:
+            List[dict]: User summaries with profile details, subscription tiers, and session counts.
+        """
         if self.use_db and self.pool:
             try:
+                # Build dynamic parameterized SQL filters to prevent SQL injection
                 search_pattern = f"%{search}%" if search else "%"
                 filters = ["(u.email LIKE $1 OR u.display_name LIKE $1)"]
                 params = [search_pattern]
                 idx = 2
+
                 if plan:
                     filters.append(f"p.plan = ${idx}")
                     params.append(plan)
                     idx += 1
+
                 if is_blocked is not None:
                     filters.append(f"u.is_blocked = ${idx}")
                     params.append(is_blocked)
                     idx += 1
+
                 where = " AND ".join(filters)
                 params.extend([limit, offset])
+
                 async with self.pool.acquire() as conn:
+                    # Query joins user_profiles, user_plans, and aggregates interview sessions
                     rows = await conn.fetch(
                         f"""
                         SELECT u.id, u.email, u.display_name, COALESCE(p.plan, 'free') as plan,
@@ -136,7 +201,7 @@ class AdminDatabase:
             except Exception as e:
                 print(f"Admin DB: Failed to query users: {e}. Falling back to mocks.")
 
-        # Mock fallback
+        # In-memory mock filtering fallback
         filtered = list(self.mock_users)
         if search:
             s_lower = search.lower()
@@ -148,6 +213,15 @@ class AdminDatabase:
         return filtered[offset: offset + limit]
 
     async def get_user_by_id(self, user_id: str) -> Optional[dict]:
+        """
+        Fetches detailed record of an individual user including plan and session stats.
+
+        Args:
+            user_id (str): UUID string of the target user.
+
+        Returns:
+            Optional[dict]: User dictionary if located, else None.
+        """
         if self.use_db and self.pool:
             try:
                 import uuid
@@ -179,12 +253,22 @@ class AdminDatabase:
             except Exception as e:
                 print(f"Admin DB: get_user_by_id error: {e}")
 
+        # Search mock cache
         for u in self.mock_users:
             if u["id"] == user_id:
                 return u
         return None
 
     async def block_user(self, user_id: str) -> bool:
+        """
+        Sets a user's account status to blocked, preventing subsequent logins and API access.
+
+        Args:
+            user_id (str): Target user UUID string.
+
+        Returns:
+            bool: True if user was found and updated, False otherwise.
+        """
         if self.use_db and self.pool:
             try:
                 import uuid
@@ -203,6 +287,15 @@ class AdminDatabase:
         return False
 
     async def unblock_user(self, user_id: str) -> bool:
+        """
+        Removes the block flag from a previously suspended user account.
+
+        Args:
+            user_id (str): Target user UUID string.
+
+        Returns:
+            bool: True if updated successfully, False otherwise.
+        """
         if self.use_db and self.pool:
             try:
                 import uuid
@@ -221,7 +314,17 @@ class AdminDatabase:
         return False
 
     async def delete_user(self, user_id: str) -> bool:
-        """Soft delete via anonymization for GDPR"""
+        """
+        Executes a GDPR "Right to be Forgotten" compliant soft delete.
+        Irreversibly scrubs personally identifiable information (PII) including email,
+        display name, password hash, bio, and portfolio links, preserving relational foreign keys.
+
+        Args:
+            user_id (str): Target user UUID string.
+
+        Returns:
+            bool: True on success, False on failure.
+        """
         anon_email = f"anon_{user_id[:8]}@devmeet.anon"
         anon_name = "Anonymized User"
         if self.use_db and self.pool:
@@ -229,6 +332,7 @@ class AdminDatabase:
                 import uuid
                 u_uuid = uuid.UUID(user_id)
                 async with self.pool.acquire() as conn:
+                    # Scrub all PII attributes in user_profiles
                     await conn.execute(
                         """
                         UPDATE user_profiles
@@ -243,6 +347,7 @@ class AdminDatabase:
                 print(f"Admin DB: Failed soft delete user: {e}")
                 return False
 
+        # Apply anonymization in mock memory
         for u in self.mock_users:
             if u["id"] == user_id:
                 u["email"] = anon_email
@@ -251,6 +356,16 @@ class AdminDatabase:
         return False
 
     async def update_user_plan(self, user_id: str, new_plan: str) -> bool:
+        """
+        Overrides a user's subscription tier directly from the admin console.
+
+        Args:
+            user_id (str): Target user UUID.
+            new_plan (str): Target plan tier ('free', 'pro', 'enterprise').
+
+        Returns:
+            bool: True if updated successfully, False otherwise.
+        """
         if self.use_db and self.pool:
             try:
                 import uuid
@@ -264,6 +379,7 @@ class AdminDatabase:
             except Exception as e:
                 print(f"Admin DB: update_user_plan error: {e}")
                 return False
+
         for u in self.mock_users:
             if u["id"] == user_id:
                 u["plan"] = new_plan
@@ -271,6 +387,15 @@ class AdminDatabase:
         return False
 
     async def get_user_sessions(self, user_id: str) -> List[dict]:
+        """
+        Lists all interview sessions associated with a specific candidate.
+
+        Args:
+            user_id (str): User UUID string.
+
+        Returns:
+            List[dict]: Interview session summaries sorted newest to oldest.
+        """
         if self.use_db and self.pool:
             try:
                 import uuid
@@ -292,6 +417,18 @@ class AdminDatabase:
         limit: int = 50,
         offset: int = 0,
     ) -> List[dict]:
+        """
+        Fetches system-wide interview sessions with optional user or status filters.
+
+        Args:
+            user_id (str, optional): Target candidate UUID filter.
+            status (str, optional): Filter by session state ('pending', 'in_progress', 'completed', 'cancelled').
+            limit (int): Max records per page.
+            offset (int): Pagination offset.
+
+        Returns:
+            List[dict]: Session records matching search criteria.
+        """
         if self.use_db and self.pool:
             try:
                 filters, params, idx = [], [], 1
@@ -317,11 +454,22 @@ class AdminDatabase:
         return []
 
     async def cancel_session(self, session_id: str) -> bool:
+        """
+        Forces cancellation of an active or pending interview session.
+        Guarantees idempotency by refusing to cancel already terminated or completed sessions.
+
+        Args:
+            session_id (str): UUID string of the session to cancel.
+
+        Returns:
+            bool: True if session state was changed to 'cancelled', False otherwise.
+        """
         if self.use_db and self.pool:
             try:
                 import uuid
                 s_uuid = uuid.UUID(session_id)
                 async with self.pool.acquire() as conn:
+                    # Update status only if session is currently active or pending
                     result = await conn.execute(
                         "UPDATE sessions SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND status NOT IN ('completed','cancelled')",
                         s_uuid
@@ -340,6 +488,20 @@ class AdminDatabase:
         ip_address: Optional[str],
         metadata: Optional[dict]
     ) -> bool:
+        """
+        Appends an immutable audit entry to track administrative actions and critical security events.
+
+        Args:
+            user_id (str, optional): Admin or actor UUID who triggered the event.
+            action (str): Standardized action name (e.g. 'user.block', 'plan.upgrade').
+            resource_type (str): Type of entity affected ('user', 'session', 'system').
+            resource_id (str, optional): ID of the affected resource.
+            ip_address (str, optional): Client IP address for forensic auditing.
+            metadata (dict, optional): Contextual metadata dictionary.
+
+        Returns:
+            bool: True if logged successfully.
+        """
         created_at = datetime.utcnow()
         if self.use_db and self.pool:
             try:
@@ -359,7 +521,7 @@ class AdminDatabase:
             except Exception as e:
                 print(f"Admin DB: Failed to create audit log: {e}")
 
-        # Mock fallback
+        # In-memory mock audit trail fallback
         self.mock_audit_logs.append({
             "id": str(datetime.utcnow().timestamp()),
             "user_id": user_id,
@@ -379,6 +541,18 @@ class AdminDatabase:
         user_id: Optional[str] = None,
         action: Optional[str] = None,
     ) -> List[dict]:
+        """
+        Retrieves paginated audit log events with optional actor and action filtering.
+
+        Args:
+            limit (int): Max number of logs to return (default: 100).
+            offset (int): Starting log index.
+            user_id (str, optional): Filter by actor UUID.
+            action (str, optional): Filter by action name.
+
+        Returns:
+            List[dict]: Serialized audit log entries.
+        """
         if self.use_db and self.pool:
             try:
                 filters, params, idx = [], [], 1
@@ -418,7 +592,7 @@ class AdminDatabase:
             except Exception as e:
                 print(f"Admin DB: get_audit_logs error: {e}")
 
-        # Mock fallback
+        # In-memory mock filter fallback
         logs = self.mock_audit_logs
         if user_id:
             logs = [l for l in logs if l["user_id"] == user_id]
@@ -427,9 +601,17 @@ class AdminDatabase:
         return logs[offset: offset + limit]
 
     async def get_admin_stats(self) -> dict:
+        """
+        Aggregates high-level system KPIs across users, subscriptions, and interview sessions.
+        Computes revenue estimates based on tier pricing rules ($19/mo Pro, $199/mo Enterprise).
+
+        Returns:
+            dict: Platform metrics summary including user counts, revenue, and session health.
+        """
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
+                    # Single-query CTE aggregation across three primary domain tables
                     row = await conn.fetchrow("""
                         WITH user_stats AS (
                             SELECT
@@ -473,7 +655,7 @@ class AdminDatabase:
             except Exception as e:
                 print(f"Admin DB: get_admin_stats error: {e}")
 
-        # Mock fallback stats
+        # In-memory mock statistics fallback
         pro_count = sum(1 for u in self.mock_users if u["plan"] == "pro")
         ent_count = sum(1 for u in self.mock_users if u["plan"] == "enterprise")
         free_count = sum(1 for u in self.mock_users if u["plan"] == "free")
@@ -492,4 +674,5 @@ class AdminDatabase:
             "blocked_users": blocked_count,
         }
 
+# Global singleton instance of the administrative database manager
 db = AdminDatabase()

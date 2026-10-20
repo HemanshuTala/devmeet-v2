@@ -1,12 +1,22 @@
 'use client';
 
+/**
+ * @file loading.tsx (Candidate Profile Route Streaming Loading Skeleton)
+ * @description Next.js streaming loading skeleton for the /profile page.
+ * Renders pulse placeholders for the user avatar, name/email, tabs bar,
+ * personal details grid, and skills tag pills.
+ */
+
+/**
+ * ProfileLoading Component.
+ */
 export default function ProfileLoading() {
   return (
     <div
       className="min-h-screen p-6 flex flex-col gap-6"
       style={{ background: 'var(--color-bg)' }}
     >
-      {/* Profile header */}
+      {/* Profile summary header banner skeleton */}
       <div
         className="rounded-2xl p-8 border flex flex-col sm:flex-row items-start sm:items-center gap-6"
         style={{
@@ -24,14 +34,14 @@ export default function ProfileLoading() {
         <div className="skeleton-shimmer h-9 w-28 rounded-lg flex-shrink-0" />
       </div>
 
-      {/* Tab bar */}
+      {/* Tabs navigation bar skeleton */}
       <div className="flex gap-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className={`skeleton-shimmer h-9 rounded-lg ${i === 0 ? 'w-24' : 'w-28'}`} />
         ))}
       </div>
 
-      {/* Content grid */}
+      {/* Content cards grid skeleton */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {Array.from({ length: 2 }).map((_, j) => (
           <div
@@ -56,7 +66,7 @@ export default function ProfileLoading() {
         ))}
       </div>
 
-      {/* Skills / tags section */}
+      {/* Skills & target companies tags section skeleton */}
       <div
         className="rounded-2xl p-6 border flex flex-col gap-4"
         style={{

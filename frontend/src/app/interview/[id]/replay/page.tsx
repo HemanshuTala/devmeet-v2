@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * @file page.tsx (Session Replay & Read-Only Audit Viewer)
+ * @description Dedicated read-only replay screen for past mock interviews.
+ * Fetches historical turns, speaker labels, timestamps, and preserves full formatting
+ * of submitted code blocks and AI questions.
+ * Allows candidates to review their performance chronologically without modifying session data.
+ */
+
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MessageSquare, Brain, User, Calendar, ShieldCheck } from 'lucide-react';
 import DashboardShell from '@/components/layout/DashboardShell';
@@ -10,14 +18,22 @@ import { useSession, useSessionTurns } from '@/hooks/queries/useSessions';
 import { Button } from '@/components/ui/button';
 import SessionBadge from '@/components/SessionBadge';
 
+/**
+ * ReplayPage Component.
+ */
 export default function ReplayPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const sessionId = params?.id;
+
+  // Authentication barrier
   const { isLoading: authLoading } = useRequireAuth();
+
+  // Session metadata and turns fetching via React Query
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession(sessionId);
   const { data: turns = [], isLoading: turnsLoading, error: turnsError } = useSessionTurns(sessionId);
 
+  // Loading skeleton while data resolves
   if (authLoading || sessionLoading || turnsLoading) {
     return <PageLoader label="Loading interview replay..." />;
   }
@@ -27,7 +43,7 @@ export default function ReplayPage() {
   return (
     <DashboardShell maxWidth="max-w-4xl">
       <main className="mx-auto flex w-full flex-col gap-6 py-6">
-        {/* Header bar */}
+        {/* Header bar: Title, badges, and back button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
@@ -48,18 +64,19 @@ export default function ReplayPage() {
           <Button
             variant="outline"
             onClick={() => router.back()}
-            className="self-start sm:self-auto rounded-xl border-slate-200 hover:bg-slate-50 font-semibold"
+            className="self-start sm:self-auto rounded-xl border-slate-200 hover:bg-slate-50 font-semibold cursor-pointer"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Sessions
           </Button>
         </div>
 
+        {/* Error notification alert */}
         {error ? (
           <ErrorAlert message={error instanceof Error ? error.message : 'Replay could not be loaded.'} />
         ) : null}
 
-        {/* Turns list */}
+        {/* Chronological turns list */}
         <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
           {turns.length ? (
             <div className="divide-y divide-slate-100 p-4 sm:p-6 space-y-4">
@@ -72,6 +89,7 @@ export default function ReplayPage() {
                       isAssistant ? 'bg-blue-50/30 -mx-4 -mt-4 px-4 py-4 rounded-xl' : ''
                     }`}
                   >
+                    {/* Speaker avatar icon */}
                     <div
                       className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm ${
                         isAssistant
@@ -81,6 +99,8 @@ export default function ReplayPage() {
                     >
                       {isAssistant ? <Brain className="h-4.5 w-4.5" /> : <User className="h-4.5 w-4.5" />}
                     </div>
+
+                    {/* Message content & timestamp header */}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                         <span className={`font-bold capitalize ${isAssistant ? 'text-blue-700' : 'text-slate-900'}`}>
@@ -101,6 +121,7 @@ export default function ReplayPage() {
               })}
             </div>
           ) : (
+            /* Empty state when no dialogue turns exist */
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
                 <MessageSquare className="w-6 h-6" />

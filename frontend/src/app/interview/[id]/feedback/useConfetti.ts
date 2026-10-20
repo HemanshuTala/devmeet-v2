@@ -1,10 +1,27 @@
 'use client';
 
+/**
+ * @file useConfetti.ts (Physics-Based Particle Celebration Canvas Hook)
+ * @description Lightweight 2D canvas particle physics hook creating celebratory confetti.
+ * Instantiates 150 colored paper particles with randomized trajectories, air resistance (0.99 drag),
+ * gravity (0.12 acceleration), 2D tumbling rotations, and gradual alpha fade-out.
+ * Automatically halts the requestAnimationFrame render loop once all particles reach 0 opacity.
+ *
+ * Used by: InterviewFeedbackPage
+ */
+
 import { useEffect, useRef } from 'react';
 
+/** Vibrant color palette for confetti pieces */
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 const PARTICLE_COUNT = 150;
 
+/**
+ * useConfetti Hook.
+ *
+ * @param trigger - Boolean flag triggering the confetti explosion (typically when score >= 70%)
+ * @returns React ref attached to the fullscreen overlay <canvas>
+ */
 export function useConfetti(trigger: boolean) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -13,11 +30,13 @@ export function useConfetti(trigger: boolean) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Synchronize canvas size to viewport dimensions
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Generate randomized particles in upper 40% of the screen
     const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height * 0.4 - 20,
@@ -33,16 +52,20 @@ export function useConfetti(trigger: boolean) {
     let animId: number;
     let frame = 0;
 
+    /**
+     * Physics simulation step: updates positions, applies drag and gravity, rotates particles,
+     * and fades alpha after frame 40.
+     */
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       frame++;
       particles.forEach((p) => {
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.12;
-        p.vx *= 0.99;
+        p.vy += 0.12; // Gravity acceleration
+        p.vx *= 0.99; // Air drag
         p.rotation += p.rotationSpeed;
-        if (frame > 40) p.alpha = Math.max(0, p.alpha - 0.008);
+        if (frame > 40) p.alpha = Math.max(0, p.alpha - 0.008); // Gradual fade-out
         ctx.save();
         ctx.globalAlpha = p.alpha;
         ctx.translate(p.x, p.y);
@@ -51,6 +74,8 @@ export function useConfetti(trigger: boolean) {
         ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
         ctx.restore();
       });
+
+      // Stop loop when all particles are invisible
       if (particles.every((p) => p.alpha <= 0)) return;
       animId = requestAnimationFrame(draw);
     };

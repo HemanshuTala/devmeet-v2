@@ -1,15 +1,34 @@
+/**
+ * @file loading.tsx
+ * @description Next.js Route Segment Skeleton Loading Fallback for `/analytics`.
+ *
+ * Prevents Cumulative Layout Shift (CLS) by mirroring the visual layout of the analytics dashboard:
+ * 1. Page title placeholder.
+ * 2. 4-column KPI metric stat cards grid.
+ * 3. 5-item breakdown score progress bars container.
+ * 4. 2-column chart canvas container skeletons.
+ *
+ * @module app/analytics/loading
+ */
+
 'use client';
 
+/**
+ * AnalyticsLoading Skeleton Component.
+ *
+ * @component
+ * @returns {JSX.Element} Shimmer skeleton UI layout.
+ */
 export default function AnalyticsLoading() {
   return (
     <div
       className="min-h-screen p-6 flex flex-col gap-6"
       style={{ background: 'var(--color-bg)' }}
     >
-      {/* Page title */}
+      {/* Page title placeholder */}
       <div className="skeleton-shimmer h-7 w-36 rounded-lg" />
 
-      {/* Stat cards — 4 columns */}
+      {/* 4-Column Stat Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
@@ -27,7 +46,7 @@ export default function AnalyticsLoading() {
         ))}
       </div>
 
-      {/* Score bars section */}
+      {/* Score progress bars section skeleton */}
       <div
         className="rounded-xl p-6 border flex flex-col gap-4"
         style={{
@@ -58,7 +77,7 @@ export default function AnalyticsLoading() {
         </div>
       </div>
 
-      {/* Chart grid */}
+      {/* Chart grid skeletons (2 columns) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {Array.from({ length: 2 }).map((_, i) => (
           <div

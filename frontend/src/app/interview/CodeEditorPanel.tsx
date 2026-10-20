@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * @file CodeEditorPanel.tsx (In-Browser Code Execution & Monaco Editor Panel)
+ * @description In-browser code workspace used in technical and DSA interview sessions.
+ * Embeds Microsoft Monaco Editor with multi-language support (Python, JS, TS, Java, C++, Go, Rust),
+ * font scaling, dark/light themes, test case validation runners, terminal output tabs,
+ * execution timing meters, and proctoring clipboard paste detection.
+ */
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import {
@@ -10,6 +18,10 @@ import {
 import { LANGUAGE_OPTIONS } from './constants';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+/**
+ * Dynamically import Monaco Editor on client-side only (disabling SSR)
+ * to avoid window/document reference errors during Next.js hydration.
+ */
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
   loading: () => (
@@ -19,15 +31,25 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ),
 });
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
+/**
+ * Execution payload returned from the code-execution microservice.
+ */
 interface ExecutionResult {
+  /** Standard output stream string */
   stdout: string;
+  /** Standard error or compiler diagnostics */
   stderr: string;
+  /** Wall-clock execution time in milliseconds */
   executionTime: number;
+  /** Overall sandbox exit code success boolean */
   success: boolean;
 }
 
+/**
+ * Test case input/output definition for automated verification.
+ */
 interface TestCase {
   id: number;
   input: string;
@@ -35,6 +57,9 @@ interface TestCase {
   description?: string;
 }
 
+/**
+ * Evaluated test case outcome comparing actual output vs expected.
+ */
 interface TestCaseResult extends TestCase {
   actual: string;
   passed: boolean;
@@ -42,21 +67,35 @@ interface TestCaseResult extends TestCase {
   timeMs?: number;
 }
 
+/**
+ * Props passed to CodeEditorPanel from Interview Studio.
+ */
 interface CodeEditorPanelProps {
+  /** Current editor text content */
   code: string;
+  /** Programming language identifier key */
   language: string;
+  /** True while sandbox execution is processing */
   isRunning: boolean;
+  /** True while submitting full code to AI interviewer evaluation */
   isSubmittingCode: boolean;
+  /** Execution output received from sandbox */
   executionResult: ExecutionResult | null;
+  /** Code change callback */
   onCodeChange: (code: string) => void;
+  /** Language switch callback */
   onLanguageChange: (lang: string) => void;
+  /** Run test suite callback */
   onRunCode: () => void;
+  /** Submit final code solution callback */
   onSubmitCode: () => void;
+  /** Reset / clear results callback */
   onClearResult: () => void;
+  /** Anti-cheating proctoring violation callback */
   triggerCheatingViolation: (type: 'tab_switch' | 'paste') => void;
 }
 
-// ─── Default test cases per language (sample, no spoilers) ───────────────────
+// ─── Default Sample Test Cases ────────────────────────────────────────────────
 
 const DEFAULT_TEST_CASES: TestCase[] = [
   { id: 1, input: 'Example Input 1', expected: 'Expected Output 1', description: 'Basic case' },
@@ -64,14 +103,29 @@ const DEFAULT_TEST_CASES: TestCase[] = [
   { id: 3, input: 'Example Input 3', expected: 'Expected Output 3', description: 'Corner case' },
 ];
 
-// Check if code is basically the unmodified template
+/**
+ * Checks whether the current editor code is identical to the starter boilerplate template
+ * or essentially empty, avoiding false positive test passes on unedited templates.
+ *
+ * @param code - Raw code string
+ * @param language - Active programming language
+ */
 function isTemplateCode(code: string, language: string): boolean {
   const template = LANGUAGE_OPTIONS[language]?.defaultCode ?? '';
   const normalize = (s: string) => s.replace(/\s+/g, '').replace(/\/\/.*/g, '').replace(/#.*/g, '');
   return normalize(code) === normalize(template) || code.trim().length < 20;
 }
 
-// Parse stdout into test case results
+/**
+ * Parses raw stdout and stderr from code execution sandbox into individual test case evaluations.
+ *
+ * @param stdout - Standard output text
+ * @param stderr - Standard error text
+ * @param testCases - List of test case criteria
+ * @param executionTime - Total milliseconds spent executing
+ * @param rawSuccess - Sandbox exit status code
+ * @param isTemplate - Whether code is boilerplate
+ */
 function parseTestResults(
   stdout: string,
   stderr: string,
@@ -80,7 +134,7 @@ function parseTestResults(
   rawSuccess: boolean,
   isTemplate: boolean,
 ): TestCaseResult[] {
-  // If template / empty code — all fail
+  // If template / empty code — all test cases fail
   if (isTemplate) {
     return testCases.map((tc) => ({
       ...tc,
@@ -91,6 +145,7 @@ function parseTestResults(
     }));
   }
 
+  // Compiler error or crash before stdout output
   if (stderr && !stdout) {
     return testCases.map((tc) => ({
       ...tc,
@@ -101,7 +156,7 @@ function parseTestResults(
     }));
   }
 
-  // Try to split stdout by newlines to match test cases
+  // Split stdout lines to align with each test case
   const lines = stdout.trim().split('\n').filter(Boolean);
 
   return testCases.map((tc, i) => {
@@ -116,9 +171,10 @@ function parseTestResults(
   });
 }
 
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
+/**
+ * CodeEditorPanel Component.
+ * Full-featured development environment with Monaco editor, test case runner, and console tabs.
+ */
 export default function CodeEditorPanel({
   code,
   language,
@@ -132,19 +188,23 @@ export default function CodeEditorPanel({
   onClearResult,
   triggerCheatingViolation,
 }: CodeEditorPanelProps) {
+  // Editor appearance settings
   const [fontSize, setFontSize] = useState(13);
   const [theme, setTheme] = useState<'vs-dark' | 'light'>('vs-dark');
   const [tabSize, setTabSize] = useState(4);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  // Tab and test selection states
   const [activeTestCase, setActiveTestCase] = useState(0);
   const [activeResultTab, setActiveResultTab] = useState<'testcases' | 'output'>('testcases');
   const [testCases] = useState<TestCase[]>(DEFAULT_TEST_CASES);
   const [testResults, setTestResults] = useState<TestCaseResult[] | null>(null);
+
   const editorRef = useRef<any>(null);
 
-  // Load persisted settings
+  // Load persisted editor preferences from localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const t = localStorage.getItem('dm_editor_theme');
@@ -153,7 +213,7 @@ export default function CodeEditorPanel({
     if (ts === 2 || ts === 4) setTabSize(ts);
   }, []);
 
-  // Parse execution result into test case results
+  // Compute test case results when new execution output arrives
   useEffect(() => {
     if (!executionResult) { setTestResults(null); return; }
     const isTemplate = isTemplateCode(code, language);
@@ -169,6 +229,11 @@ export default function CodeEditorPanel({
     setActiveResultTab('testcases');
   }, [executionResult, code, language, testCases]);
 
+  /**
+   * Clipboard paste handler:
+   * Intercepts code paste, enforces length boundary, inserts into Monaco buffer,
+   * and reports a proctoring violation for suspicious external copying.
+   */
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       e.preventDefault();
@@ -192,6 +257,9 @@ export default function CodeEditorPanel({
     [code, onCodeChange, triggerCheatingViolation],
   );
 
+  /**
+   * Resets code back to starter language boilerplate after confirmation.
+   */
   const handleReset = () => {
     onCodeChange(LANGUAGE_OPTIONS[language]?.defaultCode ?? '');
     onClearResult();
@@ -204,18 +272,17 @@ export default function CodeEditorPanel({
   const allPassed = testResults !== null && passedCount === totalCount;
   const anyFailed = testResults !== null && passedCount < totalCount;
 
-
   return (
     <section
       className={`flex flex-col bg-[#1e1e1e] border-l border-slate-800 transition-all duration-200 ${expanded ? 'fixed inset-0 z-50' : ''}`}
       style={expanded ? {} : { width: '45%' }}
     >
-      {/* ── Toolbar ── */}
+      {/* ── Toolbar: Language selector, Font sizing, Theme toggle, Reset, Fullscreen ── */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3c3c3c] shrink-0 flex-wrap">
         <Code2 className="w-4 h-4 text-blue-400 shrink-0" />
         <span className="text-slate-300 text-xs font-bold">Code Editor</span>
 
-        {/* Language */}
+        {/* Language select dropdown */}
         <Select value={language} onValueChange={(v) => { onLanguageChange(v); setResetConfirm(false); setTestResults(null); }}>
           <SelectTrigger className="h-7 w-[130px] text-xs bg-[#3c3c3c] border-[#555] text-slate-200 hover:bg-[#4c4c4c]">
             <SelectValue />
@@ -229,14 +296,14 @@ export default function CodeEditorPanel({
           </SelectContent>
         </Select>
 
-        {/* Font size */}
+        {/* Font size decrement/increment controls */}
         <div className="flex items-center bg-[#3c3c3c] border border-[#555] rounded-md overflow-hidden">
           <button onClick={() => setFontSize((s) => Math.max(10, s - 1))} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-[#4c4c4c] text-[11px] font-bold transition-colors">A−</button>
           <span className="px-2 text-[10px] text-slate-400 font-mono border-x border-[#555] select-none">{fontSize}</span>
           <button onClick={() => setFontSize((s) => Math.min(22, s + 1))} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-[#4c4c4c] text-[11px] font-bold transition-colors">A+</button>
         </div>
 
-        {/* Theme toggle */}
+        {/* Dark/Light theme toggle */}
         <button
           onClick={() => { const t = theme === 'vs-dark' ? 'light' : 'vs-dark'; setTheme(t); localStorage.setItem('dm_editor_theme', t); }}
           className="px-2 py-1 rounded-md bg-[#3c3c3c] border border-[#555] text-[10px] text-slate-400 hover:text-white font-bold transition-colors"
@@ -245,7 +312,7 @@ export default function CodeEditorPanel({
           {theme === 'vs-dark' ? '☀' : '🌙'}
         </button>
 
-        {/* Reset */}
+        {/* Reset starter code button */}
         {resetConfirm ? (
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-amber-400 font-bold">Reset?</span>
@@ -258,6 +325,7 @@ export default function CodeEditorPanel({
           </button>
         )}
 
+        {/* Line count & Fullscreen toggle */}
         <div className="ml-auto flex items-center gap-1.5">
           <span className="text-[10px] text-slate-500 font-mono">{code.split('\n').length}L</span>
           <button onClick={() => setExpanded((e) => !e)} className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors" title={expanded ? 'Collapse' : 'Expand'}>
@@ -266,7 +334,7 @@ export default function CodeEditorPanel({
         </div>
       </div>
 
-      {/* ── Monaco Editor ── */}
+      {/* ── Monaco Editor Instance ── */}
       <div className="flex-1 overflow-hidden min-h-0" onPasteCapture={handlePaste}>
         <MonacoEditor
           height="100%"
@@ -293,9 +361,9 @@ export default function CodeEditorPanel({
         />
       </div>
 
-      {/* ── Bottom Panel ── */}
+      {/* ── Bottom Console Panel: Action buttons, Test Cases & Terminal output ── */}
       <div className="shrink-0 border-t border-[#3c3c3c] bg-[#1e1e1e]" style={{ maxHeight: '280px' }}>
-        {/* Run / Submit bar */}
+        {/* Execution trigger action bar */}
         <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3c3c3c]">
           <button
             onClick={onRunCode}
@@ -318,6 +386,7 @@ export default function CodeEditorPanel({
             {isSubmittingCode ? 'Submitting…' : 'Submit'}
           </button>
 
+          {/* Test cases passed badge */}
           {testResults && (
             <div className={`ml-2 flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${allPassed ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-700' : 'bg-rose-900/50 text-rose-400 border border-rose-800'}`}>
               {allPassed ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
@@ -325,6 +394,7 @@ export default function CodeEditorPanel({
             </div>
           )}
 
+          {/* Wall-clock execution time meter & clear button */}
           {executionResult && (
             <div className="ml-auto flex items-center gap-1.5">
               <Clock className="w-3 h-3 text-slate-500" />
@@ -336,7 +406,7 @@ export default function CodeEditorPanel({
           )}
         </div>
 
-        {/* Test Cases / Output Tabs */}
+        {/* Tab switcher: Test Cases vs Raw Output */}
         <div className="flex border-b border-[#3c3c3c]">
           <button
             onClick={() => setActiveResultTab('testcases')}
@@ -352,10 +422,10 @@ export default function CodeEditorPanel({
           </button>
         </div>
 
-        {/* Test Cases Panel */}
+        {/* Test Cases Panel Tab */}
         {activeResultTab === 'testcases' && (
           <div className="flex overflow-hidden" style={{ height: '180px' }}>
-            {/* Case list */}
+            {/* Case selector sidebar */}
             <div className="w-32 shrink-0 border-r border-[#3c3c3c] overflow-y-auto">
               {testCases.map((tc, i) => {
                 const result = testResults?.[i];
@@ -378,7 +448,7 @@ export default function CodeEditorPanel({
               })}
             </div>
 
-            {/* Case detail */}
+            {/* Selected Case Inspection */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-xs font-mono">
               {(() => {
                 const tc = testCases[activeTestCase];
@@ -410,7 +480,7 @@ export default function CodeEditorPanel({
           </div>
         )}
 
-        {/* Raw Output Panel */}
+        {/* Raw Terminal Output Tab */}
         {activeResultTab === 'output' && (
           <div className="h-[180px] overflow-y-auto px-4 py-3">
             {!executionResult ? (

@@ -1,3 +1,24 @@
+/**
+ * @file RecordingConsentModal.tsx
+ * @description GDPR-Compliant Video Recording Consent & Paywall Modal for DevMeet.
+ *
+ * Responsibilities:
+ * 1. Plan Verification Gate:
+ *    - Restricts interview session recording to 'pro' and 'enterprise' subscribers.
+ *    - Displays an upgrade upsell card when a 'free' tier candidate attempts to record.
+ * 2. Privacy & Compliance Disclosure:
+ *    - Informs the candidate explicitly what is recorded (video, audio, transcript).
+ *    - Informs how data is secured (AES-256 S3 server-side encryption).
+ *    - Communicates retention policy (automatic deletion after 7 days).
+ *    - Explains right to erasure (data deletion on request).
+ * 3. Explicit Checkbox Consent:
+ *    - Requires positive opt-in checkbox click before enabling the "Start Recording" button.
+ * 4. API Dispatch:
+ *    - Triggers `videoApi.startRecording(roomName, userId, true)` upon confirmed consent.
+ *
+ * @module components/interview/RecordingConsentModal
+ */
+
 'use client';
 
 import React, { useState } from 'react';
@@ -14,15 +35,31 @@ import {
 } from 'lucide-react';
 import { videoApi } from '@/lib/api';
 
+/**
+ * Props accepted by RecordingConsentModal.
+ */
 interface RecordingConsentModalProps {
+  /** Flag controlling modal visibility. */
   isOpen: boolean;
+  /** LiveKit video room identifier. */
   roomName: string;
+  /** Authenticated user UUID. */
   userId: string;
+  /** Current subscription tier ('free' | 'pro' | 'enterprise'). */
   userPlan: 'free' | 'pro' | 'enterprise';
-  onConsent: () => void;    // Recording successfully started
-  onDecline: () => void;    // User declined or modal closed
+  /** Callback fired after recording is successfully initialized on the backend. */
+  onConsent: () => void;
+  /** Callback fired if the user cancels, closes, or skips recording. */
+  onDecline: () => void;
 }
 
+/**
+ * RecordingConsentModal Component.
+ *
+ * @component
+ * @param {RecordingConsentModalProps} props
+ * @returns {JSX.Element} Portaled modal overlay.
+ */
 export default function RecordingConsentModal({
   isOpen,
   roomName,
@@ -31,10 +68,16 @@ export default function RecordingConsentModal({
   onConsent,
   onDecline,
 }: RecordingConsentModalProps) {
+  // Checkbox consent agreement state
   const [agreed, setAgreed] = useState(false);
+  // Async submission state
   const [isStarting, setIsStarting] = useState(false);
+  // Error message state
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Dispatches recording start request to video-service after user provides consent.
+   */
   const handleStart = async () => {
     if (!agreed) return;
     setIsStarting(true);
@@ -49,12 +92,16 @@ export default function RecordingConsentModal({
     }
   };
 
+  /**
+   * Resets local states and notifies parent that user declined recording.
+   */
   const handleClose = () => {
     setAgreed(false);
     setError(null);
     onDecline();
   };
 
+  // If user is on the Free tier, render an upgrade promotional modal instead of recording consent
   if (userPlan === 'free') {
     return (
       <AnimatePresence>
@@ -102,6 +149,7 @@ export default function RecordingConsentModal({
     );
   }
 
+  // Render Recording Consent Dialog for Pro/Enterprise users
   return (
     <AnimatePresence>
       {isOpen && (
@@ -119,7 +167,7 @@ export default function RecordingConsentModal({
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden"
           >
-            {/* Header */}
+            {/* Header with pulsing recording icon */}
             <div className="px-8 pt-8 pb-5 border-b border-slate-100">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -140,9 +188,8 @@ export default function RecordingConsentModal({
               </div>
             </div>
 
-            {/* Content */}
+            {/* Privacy details list */}
             <div className="px-8 py-6 space-y-4">
-              {/* What's recorded */}
               <div className="space-y-3">
                 {[
                   {
@@ -176,7 +223,7 @@ export default function RecordingConsentModal({
                 ))}
               </div>
 
-              {/* Consent checkbox */}
+              {/* Explicit Opt-In Consent Checkbox */}
               <button
                 onClick={() => setAgreed((a) => !a)}
                 className="w-full flex items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 text-left mt-2"
@@ -195,7 +242,7 @@ export default function RecordingConsentModal({
                 </p>
               </button>
 
-              {/* Error */}
+              {/* Error Alert Display */}
               {error && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                   <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
@@ -204,7 +251,7 @@ export default function RecordingConsentModal({
               )}
             </div>
 
-            {/* Footer */}
+            {/* Modal Actions */}
             <div className="px-8 py-5 border-t border-slate-100 flex gap-3">
               <button
                 onClick={handleClose}

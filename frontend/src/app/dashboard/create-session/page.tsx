@@ -1,3 +1,25 @@
+/**
+ * @file page.tsx
+ * @description Custom Interview Session Setup Wizard & AI Launcher for DevMeet.
+ *
+ * Responsibilities:
+ * 1. Multi-Step Interview Configuration:
+ *    - Step 1 (Interview Type): DSA & Coding, Behavioral (STAR), or System Design.
+ *    - Step 2 (Difficulty Level): Easy, Medium (Senior), or Hard (Advanced/Staff).
+ *    - Step 3 (Duration): Preset buttons (15m, 30m, 45m, 60m, 90m, 120m) and continuous [Slider](file:///e:/AI%20INTERVIEW/frontend/src/components/ui/slider.tsx).
+ *    - Step 4 (Targeting & Focus): Company name (e.g. Google, Meta) and topic focus (e.g. Dynamic Programming, Distributed Databases).
+ * 2. URL Parameter Pre-population:
+ *    - Automatically synchronizes query params (`?type=...&difficulty=...&focus=...&company=...`).
+ * 3. Sticky Real-time Summary Card:
+ *    - Updates live as candidate toggles configuration options.
+ * 4. Concurrent Active Session Safeguard:
+ *    - Catches HTTP 409 conflict errors (`CONCURRENT_SESSION`), extracts the UUID, and smoothly resumes existing session.
+ * 5. Fullscreen Launch Experience (`LaunchOverlay`):
+ *    - Displays progress steps ("Authenticating session", "Spinning up AI interviewer", "Preparing questions", "Launching interview room").
+ *
+ * @module app/dashboard/create-session/page
+ */
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
@@ -9,6 +31,7 @@ import DashboardShell from '@/components/layout/DashboardShell';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
 
+/** Interview type specifications */
 const TYPES = [
   {
     value: 'dsa',
@@ -45,14 +68,22 @@ const TYPES = [
   },
 ];
 
+/** Difficulty level specifications */
 const DIFFICULTIES = [
   { value: 'easy', label: 'Easy', desc: 'Warm-up & fundamentals', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', textColor: '#14532d' },
   { value: 'medium', label: 'Medium', desc: 'Senior developer level', color: '#d97706', bg: '#fffbeb', border: '#fde68a', textColor: '#78350f' },
   { value: 'hard', label: 'Hard', desc: 'Advanced & edge cases', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', textColor: '#7f1d1d' },
 ];
 
+/** Preset session durations in minutes */
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 
+/**
+ * Formats duration in minutes to user-friendly label.
+ *
+ * @param {number} min - Minutes.
+ * @returns {string} Formatted duration string.
+ */
 function fmt(min: number) {
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
@@ -60,6 +91,12 @@ function fmt(min: number) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+/**
+ * Root CreateSessionPage component wrapped in Suspense boundary for `useSearchParams`.
+ *
+ * @component
+ * @returns {JSX.Element}
+ */
 export default function CreateSessionPage() {
   return (
     <Suspense
@@ -70,7 +107,7 @@ export default function CreateSessionPage() {
             <div className="skeleton-shimmer" style={{ height: 32, width: 220, borderRadius: 8 }} />
             {/* Step 1 — interview type cards */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              {[0, 1, 2].map(i => (
+              {[0, 1, 2].map((i) => (
                 <div key={i} className="skeleton-shimmer" style={{ height: 120, borderRadius: 12 }} />
               ))}
             </div>
@@ -95,6 +132,9 @@ export default function CreateSessionPage() {
   );
 }
 
+/**
+ * Miniature circular spinner for pending states.
+ */
 function Spinner() {
   return (
     <div
@@ -110,6 +150,11 @@ function Spinner() {
   );
 }
 
+/**
+ * StepHeader Component.
+ *
+ * Numbered step indicator header.
+ */
 function StepHeader({ n, title, sub }: { n: number; title: string; sub: string }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -137,6 +182,11 @@ function StepHeader({ n, title, sub }: { n: number; title: string; sub: string }
   );
 }
 
+/**
+ * SummaryRow Component.
+ *
+ * Formatted row in the sticky right-side session preview card.
+ */
 function SummaryRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -149,6 +199,9 @@ function SummaryRow({ icon, label, value }: { icon: React.ReactNode; label: stri
   );
 }
 
+/**
+ * Styled text input for company and focus area fields.
+ */
 function StyledInput({
   value,
   onChange,
@@ -191,6 +244,11 @@ const LAUNCH_STEPS = [
   { label: 'Launching interview room' },
 ];
 
+/**
+ * LaunchOverlay Component.
+ *
+ * Fullscreen animated loading sequence presented while orchestrator service allocates resources.
+ */
 function LaunchOverlay({ step, type, difficulty }: { step: number; type: string; difficulty: string }) {
   const progress = ((step + 1) / (LAUNCH_STEPS.length + 1)) * 100;
 
@@ -218,7 +276,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
         @keyframes launchProgressGlow { 0%, 100% { box-shadow: 0 0 8px rgba(37, 99, 235,0.3); } 50% { box-shadow: 0 0 16px rgba(37, 99, 235,0.5); } }
       `}</style>
 
-      {/* Spinner */}
+      {/* Target Icon & Concentric Ring Spinner */}
       <div style={{ marginBottom: 32, position: 'relative' }}>
         <svg width="56" height="56" viewBox="0 0 56 56" style={{ animation: 'launchSpin 1.2s linear infinite' }}>
           <circle cx="28" cy="28" r="24" fill="none" stroke="#e5e5e5" strokeWidth="3" />
@@ -243,7 +301,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
         {TYPE_LABELS[type] || type} &middot; {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
       </p>
 
-      {/* Steps */}
+      {/* Sequential Milestone Steps */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, width: 300 }}>
         {LAUNCH_STEPS.map((s, i) => {
           const done = step > i;
@@ -264,7 +322,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
                   animation: (done || active) ? `launchStepIn 0.3s ease ${i * 0.08}s both` : 'none',
                 }}
               >
-                {/* Step indicator */}
+                {/* Step indicator circular badge */}
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -279,7 +337,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
                   }
                 </div>
 
-                {/* Label */}
+                {/* Milestone label */}
                 <div style={{ flex: 1 }}>
                   <span style={{
                     fontSize: 13.5, fontWeight: 600,
@@ -298,7 +356,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
                   )}
                 </div>
 
-                {/* Status dot */}
+                {/* Status Dot */}
                 {done && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />}
                 {active && <div style={{
                   width: 6, height: 6, borderRadius: '50%', background: '#2563eb',
@@ -306,7 +364,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
                 }} />}
               </div>
 
-              {/* Connector line */}
+              {/* Vertical Connector Line */}
               {!isLast && (
                 <div style={{ marginLeft: 15.5, width: 1, height: 8, background: done ? '#bbf7d0' : '#e5e5e5', transition: 'background 0.3s' }} />
               )}
@@ -315,7 +373,7 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
         })}
       </div>
 
-      {/* Progress bar */}
+      {/* Bottom Progress Bar */}
       <div style={{
         width: 300, height: 3, background: '#e5e5e5', borderRadius: 4, marginTop: 32, overflow: 'hidden',
       }}>
@@ -332,12 +390,18 @@ function LaunchOverlay({ step, type, difficulty }: { step: number; type: string;
   );
 }
 
+/**
+ * CreateSessionForm Component.
+ *
+ * Interactive session creation form.
+ */
 function CreateSessionForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   useRequireAuth();
   const createSession = useCreateSession();
 
+  // Wizard state inputs
   const [selectedType, setSelectedType] = useState('dsa');
   const [selectedDiff, setSelectedDiff] = useState('medium');
   const [company, setCompany] = useState('');
@@ -348,6 +412,7 @@ function CreateSessionForm() {
   const [launchStep, setLaunchStep] = useState(0);
   const stepTimers = useRef<number[]>([]);
 
+  // Prepopulate form state from URL query parameters
   useEffect(() => {
     const t = searchParams.get('type');
     if (t && ['dsa', 'behavioral', 'system_design'].includes(t)) setSelectedType(t);
@@ -359,12 +424,14 @@ function CreateSessionForm() {
     if (c) setCompany(c);
   }, [searchParams]);
 
+  /**
+   * Dispatches createSession mutation to orchestrator service and manages launch animation.
+   */
   const handleStart = useCallback(async () => {
     setError(null);
     setLaunching(true);
     setLaunchStep(0);
 
-    // Progress steps tied to actual work, not artificial timers
     const stepTimer = window.setTimeout(() => setLaunchStep(1), 150);
     stepTimers.current.push(stepTimer);
 
@@ -378,6 +445,7 @@ function CreateSessionForm() {
         ...(focus.trim() ? { focus_area: focus.trim() } : {}),
       });
       setLaunchStep(4);
+      // Route candidate into the live interview room
       router.push(`/interview/${session.id}`);
     } catch (err) {
       stepTimers.current.forEach(clearTimeout);
@@ -386,6 +454,7 @@ function CreateSessionForm() {
       setLaunchStep(0);
 
       const msg = err instanceof Error ? err.message : 'Failed to create session.';
+      // Check for concurrent active interview conflict and extract existing UUID to resume
       if (msg.includes('CONCURRENT_SESSION') || msg.includes('active interview session')) {
         const match = msg.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
         if (match) {
@@ -395,6 +464,10 @@ function CreateSessionForm() {
           return;
         }
         const m = 'You have an active session. Resume it from History.';
+        setError(m);
+        toast.error(m);
+      } else if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('limit')) {
+        const m = 'Interview quota exceeded: You have used your 5 free interviews. Please upgrade to Pro for unlimited sessions!';
         setError(m);
         toast.error(m);
       } else {
@@ -409,13 +482,17 @@ function CreateSessionForm() {
 
   return (
     <>
+      {/* Fullscreen Launch Animation Overlay */}
       {launching && <LaunchOverlay step={launchStep} type={selectedType} difficulty={selectedDiff} />}
+
       <DashboardShell maxWidth="max-w-[1100px]">
+        {/* Page Title */}
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', letterSpacing: '-0.025em', margin: 0 }}>New Interview Session</h1>
           <p style={{ fontSize: 13, color: '#888', margin: '5px 0 0', fontWeight: 400 }}>Configure your interview and click Start when ready.</p>
         </div>
 
+        {/* Error Notification */}
         {error && (
           <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13, marginBottom: 20 }}>
             {error}
@@ -423,9 +500,9 @@ function CreateSessionForm() {
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, alignItems: 'start' }}>
-          {/* Left column - form steps */}
+          {/* Left Column: Form Steps */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-            {/* Step 1: Interview Type */}
+            {/* Step 1: Interview Track Type */}
             <section>
               <StepHeader n={1} title="Interview Type" sub="Choose the focus area for your session" />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
@@ -508,7 +585,7 @@ function CreateSessionForm() {
               </div>
             </section>
 
-            {/* Step 2: Difficulty */}
+            {/* Step 2: Difficulty Level */}
             <section>
               <StepHeader n={2} title="Difficulty Level" sub="Pick a level that matches your experience" />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
@@ -542,8 +619,9 @@ function CreateSessionForm() {
               </div>
             </section>
 
-            {/* Step 3 & 4: Duration + Optional */}
+            {/* Step 3 & 4: Session Duration & Optional Targeting */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Duration with Slider */}
               <section>
                 <StepHeader n={3} title="Session Duration" sub="How long is this session?" />
                 <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 12, padding: '18px 16px' }}>
@@ -578,6 +656,7 @@ function CreateSessionForm() {
                 </div>
               </section>
 
+              {/* Optional Settings */}
               <section>
                 <StepHeader n={4} title="Optional Settings" sub="Target company or specific focus area" />
                 <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 12, padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -600,9 +679,10 @@ function CreateSessionForm() {
             </div>
           </div>
 
-          {/* Right column - summary sidebar */}
+          {/* Right Column: Sticky Summary Sidebar */}
           <div style={{ position: 'sticky', top: 24 }}>
             <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
+              {/* Header */}
               <div style={{ padding: '18px 20px 16px', borderBottom: '1px solid #f0f0f0' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 6 }}>
                   Session Summary
@@ -611,6 +691,7 @@ function CreateSessionForm() {
                 <div style={{ fontSize: 12, color: '#888', marginTop: 3, fontWeight: 400 }}>{typeData.description}</div>
               </div>
 
+              {/* Rows */}
               <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <SummaryRow
                   icon={
@@ -663,6 +744,7 @@ function CreateSessionForm() {
                 )}
               </div>
 
+              {/* Topics Pills */}
               <div style={{ padding: '0 20px 16px' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 8 }}>
                   Topics Covered
@@ -687,6 +769,7 @@ function CreateSessionForm() {
                 </div>
               </div>
 
+              {/* Launch Action Button */}
               <div style={{ padding: '0 20px 20px' }}>
                 <button
                   onClick={handleStart}
