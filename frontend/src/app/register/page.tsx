@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * @file page.tsx (Candidate Registration & Account Creation Page)
+ * @description Candidate registration screen with React Hook Form + Zod schema validation.
+ * Captures display name, email, password, and confirmation password.
+ * Supports password visibility toggle, real-time client-side validation errors,
+ * server error notifications, and immediate redirection to /dashboard upon successful account creation.
+ */
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -14,18 +22,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ErrorAlert } from '@/components/feedback/ErrorAlert';
 
+/** Value proposition metrics displayed on the desktop hero sidebar */
 const STATS = [
   { icon: <Zap className="w-4 h-4 text-yellow-300" />, label: '98% Success Rate' },
   { icon: <Brain className="w-4 h-4 text-blue-300" />, label: 'AI-Powered Evaluations' },
   { icon: <ShieldCheck className="w-4 h-4 text-emerald-300" />, label: 'Enterprise Security' },
 ];
 
+/**
+ * RegisterPage Component.
+ */
 export default function RegisterPage() {
   const router = useRouter();
   const { register: registerUser } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
+  // Form initialization using react-hook-form and Zod resolver
   const {
     register,
     handleSubmit,
@@ -40,6 +53,10 @@ export default function RegisterPage() {
     },
   });
 
+  /**
+   * Handles validated registration submission.
+   * Dispatches registration to AuthContext and navigates to candidate dashboard.
+   */
   const onSubmit = async ({ confirmPassword, ...values }: RegisterFormValues) => {
     setServerError(null);
     try {
@@ -53,7 +70,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex bg-slate-50">
-      {/* Left panel - matching LoginPage branded identity */}
+      {/* ── Left Hero Panel (matches login branding) ── */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-blue-600 flex-col justify-between p-12">
         <div
           aria-hidden
@@ -98,7 +115,7 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      {/* Right panel */}
+      {/* ── Right Registration Form Card ── */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <Link href="/" className="lg:hidden flex items-center gap-2 mb-10">
           <Brain className="w-6 h-6 text-blue-600" />
@@ -119,6 +136,7 @@ export default function RegisterPage() {
           {serverError ? <ErrorAlert message={serverError} /> : null}
 
           <form className="mt-5 space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+            {/* Full Name input */}
             <div className="space-y-1.5">
               <Label htmlFor="display_name">Full Name</Label>
               <Input
@@ -134,6 +152,7 @@ export default function RegisterPage() {
               ) : null}
             </div>
 
+            {/* Email input */}
             <div className="space-y-1.5">
               <Label htmlFor="email">Email address</Label>
               <Input
@@ -150,6 +169,7 @@ export default function RegisterPage() {
               ) : null}
             </div>
 
+            {/* Password input with toggle button */}
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
@@ -165,7 +185,7 @@ export default function RegisterPage() {
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 cursor-pointer"
                   onClick={() => setShowPassword((value) => !value)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
@@ -177,6 +197,7 @@ export default function RegisterPage() {
               ) : null}
             </div>
 
+            {/* Confirm Password input */}
             <div className="space-y-1.5">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <Input
@@ -193,15 +214,17 @@ export default function RegisterPage() {
               ) : null}
             </div>
 
+            {/* Submit button */}
             <Button
               type="submit"
-              className="w-full h-11 font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-500/10 transition-all"
+              className="w-full h-11 font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-500/10 transition-all cursor-pointer"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Creating account...' : 'Create Account'}
             </Button>
           </form>
 
+          {/* Legal policy links */}
           <p className="text-center text-xs text-slate-400 mt-6">
             By creating an account, you agree to our{' '}
             <Link href="/terms" className="text-blue-600 hover:underline">Terms</Link>
