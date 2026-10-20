@@ -44,7 +44,8 @@ export function useQuestionSearch(params: QuestionSearchParams, enabled = true) 
     queryKey: queryKeys.questions.search(params),
     queryFn: () => searchApi.search(params as unknown as Record<string, unknown>),
     enabled,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    placeholderData: (previousData) => previousData,
   });
 }
 

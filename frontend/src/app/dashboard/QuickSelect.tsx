@@ -168,6 +168,7 @@ export default function QuickSelect() {
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard/questions"
+            prefetch={true}
             className="btn-ghost flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-slate-100 transition-all duration-200"
           >
             <BookOpen className="w-3.5 h-3.5" />
@@ -175,6 +176,7 @@ export default function QuickSelect() {
           </Link>
           <Link
             href="/dashboard/create-session"
+            prefetch={true}
             className="btn-ghost flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-slate-100 transition-all duration-200"
           >
             <Plus className="w-3.5 h-3.5" />

@@ -24,9 +24,12 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { useQueryClient } from '@tanstack/react-query';
+import { searchApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import { motion } from 'framer-motion';
 import {
   Code2,
@@ -117,6 +120,7 @@ function computeStreak(sessions: any[]) {
  * @returns {JSX.Element} Authenticated Candidate Dashboard.
  */
 export default function DashboardPage() {
+  const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useRequireAuth();
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
   const { data: quota } = useQuota();
@@ -125,6 +129,15 @@ export default function DashboardPage() {
 
   const { data: scoreTrendData } = useUserScoreTrend(trendDays);
   const { data: dashboardData } = useUserDashboard(90);
+
+  // Prefetch Question Bank search catalog in the background so transitions are instant
+  useEffect(() => {
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.questions.search({ limit: 24, offset: 0 }),
+      queryFn: () => searchApi.search({ limit: 24, offset: 0 }),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [queryClient]);
 
   // Extract unique sorted companies for chip filtering
   const companyOptions = useMemo(() => {
@@ -249,6 +262,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
               <Link
                 href="/dashboard/create-session"
+                prefetch={true}
                 className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold text-sm transition-all shadow-sm hover:shadow-blue-500/20 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
@@ -256,6 +270,7 @@ export default function DashboardPage() {
               </Link>
               <Link
                 href="/dashboard/questions"
+                prefetch={true}
                 className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-3 rounded-2xl font-semibold text-sm transition-all cursor-pointer"
               >
                 <Code2 className="w-4 h-4" />

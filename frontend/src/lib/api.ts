@@ -133,6 +133,7 @@ export interface SearchQuestion {
 type RequestOptions = RequestInit & {
   auth?: boolean;
   retryOnUnauthorized?: boolean;
+  timeoutMs?: number;
 };
 
 
@@ -158,6 +159,45 @@ function storeTokens(tokens: TokenResponse): void {
   }
 }
 
+// ─── Single-Flight Refresh Synchronization ────────────────────────────────────
+// Prevents multiple concurrent 401s from triggering competing refresh cycles.
+let refreshPromise: Promise<TokenResponse | null> | null = null;
+
+async function executeSingleFlightRefresh(): Promise<TokenResponse | null> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        return null;
+      }
+      const tokens = await request<TokenResponse>('/api/v1/auth/refresh', {
+        ...json('POST', { refresh_token: refreshToken }),
+        auth: false,
+        retryOnUnauthorized: false,
+      });
+      storeTokens(tokens);
+      return tokens;
+    } catch (err) {
+      // Clear invalid credentials on definitive auth failure
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        if (isBrowser()) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+        }
+      }
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -174,12 +214,12 @@ async function parseResponse<T>(response: Response): Promise<T> {
  * automated authentication injection, retry handling, and error formatting.
  *
  * @param path - API endpoint route path (e.g. `/api/v1/auth/login`).
- * @param options - Request options including authorization and retry flags.
+ * @param options - Request options including authorization, timeout, and retry flags.
  * @returns Parsed JSON response body.
  * @throws ApiError on non-2xx status code.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { auth = true, retryOnUnauthorized = true, headers, ...init } = options;
+  const { auth = true, retryOnUnauthorized = true, timeoutMs, headers, signal, ...init } = options;
   const token = getAccessToken();
   const requestHeaders = new Headers(headers);
 
@@ -193,38 +233,63 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     requestHeaders.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: requestHeaders,
-    credentials: 'include',
-  });
-
-  // Handle token expiration via automatic silent refresh
-  if (response.status === 401 && retryOnUnauthorized && auth) {
-    const refreshed = await apiClient.refreshToken().catch(() => null);
-    if (refreshed) {
-      // Retry original request once with fresh access token
-      return request<T>(path, { ...options, retryOnUnauthorized: false });
-    }
+  // Propagate trace correlation ID if available
+  if (!requestHeaders.has('X-Request-ID') && isBrowser()) {
+    const traceId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `fe-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    requestHeaders.set('X-Request-ID', traceId);
   }
 
-  // Handle HTTP error responses
-  if (!response.ok) {
-    const payload = await parseResponse<any>(response).catch(() => null);
-    let message = payload?.detail || payload?.message || response.statusText;
-    
-    // Normalize FastAPI 422 Unprocessable Entity array payloads
-    if (response.status === 422 && Array.isArray(payload?.detail)) {
-      message = payload.detail.map((err: any) => err.msg).join(', ');
-    }
-    throw new ApiError(
-      response.status,
-      typeof message === 'string' ? message : JSON.stringify(message),
-      payload
-    );
+  // Optional client-side request timeout controller
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let effectiveSignal = signal;
+
+  if (timeoutMs && !signal && typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    effectiveSignal = controller.signal;
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   }
 
-  return parseResponse<T>(response);
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: requestHeaders,
+      credentials: 'include',
+      signal: effectiveSignal,
+    });
+
+    // Handle token expiration via single-flight silent refresh
+    if (response.status === 401 && retryOnUnauthorized && auth) {
+      const refreshed = await executeSingleFlightRefresh();
+      if (refreshed) {
+        // Retry original request once with fresh access token
+        return request<T>(path, { ...options, retryOnUnauthorized: false });
+      }
+    }
+
+    // Handle HTTP error responses
+    if (!response.ok) {
+      const payload = await parseResponse<any>(response).catch(() => null);
+      let message = payload?.detail || payload?.message || response.statusText;
+      
+      // Normalize FastAPI 422 Unprocessable Entity array payloads
+      if (response.status === 422 && Array.isArray(payload?.detail)) {
+        message = payload.detail.map((err: any) => err.msg).join(', ');
+      }
+      throw new ApiError(
+        response.status,
+        typeof message === 'string' ? message : JSON.stringify(message),
+        payload
+      );
+    }
+
+    return parseResponse<T>(response);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function json(method: string, body?: unknown): RequestInit {
@@ -268,15 +333,8 @@ export const apiClient = {
     storeTokens(tokens);
     return tokens;
   },
-  async refreshToken() {
-    const refreshToken = getRefreshToken();
-    const tokens = await request<TokenResponse>('/api/v1/auth/refresh', {
-      ...json('POST', refreshToken ? { refresh_token: refreshToken } : undefined),
-      auth: false,
-      retryOnUnauthorized: false,
-    });
-    storeTokens(tokens);
-    return tokens;
+  async refreshToken(): Promise<TokenResponse | null> {
+    return executeSingleFlightRefresh();
   },
   async logout() {
     await request('/api/v1/auth/logout', json('POST')).catch(() => null);

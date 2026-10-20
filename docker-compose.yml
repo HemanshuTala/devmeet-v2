@@ -202,6 +202,8 @@ services:
     build: ./services/analytics-service
     ports:
       - "8009:8009"
+    volumes:
+      - ./services/analytics-service/app:/app/app
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -218,6 +220,8 @@ services:
     build: ./services/admin-service
     ports:
       - "8010:8010"
+    volumes:
+      - ./services/admin-service/app:/app/app
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -239,6 +243,8 @@ services:
     build: ./services/file-service
     ports:
       - "8011:8011"
+    volumes:
+      - ./services/file-service/app:/app/app
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -250,6 +256,8 @@ services:
     build: ./services/payment-service
     ports:
       - "8012:8012"
+    volumes:
+      - ./services/payment-service/app:/app/app
     env_file:
       - .env
     environment:

@@ -47,6 +47,17 @@ export function useAIStreaming(opts: {
   const [isAiTyping, setIsAiTyping] = useState(false);
   // Extracted progressive hints for the current question
   const [hints, setHints] = useState<string[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Abort any active streaming connection when component unmounts
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   /**
    * Initiates question generation and streams tokens directly into chat messages.
@@ -58,6 +69,12 @@ export function useAIStreaming(opts: {
     async (history: ChatMessage[], currentSession?: any) => {
       const activeSession = currentSession || opts.session;
       if (!activeSession) return;
+
+      // Abort any prior in-flight stream to prevent overlapping responses
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
 
       setIsAiTyping(true);
       opts.onError('');
@@ -87,9 +104,11 @@ export function useAIStreaming(opts: {
         { id: streamId, role: 'interviewer', content: '', timestamp: new Date() },
       ]);
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       try {
         // Enforce a 60-second fetch timeout
-        const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
 
         const response = await fetch(streamUrl, {
@@ -243,6 +262,9 @@ export function useAIStreaming(opts: {
           return found && !found.content ? prev.filter((m) => m.id !== streamId) : prev;
         });
       } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
         setIsAiTyping(false);
       }
     },
