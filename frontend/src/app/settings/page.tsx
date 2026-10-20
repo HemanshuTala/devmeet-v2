@@ -1,3 +1,28 @@
+/**
+ * @file frontend/src/app/settings/page.tsx
+ * @description User Account Settings, Editor Preferences & Security Configuration Page.
+ *
+ * This client-side page provides users with full control over:
+ * 1. **General Preferences**:
+ *    - Email reminders for scheduled technical interview simulations.
+ *    - Profile visibility (opt-in for recruiter search and talent discovery).
+ * 2. **Code Editor Preferences**:
+ *    - Theme selection (Light vs. Dark 'vs-dark').
+ *    - Indentation settings (2 vs. 4 spaces).
+ *    - Keybinding modes (Standard, Vim mode, or Emacs mode) stored in `localStorage`.
+ * 3. **Security & Authentication Management**:
+ *    - Multi-Factor Authentication (TOTP QR code pairing via `SecuritySection`).
+ *    - Password changes with confirmation checks via `authApi.changePassword()`.
+ * 4. **Privacy & Data Compliance (GDPR)**:
+ *    - Complete data archive export as a downloadable JSON file.
+ *    - Permanent account deletion with confirmation safeguards.
+ *
+ * Architectural Patterns:
+ * - Employs `useRequireAuth()` for unauthenticated redirect enforcement.
+ * - Utilizes React Query hooks (`useProfile`, `useUpdateProfile`) for optimistic caching and API sync.
+ * - Manages tab switching between 'preferences' and 'security' without page reloads.
+ */
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,47 +39,74 @@ import ToggleSwitch from '@/components/ToggleSwitch';
 import { SecuritySection } from '@/components/settings/SecuritySection';
 import { Button } from '@/components/ui/button';
 
+/**
+ * SettingsPage Component
+ *
+ * Renders the top-level account preferences, code editor customizer,
+ * MFA controls, password reset form, and GDPR compliance actions.
+ *
+ * @returns {JSX.Element} The rendered settings dashboard view
+ */
 export default function SettingsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, refreshUser } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Settings states
+  // Settings states for notifications and privacy
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [profilePublic, setProfilePublic] = useState(false);
+
+  // Settings states for Monaco code editor customization
   const [editorTheme, setEditorTheme] = useState<'light' | 'vs-dark'>('light');
   const [editorTabSize, setEditorTabSize] = useState<2 | 4>(4);
   const [editorKeybindings, setEditorKeybindings] = useState<'standard' | 'vim' | 'emacs'>('standard');
+
+  // UI status tracking states
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Password state
+  // Password update form states
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  // GDPR action loaders
   const [exportingData, setExportingData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
+  // Authentication requirement hook (redirects unauthenticated guests to /login)
   const { isLoading: authGuardLoading } = useRequireAuth();
+
+  // Profile data fetch and mutation queries via TanStack React Query
   const { data: profileData, isLoading: profileLoading, isError: profileError } = useProfile();
   const updateProfileMutation = useUpdateProfile();
+
+  // Active navigation tab ('preferences' vs 'security')
   const [activeTab, setActiveTab] = useState<'preferences' | 'security'>('preferences');
 
+  /**
+   * Synchronize local state with fetched profile data and retrieve stored editor preferences.
+   * Runs whenever profileData changes or when component mounts on client side.
+   */
   useEffect(() => {
+    // If fetching profile fails, stop loading spinner and render error view
     if (profileError) {
       setLoading(false);
       return;
     }
     if (!profileData) return;
+
+    // Populate remote profile preferences
     setProfile(profileData);
     setReminderEnabled(profileData.interview_reminder_enabled ?? false);
     setProfilePublic(profileData.profile_public ?? false);
     setLoading(false);
 
+    // Read stored code editor preferences from client's browser localStorage
     if (typeof window !== 'undefined') {
       const theme = localStorage.getItem('devmeet_editor_theme') as 'light' | 'vs-dark';
       const tabSize = Number(localStorage.getItem('devmeet_editor_tab_size'));
@@ -63,24 +115,29 @@ export default function SettingsPage() {
       if (tabSize === 2 || tabSize === 4) setEditorTabSize(tabSize);
       if (keybindings) setEditorKeybindings(keybindings);
     }
-  }, [profileData]);
+  }, [profileData, profileError]);
 
+  /**
+   * Persists both remote profile preferences to the backend API and
+   * code editor preferences to browser localStorage.
+   */
   const handleSaveSettings = async () => {
     setSaving(true);
     setSuccessMsg('');
     try {
-      // Save profile preferences to API
+      // 1. Dispatch profile preference updates to the backend User Microservice
       const updated = await updateProfileMutation.mutateAsync({
         interview_reminder_enabled: reminderEnabled,
         profile_public: profilePublic,
       });
       setProfile(updated);
 
-      // Save editor preferences to localStorage
+      // 2. Persist code editor settings to browser local storage for Monaco Editor consumption
       localStorage.setItem('devmeet_editor_theme', editorTheme);
       localStorage.setItem('devmeet_editor_tab_size', String(editorTabSize));
       localStorage.setItem('devmeet_editor_keybindings', editorKeybindings);
 
+      // 3. Display success toast banner and auto-dismiss after 3 seconds
       setSuccessMsg('Settings saved successfully!');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch {
@@ -90,15 +147,23 @@ export default function SettingsPage() {
     }
   };
 
+  /**
+   * Submits a password update request after validating matching passwords and minimum length.
+   *
+   * @param {React.FormEvent} e - Form submission event
+   */
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess('');
 
+    // Ensure new password and confirm password inputs match
     if (newPassword !== confirmPassword) {
       setPasswordError('New passwords do not match.');
       return;
     }
+
+    // Ensure new password meets minimal length criteria
     if (newPassword.length < 8) {
       setPasswordError('New password must be at least 8 characters.');
       return;
@@ -106,8 +171,11 @@ export default function SettingsPage() {
 
     setUpdatingPassword(true);
     try {
+      // Call Auth microservice to verify current credentials and apply new password hash
       await authApi.changePassword(currentPassword, newPassword);
       setPasswordSuccess('Password changed successfully!');
+
+      // Reset form fields upon successful update
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -119,10 +187,12 @@ export default function SettingsPage() {
     }
   };
 
+  // Render full-page loading spinner while authenticating user session
   if (authLoading || authGuardLoading) {
     return <PageLoader label="Loading settings…" />;
   }
 
+  // Render dashboard layout with loader while initial profile query is in-flight
   if (loading || profileLoading) {
     return (
       <DashboardShell maxWidth="max-w-4xl">
@@ -131,6 +201,7 @@ export default function SettingsPage() {
     );
   }
 
+  // Render fallback card if profile fails to load
   if (profileError || !profile) {
     return (
       <DashboardShell maxWidth="max-w-4xl">
@@ -154,6 +225,7 @@ export default function SettingsPage() {
   return (
     <DashboardShell maxWidth="max-w-4xl">
       <div className="space-y-6">
+        {/* Page Header */}
         <div>
           <h1 className="text-3xl font-bold text-slate-900 gradient-text">Settings</h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">
@@ -161,6 +233,7 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        {/* Global Feedback Alert Banner */}
         {successMsg && (
           <div className="alert-success text-sm font-semibold flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
@@ -169,7 +242,7 @@ export default function SettingsPage() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left panel info & local settings navigation */}
+          {/* Left panel: General account overview & Tab navigation buttons */}
           <div className="md:col-span-1 space-y-4">
             <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
               <h2 className="text-slate-800 font-bold text-sm mb-3">General Details</h2>
@@ -180,6 +253,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Sidebar Tab Selector */}
             <div className="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm flex flex-col gap-1.5">
               <button
                 onClick={() => setActiveTab('preferences')}
@@ -206,11 +280,11 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Right settings configs */}
+          {/* Right panel: Active Tab Content */}
           <div className="md:col-span-2 space-y-6">
             {activeTab === 'preferences' && (
               <>
-                {/* Preferences */}
+                {/* Notification & Visibility Toggles */}
                 <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm space-y-4">
                   <h3 className="text-slate-900 font-bold text-base flex items-center gap-2">
                     <Bell className="w-4 h-4 text-blue-600" />
@@ -236,13 +310,14 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Code Editor Configuration */}
+                {/* Code Editor Configuration (Monaco Editor theme, indent, keybindings) */}
                 <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm space-y-4">
                   <h3 className="text-slate-900 font-bold text-base flex items-center gap-2">
                     <Laptop className="w-4 h-4 text-blue-600" />
                     Code Editor Preferences
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Theme selector */}
                     <div>
                       <label className="form-label font-bold text-slate-700" htmlFor="theme">Editor Theme</label>
                       <select
@@ -255,6 +330,8 @@ export default function SettingsPage() {
                         <option value="vs-dark">Dark Theme</option>
                       </select>
                     </div>
+
+                    {/* Tab spacing selector */}
                     <div>
                       <label className="form-label font-bold text-slate-700" htmlFor="tabSize">Tab Spaces</label>
                       <select
@@ -267,6 +344,8 @@ export default function SettingsPage() {
                         <option value={4}>4 Spaces</option>
                       </select>
                     </div>
+
+                    {/* Keybinding scheme selector */}
                     <div>
                       <label className="form-label font-bold text-slate-700" htmlFor="keybindings">Keybindings</label>
                       <select
@@ -283,7 +362,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Update Save button */}
+                {/* Save Preferences Button */}
                 <div className="flex justify-end pt-2">
                   <Button
                     onClick={handleSaveSettings}
@@ -309,10 +388,10 @@ export default function SettingsPage() {
 
             {activeTab === 'security' && (
               <>
-                {/* Security: MFA + Email verification */}
+                {/* Security Section: Multi-Factor Authentication (MFA) & Email verification */}
                 <SecuritySection />
 
-                {/* GDPR: Data export & account deletion */}
+                {/* Privacy & Data Compliance (GDPR) */}
                 <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm space-y-4">
                   <h3 className="text-slate-900 font-bold text-base flex items-center gap-2">
                     <Shield className="w-4 h-4 text-blue-600" />
@@ -322,6 +401,7 @@ export default function SettingsPage() {
                     Export your data or permanently delete your account. Deletion is irreversible.
                   </p>
                   <div className="flex flex-wrap gap-3">
+                    {/* Export My Data Button */}
                     <Button
                       type="button"
                       variant="outline"
@@ -330,11 +410,13 @@ export default function SettingsPage() {
                         setExportingData(true);
                         try {
                           const blob = await userApi.exportData();
+                          // Create temporary Object URL for downloading the file
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
                           a.href = url;
                           a.download = `devmeet-data-export-${Date.now()}.json`;
                           a.click();
+                          // Clean up object URL from memory
                           URL.revokeObjectURL(url);
                           setSuccessMsg('Data export downloaded.');
                         } catch {
@@ -348,11 +430,14 @@ export default function SettingsPage() {
                       {exportingData ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 text-slate-500 mr-1" />}
                       Export My Data
                     </Button>
+
+                    {/* Delete Account Button */}
                     <Button
                       type="button"
                       variant="outline"
                       disabled={deletingAccount}
                       onClick={async () => {
+                        // Request user confirmation before invoking irreversible account deletion
                         if (!confirm('Delete your account permanently? This cannot be undone.')) return;
                         setDeletingAccount(true);
                         try {
@@ -371,7 +456,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Security Change Password */}
+                {/* Change Account Password Form */}
                 <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm space-y-4">
                   <h3 className="text-slate-900 font-bold text-base flex items-center gap-2">
                     <Lock className="w-4 h-4 text-blue-600" />
@@ -379,9 +464,11 @@ export default function SettingsPage() {
                   </h3>
                   
                   <form onSubmit={handleChangePassword} className="space-y-4">
+                    {/* Error & Success Feedback alerts */}
                     {passwordError && <div className="alert-error text-sm font-semibold">{passwordError}</div>}
                     {passwordSuccess && <div className="alert-success text-sm font-semibold">{passwordSuccess}</div>}
 
+                    {/* Current password input */}
                     <div>
                       <label className="form-label font-bold text-slate-700" htmlFor="currentPassword">Current Password</label>
                       <input
@@ -395,6 +482,7 @@ export default function SettingsPage() {
                       />
                     </div>
 
+                    {/* New password & Confirm password inputs */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="form-label font-bold text-slate-700" htmlFor="newPassword">New Password</label>
@@ -422,6 +510,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
+                    {/* Submit password update */}
                     <div className="flex justify-end pt-2">
                       <Button
                         type="submit"
