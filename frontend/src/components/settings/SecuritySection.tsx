@@ -14,12 +14,12 @@ export function SecuritySection() {
     const [emailVerifying, setEmailVerifying] = useState(false);
     const [emailVerified, setEmailVerified] = useState(false);
     const [mfaEnrolling, setMfaEnrolling] = useState(false);
-    const [mfaUri, setMfaUri] = useState(null);
-    const [mfaSecret, setMfaSecret] = useState(null);
+    const [mfaUri, setMfaUri] = useState<string | null>(null);
+    const [mfaSecret, setMfaSecret] = useState<string | null>(null);
     const [mfaCode, setMfaCode] = useState("");
     const [mfaEnabled, setMfaEnabled] = useState(false);
     const [mfaVerifying, setMfaVerifying] = useState(false);
-    const [backupCodes, setBackupCodes] = useState(null);
+    const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
     const [disableCode, setDisableCode] = useState("");
     const [resendCooldown, setResendCooldown] = useState(0);
     useEffect(()=>{

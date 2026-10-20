@@ -5,17 +5,19 @@ import { Sparkles } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 
 interface SkillRadarProps {
-  radarScores: Record<string, number>;
-  totalSessions: number;
+  radarScores?: Record<string, number>;
+  scores?: Record<string, number>;
+  totalSessions?: number;
 }
 
-export default function SkillRadar({ radarScores, totalSessions }: SkillRadarProps) {
+export default function SkillRadar({ radarScores, scores, totalSessions = 5 }: SkillRadarProps) {
+  const activeScores = radarScores || scores || {};
   const data = [
-    { subject: 'DSA', score: radarScores.dsa ?? 50, fullMark: 100 },
-    { subject: 'Behavioral', score: radarScores.behavioral ?? 50, fullMark: 100 },
-    { subject: 'System Design', score: radarScores.system_design ?? 50, fullMark: 100 },
-    { subject: 'Communication', score: radarScores.communication ?? 50, fullMark: 100 },
-    { subject: 'Optimizations', score: radarScores.optimizations ?? 50, fullMark: 100 },
+    { subject: 'DSA', score: activeScores.dsa ?? 50, fullMark: 100 },
+    { subject: 'Behavioral', score: activeScores.behavioral ?? 50, fullMark: 100 },
+    { subject: 'System Design', score: activeScores.system_design ?? 50, fullMark: 100 },
+    { subject: 'Communication', score: activeScores.communication ?? 50, fullMark: 100 },
+    { subject: 'Optimizations', score: activeScores.optimizations ?? 50, fullMark: 100 },
   ];
 
   return (

@@ -195,8 +195,13 @@ async def razorpay_webhook(request: Request):
     body = await request.body()
     sig_header = request.headers.get("x-razorpay-signature", "")
 
-    if USE_RAZORPAY and webhook_secret() and sig_header:
-        # Razorpay HMAC-SHA256 verification (webhook secret from dashboard)
+    if USE_RAZORPAY:
+        # In live mode, a missing or invalid signature must be rejected — no bypass allowed
+        if not sig_header:
+            raise HTTPException(status_code=400, detail="Missing webhook signature header")
+        if not webhook_secret():
+            raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        # Razorpay HMAC-SHA256 verification
         mac = hmac.new(
             webhook_secret().encode("utf-8"),
             body,

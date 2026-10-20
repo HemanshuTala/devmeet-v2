@@ -1,21 +1,20 @@
 import React from 'react';
 import { Calendar, Flame } from 'lucide-react';
-import { Session } from '@/lib/api';
 
 interface ConsistencyGridProps {
-  sessions: Session[];
-  streakDays: number;
+  sessions?: any[];
+  streakDays?: number;
 }
 
-export default function ConsistencyGrid({ sessions, streakDays }: ConsistencyGridProps) {
+export default function ConsistencyGrid({ sessions = [], streakDays = 0 }: ConsistencyGridProps) {
   const renderConsistencyGrid = () => {
-    const cols = [];
-    const dates = new Set(sessions.map((s) => new Date(s.created_at).toDateString()));
+    const cols: React.ReactNode[] = [];
+    const dates = new Set((sessions || []).map((s: any) => new Date(s.created_at).toDateString()));
     const now = new Date();
 
     // Grid spans 24 weeks backwards
     for (let w = 23; w >= 0; w--) {
-      const days = [];
+      const days: React.ReactNode[] = [];
       for (let d = 0; d < 7; d++) {
         const targetDate = new Date(now.getTime());
         const daysBack = w * 7 + (6 - d);
@@ -23,8 +22,8 @@ export default function ConsistencyGrid({ sessions, streakDays }: ConsistencyGri
 
         const hasSession = dates.has(targetDate.toDateString());
         // Color based on session count for the day
-        const daySessionCount = [...sessions].filter(
-          (s) => new Date(s.created_at).toDateString() === targetDate.toDateString()
+        const daySessionCount = [...(sessions || [])].filter(
+          (s: any) => new Date(s.created_at).toDateString() === targetDate.toDateString()
         ).length;
         let fill = 'bg-slate-100 border border-slate-200/20';
         if (daySessionCount >= 3) {

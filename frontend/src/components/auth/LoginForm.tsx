@@ -69,7 +69,7 @@ export function LoginForm() {
         return;
       }
       if ('security_alert' in result && result.security_alert) {
-        setSecurityAlert(result.security_alert);
+        setSecurityAlert(result.security_alert as any);
       }
       toast.success('Welcome back!');
       router.push('/dashboard');

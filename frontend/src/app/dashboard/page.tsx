@@ -160,7 +160,7 @@ export default function DashboardPage() {
     );
   }
 
-  const displayName = user.name || user.email?.split('@')[0] || 'Candidate';
+  const displayName = user.display_name || user.email?.split('@')[0] || 'Candidate';
 
   return (
     <DashboardShell>
@@ -245,30 +245,28 @@ export default function DashboardPage() {
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
-            title="Total Interviews"
+            label="Total Interviews"
             value={totalSessions}
             icon={BarChart2}
-            trend={+12}
-            subtitle="Practice sessions completed"
+            change="+12%"
+            changePositive
           />
           <StatCard
-            title="Completed Sessions"
+            label="Completed Sessions"
             value={completedSessions}
             icon={CheckCircle}
-            trend={+8}
-            subtitle="Fully scored sessions"
+            change="+8%"
+            changePositive
           />
           <StatCard
-            title="DSA Practices"
+            label="DSA Practices"
             value={dsaSessions}
             icon={Code2}
-            subtitle="Coding challenges solved"
           />
           <StatCard
-            title="Day Streak"
+            label="Day Streak"
             value={`${streakDays} Days`}
             icon={Flame}
-            subtitle="Current practice momentum"
           />
         </div>
 
@@ -331,7 +329,7 @@ export default function DashboardPage() {
               <h3 className="text-base font-bold text-slate-900 tracking-tight">Activity Heatmap</h3>
               <p className="text-xs text-slate-500">Daily practice consistency</p>
             </div>
-            <ConsistencyGrid sessions={sessions} />
+            <ConsistencyGrid sessions={sessions} streakDays={streakDays} />
           </div>
         </div>
       </div>

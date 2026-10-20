@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = useCallback(async () => {
     try {
-      let tokens = null;
+      let tokens: { accessToken: string | null; refreshToken?: string | null } | null = null;
       try {
         tokens = apiClient.getTokens();
       } catch (tokenErr) {

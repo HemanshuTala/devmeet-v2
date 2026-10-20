@@ -65,6 +65,37 @@ export interface CreateSessionRequest {
   recording_consent?: boolean;
 }
 
+export interface Session {
+  id: string;
+  user_id: string;
+  interview_type: string;
+  difficulty: string;
+  target_company?: string | null;
+  focus_area?: string | null;
+  duration_minutes?: number;
+  status: string;
+  created_at: string;
+  updated_at?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  elapsed_seconds?: number;
+  tab_switch_count?: number;
+  paste_count?: number;
+  recording_consent?: boolean;
+}
+
+export interface SearchQuestion {
+  id?: string;
+  title: string;
+  description: string;
+  interview_type: string;
+  difficulty: string;
+  tags?: string[];
+  company_tags?: string[];
+  category?: string;
+  seed_question?: string;
+}
+
 type RequestOptions = RequestInit & {
   auth?: boolean;
   retryOnUnauthorized?: boolean;

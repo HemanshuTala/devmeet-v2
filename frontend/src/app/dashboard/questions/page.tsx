@@ -66,7 +66,7 @@ function QuestionCard({
       <CardContent className="space-y-4">
         <p className="text-sm text-slate-600 line-clamp-3 leading-relaxed">{question.description}</p>
 
-        {(question.tags?.length > 0 || question.company_tags?.length > 0) && (
+        {((question.tags?.length ?? 0) > 0 || (question.company_tags?.length ?? 0) > 0) && (
           <div className="flex flex-wrap gap-1.5">
             {question.tags?.slice(0, 4).map((tag) => (
               <Badge key={tag} variant="muted" className="text-[10px]">
@@ -139,7 +139,7 @@ export default function QuestionsPage() {
   const total = data?.total ?? 0;
 
   const handlePractice = async (question: SearchQuestion) => {
-    setPracticingId(question.id);
+    setPracticingId(question.id ?? null);
     try {
       const params = new URLSearchParams({
         type: question.interview_type,

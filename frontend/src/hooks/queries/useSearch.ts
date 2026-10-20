@@ -16,7 +16,7 @@ export interface QuestionSearchParams {
 export function useQuestionSearch(params: QuestionSearchParams, enabled = true) {
   return useQuery({
     queryKey: queryKeys.questions.search(params),
-    queryFn: () => searchApi.search(params),
+    queryFn: () => searchApi.search(params as unknown as Record<string, unknown>),
     enabled,
     staleTime: 60_000,
   });

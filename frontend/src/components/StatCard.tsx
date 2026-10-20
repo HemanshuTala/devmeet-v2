@@ -1,14 +1,16 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface StatCardProps {
-  label: string;
+  label?: string;
+  title?: string;   // alias for label
   value: string | number;
   icon: LucideIcon;
   color?: 'blue' | 'green' | 'purple' | 'orange';
   change?: string;
   changePositive?: boolean;
+  trend?: number;   // numeric trend value (e.g. +12 → shown as "+12%")
+  subtitle?: string;
 }
 
 const colorMap = {
@@ -40,13 +42,21 @@ const colorMap = {
 
 export default React.memo(function StatCard({
   label,
+  title,
   value,
   icon: Icon,
   color = 'blue',
   change,
   changePositive,
+  trend,
+  subtitle,
 }: StatCardProps) {
   const c = colorMap[color];
+  // Support both label and title prop names
+  const displayLabel = label ?? title ?? '';
+  // Support both change (string) and trend (number) for the badge
+  const changeText = change ?? (trend != null ? `${trend > 0 ? '+' : ''}${trend}%` : undefined);
+  const isPositive = changePositive ?? (trend != null ? trend >= 0 : undefined);
 
   return (
     <div
@@ -93,7 +103,7 @@ export default React.memo(function StatCard({
             lineHeight: 1,
           }}
         >
-          {label}
+          {displayLabel}
         </p>
         <p
           style={{
@@ -107,7 +117,7 @@ export default React.memo(function StatCard({
         >
           {value}
         </p>
-        {change && (
+        {changeText && (
           <span
             style={{
               display: 'inline-flex',
@@ -116,16 +126,28 @@ export default React.memo(function StatCard({
               marginTop: 6,
               fontSize: 11,
               fontWeight: 600,
-              color: changePositive ? '#16a34a' : '#dc2626',
-              background: changePositive ? '#f0fdf4' : '#fef2f2',
-              border: `1px solid ${changePositive ? '#bbf7d0' : '#fecaca'}`,
+              color: isPositive ? '#16a34a' : '#dc2626',
+              background: isPositive ? '#f0fdf4' : '#fef2f2',
+              border: `1px solid ${isPositive ? '#bbf7d0' : '#fecaca'}`,
               borderRadius: 5,
               padding: '2px 7px',
             }}
           >
-            <span>{changePositive ? '↑' : '↓'}</span>
-            <span>{change}</span>
+            <span>{isPositive ? '↑' : '↓'}</span>
+            <span>{changeText}</span>
           </span>
+        )}
+        {subtitle && (
+          <p
+            style={{
+              fontSize: 12,
+              color: '#64748b',
+              margin: '6px 0 0',
+              lineHeight: 1.3,
+            }}
+          >
+            {subtitle}
+          </p>
         )}
       </div>
     </div>

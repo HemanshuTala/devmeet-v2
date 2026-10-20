@@ -88,7 +88,27 @@ function exportToCSV(sessions) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 }
-export default function RecentSessions({ sessionsLoading, sessionsError, recentSessions, allSessions, totalSessions, fetchSessions, isPro = false }) {
+export default function RecentSessions({
+    sessionsLoading,
+    sessionsError,
+    recentSessions,
+    allSessions,
+    totalSessions,
+    fetchSessions,
+    isPro = false,
+    sessions,
+    isLoading
+}: {
+    sessionsLoading?: boolean;
+    sessionsError?: any;
+    recentSessions?: any[];
+    allSessions?: any[];
+    totalSessions?: number;
+    fetchSessions?: () => void;
+    isPro?: boolean;
+    sessions?: any[];
+    isLoading?: boolean;
+}) {
     const [companyFilter, setCompanyFilter] = useState("");
     const [viewMode, setViewMode] = useState("list");
     const [localSessions, setLocalSessions] = useState<any[]>([]);
@@ -97,19 +117,21 @@ export default function RecentSessions({ sessionsLoading, sessionsError, recentS
         setMounted(true);
     }, []);
     useEffect(()=>{
-        setLocalSessions(allSessions);
+        setLocalSessions(allSessions || sessions || []);
     }, [
-        allSessions
+        allSessions,
+        sessions
     ]);
     // Unique companies for filters
     const companies = useMemo(()=>{
-        const set = new Set();
-        allSessions.forEach((s)=>{
+        const set = new Set<string>();
+        (allSessions || sessions || []).forEach((s: any)=>{
             if (s.target_company) set.add(s.target_company);
         });
         return Array.from(set).sort();
     }, [
-        allSessions
+        allSessions,
+        sessions
     ]);
     // Filter for List View (Recent 5 only)
     const filteredListSessions = useMemo(()=>{
@@ -161,14 +183,14 @@ export default function RecentSessions({ sessionsLoading, sessionsError, recentS
                 await sessionApi.pause(sessionId);
                 toast.success("Session paused/drafted!");
             }
-            fetchSessions();
-        } catch (err) {
+            fetchSessions?.();
+        } catch (err: any) {
             // Rollback
             setLocalSessions((prev)=>prev.map((s)=>s.id === sessionId ? {
                         ...s,
                         status: oldStatus
                     } : s));
-            toast.error(`Failed to change session status: ${err.message || "Server error"}`);
+            toast.error(`Failed to change session status: ${err?.message || "Server error"}`);
         }
     };
     const kanbanColumns = [
@@ -237,7 +259,7 @@ export default function RecentSessions({ sessionsLoading, sessionsError, recentS
                                                 className: "w-3.5 h-3.5"
                                             })
                                         ]
-                                    }) : companies.slice(0, 3).map((c)=>/*#__PURE__*/ _jsx("button", {
+                                    }) : companies.slice(0, 3).map((c: string)=>/*#__PURE__*/ _jsx("button", {
                                             onClick: ()=>setCompanyFilter(c),
                                             className: "px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold hover:bg-blue-100 hover:text-blue-700 transition-colors border border-slate-200/50",
                                             children: c
@@ -278,8 +300,8 @@ export default function RecentSessions({ sessionsLoading, sessionsError, recentS
                                 ]
                             }),
                             isPro ? /*#__PURE__*/ _jsxs("button", {
-                                onClick: ()=>exportToCSV(allSessions),
-                                disabled: allSessions.length === 0,
+                                onClick: ()=>exportToCSV(allSessions || sessions || []),
+                                disabled: (allSessions || sessions || []).length === 0,
                                 className: "flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 text-xs font-bold transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed",
                                 title: "Export all sessions as CSV",
                                 id: "export-csv-btn",
@@ -304,7 +326,7 @@ export default function RecentSessions({ sessionsLoading, sessionsError, recentS
                                     })
                                 ]
                             }),
-                            totalSessions > 5 && viewMode === "list" && /*#__PURE__*/ _jsxs(Link, {
+                            ((totalSessions ?? (allSessions || sessions || []).length) > 5) && viewMode === "list" && /*#__PURE__*/ _jsxs(Link, {
                                 href: "/dashboard/history",
                                 className: "btn-ghost flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all border border-slate-200",
                                 children: [

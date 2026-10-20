@@ -1,19 +1,19 @@
 # DevMeet v2.0 — AWS Deployment Guide
 
-Region: **eu-north-1 (Stockholm)**  
-AWS Account: configured in `.env`  
+Region: **eu-north-1 (Stockholm)**\
+AWS Account: configured in `.env`\
 S3 Bucket: `<YOUR_S3_BUCKET_NAME>`
 
 ---
 
 ## Two Deployment Options
 
-| | **Option A: EC2 + Docker Compose** | **Option B: EKS + Kubernetes** |
-|---|---|---|
+|  | **Option A: EC2 + Docker Compose** | **Option B: EKS + Kubernetes** |
+| --- | --- | --- |
 | Complexity | Low | High |
-| Cost (est.) | ~$80–150/month | ~$300–600/month |
+| Cost (est.) | \~$80–150/month | \~$300–600/month |
 | Best for | MVP, staging, small load | Production scale, auto-scaling |
-| Time to deploy | ~30 min | ~2–3 hours |
+| Time to deploy | \~30 min | \~2–3 hours |
 | Managed infra | You manage everything | AWS manages the control plane |
 
 **Recommendation:** Start with Option A (EC2) to validate the deployment, then migrate to Option B (EKS) when you need scaling.
@@ -25,10 +25,15 @@ S3 Bucket: `<YOUR_S3_BUCKET_NAME>`
 Before deploying, confirm these are done:
 
 - [ ] `.env` file is fully filled in (check yours — it already is ✅)
+
 - [ ] AWS credentials are active and have required permissions
+
 - [ ] SES email `<YOUR_EMAIL>` is verified in AWS SES eu-north-1
+
 - [ ] S3 bucket `<YOUR_S3_BUCKET_NAME>` exists in eu-north-1
+
 - [ ] ECR repositories created (run `scripts/setup-ecr.sh`)
+
 - [ ] Docker images built and pushed to ECR (run `scripts/push-images-ecr.sh`)
 
 ---
@@ -75,24 +80,30 @@ AWS_REGION=eu-north-1 IMAGE_TAG=latest bash scripts/push-images-ecr.sh
 ### Step 1: Launch EC2 Instance
 
 **Recommended instance type:** `t3.2xlarge` (8 vCPU, 32GB RAM)
+
 - 13 microservices + infra (postgres, redis, rabbitmq, kafka, elasticsearch) need at least 16GB
 - `t3.xlarge` (16GB) works for testing but will be tight
 
 **Via AWS Console:**
 
 1. Go to EC2 → Launch Instance
+
 2. **AMI:** Amazon Linux 2023 (x86_64)
+
 3. **Instance type:** `t3.2xlarge`
+
 4. **Key pair:** Create new → `<YOUR_KEY_PAIR_NAME>` → download `.pem`
+
 5. **Security group:** Create new `devmeet-sg` with these inbound rules:
 
    | Port | Protocol | Source | Purpose |
-   |------|----------|--------|---------|
+   | --- | --- | --- | --- |
    | 22 | TCP | Your IP | SSH |
    | 80 | TCP | 0.0.0.0/0 | HTTP (API Gateway) |
    | 443 | TCP | 0.0.0.0/0 | HTTPS (if you add TLS) |
 
 6. **Storage:** 50 GB gp3
+
 7. Launch
 
 **Via AWS CLI:**
@@ -201,6 +212,7 @@ bash scripts/deploy-ec2.sh
 ```
 
 This will:
+
 1. Copy the project files to EC2 via rsync
 2. Install Docker + AWS CLI on the EC2 instance
 3. Pull all images from ECR
@@ -367,7 +379,7 @@ kubectl logs -n devmeet -l app=auth-service --tail=50
 The `.github/workflows/ci-cd.yml` pipeline is now fully configured. Add these GitHub Secrets:
 
 | Secret | Value |
-|--------|-------|
+| --- | --- |
 | `AWS_ACCESS_KEY_ID` | Your IAM access key ID (from AWS Console → IAM → Security credentials) |
 | `AWS_SECRET_ACCESS_KEY` | Your IAM secret access key |
 | `AWS_ACCOUNT_ID` | Your 12-digit AWS account ID (`aws sts get-caller-identity --query Account`) |
@@ -375,6 +387,7 @@ The `.github/workflows/ci-cd.yml` pipeline is now fully configured. Add these Gi
 For EKS deploys, the CI/CD uses `aws eks update-kubeconfig` automatically — no `KUBE_CONFIG` secret needed.
 
 **Pipeline flow:**
+
 ```
 push to main
   → test all 14 services in parallel
@@ -429,50 +442,52 @@ aws s3api put-bucket-cors \
 ### Option A: EC2 + Docker Compose
 
 | Resource | Type | Monthly |
-|----------|------|---------|
-| EC2 instance | t3.2xlarge | ~$80 |
-| EBS storage | 50 GB gp3 | ~$5 |
-| S3 (`<YOUR_S3_BUCKET_NAME>`) | ~10 GB + requests | ~$3 |
-| SES | ~1000 emails | ~$0.10 |
-| Data transfer | ~50 GB out | ~$5 |
-| **Total** | | **~$93/month** |
+| --- | --- | --- |
+| EC2 instance | t3.2xlarge | \~$80 |
+| EBS storage | 50 GB gp3 | \~$5 |
+| S3 (`<YOUR_S3_BUCKET_NAME>`) | \~10 GB + requests | \~$3 |
+| SES | \~1000 emails | \~$0.10 |
+| Data transfer | \~50 GB out | \~$5 |
+| **Total** |  | **\~$93/month** |
 
 ### Option B: EKS
 
 | Resource | Type | Monthly |
-|----------|------|---------|
+| --- | --- | --- |
 | EKS cluster | Control plane | $73 |
-| EC2 nodes | 3x t3.xlarge | ~$150 |
-| EBS (PVC) | 20 GB gp3 | ~$2 |
-| ALB | Load balancer | ~$20 |
-| S3 | Same as above | ~$3 |
-| ECR | 14 repos, ~5 GB | ~$5 |
-| **Total** | | **~$253/month** |
+| EC2 nodes | 3x t3.xlarge | \~$150 |
+| EBS (PVC) | 20 GB gp3 | \~$2 |
+| ALB | Load balancer | \~$20 |
+| S3 | Same as above | \~$3 |
+| ECR | 14 repos, \~5 GB | \~$5 |
+| **Total** |  | **\~$253/month** |
 
 ---
 
 ## Troubleshooting
 
 **Services can't reach postgres/redis:**
+
 - Make sure they're on the same Docker network (`devmeet_net`)
 - Check `docker compose -f docker-compose.prod.yml ps` — are postgres/redis healthy?
 
 **code-execution-service can't run Docker containers:**
+
 - On EC2: the socket `/var/run/docker.sock` must exist. Run `ls -la /var/run/docker.sock`
 - The service runs as `root` in production — this is intentional for Docker socket access
 - The service has a full CLI fallback — check logs: `docker compose logs code-execution-service`
 
 **ECR pull fails (403):**
+
 - Re-authenticate: `aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin <ecr-registry>`
 - Check EC2 IAM role has `AmazonEC2ContainerRegistryReadOnly`
 
 **Postgres PVC stuck in Pending (EKS):**
+
 - Make sure EBS CSI driver is installed and `gp3` StorageClass exists
 - Run: `kubectl describe pvc postgres-pvc -n devmeet`
 
 **SES emails not sending:**
+
 - Confirm the from-address `<YOUR_EMAIL>` is verified in SES eu-north-1
-- Check if SES account is still in sandbox (can only send to verified addresses)
-#   T r i g g e r   C I / C D   w i t h   u p d a t e d   c r e d e n t i a l s   -   0 8 / 0 8 / 2 0 2 6   1 8 : 5 6 : 0 2  
- #   T r i g g e r   C I / C D   t o   r e b u i l d   a p i - g a t e w a y   w i t h   C O R S   f i x   -   0 8 / 0 8 / 2 0 2 6   1 9 : 3 7 : 2 2  
- 
+- Check if SES account is still in sandbox (can only send to verified addresses) 

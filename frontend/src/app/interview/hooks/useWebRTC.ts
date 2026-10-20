@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { videoApi } from '@/lib/api';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected' | 'failed';
@@ -21,6 +21,7 @@ export function useWebRTC(
   const [retryCount, setRetryCount] = useState(0);
   const [livekitUrl, setLivekitUrl] = useState('');
   const [isMockMode, setIsMockMode] = useState(true);
+  const roomRef = useRef<any>(null);
 
   const [latency, setLatency] = useState(45);
   const [packetLoss, setPacketLoss] = useState(0.1);
@@ -37,9 +38,46 @@ export function useWebRTC(
       try {
         addLog(`Attempt ${attempt}/3...`);
         const res = await videoApi.getToken(roomName, userId, userDisplayName);
-        setLivekitUrl(res.livekit_url);
-        setIsMockMode(!!res.mock);
-        addLog(res.mock ? 'Connected (simulation mode).' : `Connected to LiveKit: ${res.livekit_url}`);
+        const url: string = res.livekit_url;
+        const token: string = res.token;
+        const isMock: boolean = !!res.mock;
+
+        setLivekitUrl(url);
+        setIsMockMode(isMock);
+
+        if (!isMock && url && token) {
+          // Dynamically import livekit-client to avoid SSR issues
+          const { Room, RoomEvent } = await import('livekit-client').catch(() => ({
+            Room: null,
+            RoomEvent: null,
+          }));
+
+          if (Room && RoomEvent) {
+            const room = new Room();
+            roomRef.current = room;
+
+            room.on(RoomEvent.Disconnected, () => {
+              setConnStatus('disconnected');
+              addLog('Disconnected from LiveKit room.');
+            });
+
+            room.on(RoomEvent.Reconnecting, () => {
+              addLog('Reconnecting to LiveKit room...');
+            });
+
+            room.on(RoomEvent.Reconnected, () => {
+              addLog('Reconnected to LiveKit room.');
+            });
+
+            await room.connect(url, token);
+            addLog(`Connected to LiveKit room: ${roomName}`);
+          } else {
+            addLog('livekit-client not available — running in simulation mode.');
+          }
+        } else {
+          addLog('Connected (simulation mode — no LiveKit URL or token provided).');
+        }
+
         setConnStatus('connected');
         success = true;
       } catch (err: any) {
@@ -54,11 +92,21 @@ export function useWebRTC(
     }
   }, [permissionStatus, sessionId, userId, userDisplayName, addLog]);
 
+  // Disconnect from LiveKit room on unmount
+  useEffect(() => {
+    return () => {
+      if (roomRef.current) {
+        roomRef.current.disconnect().catch(() => {});
+        roomRef.current = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (permissionStatus === 'granted') connectToVideoRoom();
   }, [permissionStatus, connectToVideoRoom]);
 
-  // Network quality simulation
+  // Network quality simulation (used in mock mode; real stats come from LiveKit SDK in live mode)
   useEffect(() => {
     if (connStatus !== 'connected') return;
     const interval = setInterval(() => {

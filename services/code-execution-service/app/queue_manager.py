@@ -94,6 +94,7 @@ def _run_worker():
         return
 
     def callback(ch, method, properties, body):
+        job_id = None
         try:
             data = json.loads(body.decode("utf-8"))
             job_id = data["job_id"]
@@ -123,10 +124,33 @@ def _run_worker():
                 })
             )
             print(f"[+] Completed job {job_id}.")
+            # Only ack on successful completion
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
         except Exception as e:
             print(f"[!] Worker failed to execute task: {e}")
-        finally:
-            ch.basic_ack(delivery_tag=method.delivery_tag)
+            # Write an error result to Redis so the status endpoint returns something
+            # instead of leaving the job stuck as 'pending' forever
+            if job_id:
+                try:
+                    r.setex(
+                        f"execution_job:{job_id}",
+                        3600,
+                        json.dumps({
+                            "status": "error",
+                            "result": {
+                                "stdout": "",
+                                "stderr": f"Execution failed: {str(e)}",
+                                "exit_code": 1,
+                                "execution_time": 0,
+                            }
+                        })
+                    )
+                except Exception as redis_err:
+                    print(f"[!] Failed to write error state to Redis for job {job_id}: {redis_err}")
+            # Nack without requeue so the message goes to dead-letter queue if configured,
+            # rather than being retried infinitely and blocking other jobs
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)

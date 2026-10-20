@@ -18,9 +18,9 @@ interface VideoPanelProps {
   userDisplayName?: string;
   userId?: string;
   isActive: boolean;
-  aiState: 'speaking' | 'thinking' | 'idle';
+  aiState: 'speaking' | 'thinking' | 'idle' | string;
   compact?: boolean;
-  onProctorViolation?: (type: string, message: string) => void;
+  onProctorViolation?: (type: any, message?: any) => void;
 }
 
 function AudioLevelMeter({ subscribe, size = 'sm' }: { subscribe: (cb: (level: number) => void) => () => void; size?: 'sm' | 'md' }) {
@@ -246,7 +246,7 @@ export default function VideoPanel({
           {media.permissionStatus === 'granted' && !media.useAudioOnly ? (
             <div className="relative w-full h-full bg-slate-950">
               <video ref={media.videoRef} autoPlay playsInline muted className={`w-full h-full object-cover transition-all duration-300 ${proctor.backgroundBlur ? 'opacity-0' : ''}`} />
-              <canvas ref={proctor.canvasRef} className="absolute inset-0 w-full h-full pointer-events-none z-10" />
+              <canvas ref={proctor.canvasRef as any} className="absolute inset-0 w-full h-full pointer-events-none z-10" />
               <ProctorOverlays
                 activeWarning={proctor.activeWarning} blurPerformanceWarning={proctor.blurPerformanceWarning}
                 modelsLoaded={proctor.modelsLoaded} videoActive={media.videoActive}
@@ -372,7 +372,7 @@ export default function VideoPanel({
           {media.permissionStatus === 'granted' && !media.useAudioOnly ? (
             <div className="relative w-full h-full bg-slate-950">
               <video ref={media.videoRef} autoPlay playsInline muted className={`w-full h-full object-cover transition-all duration-300 ${proctor.backgroundBlur ? 'opacity-0' : ''}`} />
-              <canvas ref={proctor.canvasRef} className="absolute inset-0 w-full h-full pointer-events-none z-10" />
+              <canvas ref={proctor.canvasRef as any} className="absolute inset-0 w-full h-full pointer-events-none z-10" />
               <ProctorOverlays
                 activeWarning={proctor.activeWarning} blurPerformanceWarning={proctor.blurPerformanceWarning}
                 modelsLoaded={proctor.modelsLoaded} videoActive={media.videoActive}
@@ -575,7 +575,7 @@ export default function VideoPanel({
         isOpen={showConsentModal}
         roomName={`session_${sessionId}`}
         userId={userId}
-        userPlan={userPlan}
+        userPlan={userPlan as any}
         onConsent={confirmRecording}
         onDecline={() => setShowConsentModal(false)}
       />

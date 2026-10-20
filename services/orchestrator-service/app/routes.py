@@ -421,29 +421,54 @@ async def complete_session(
             detail=f"Invalid state transition from {current_status.value} to {new_status.value}"
         )
     
-    updated_session = await db.update_session_status(session_id, "completed", elapsed_seconds=elapsed_seconds)
-    await redis_lock.invalidate_cache(f"session:{session_id}")
-    await clear_active_session_for_user(str(updated_session["user_id"]), session_id)
-
-    # Emit outbox event for feedback generation (replaces fragile direct HTTP call)
+    # SESS-02 + Outbox: complete session and emit feedback event atomically in one transaction.
+    # Both the status update and the outbox insert must succeed together, or neither does.
     try:
         async with db.pool.acquire() as conn:
-            await emit_event(
-                conn,
-                event_type="session.completed",
-                aggregate_type="session",
-                aggregate_id=session_id,
-                payload={
-                    "session_id": session_id,
-                    "user_id": current_user["id"],
-                    "interview_type": updated_session.get("interview_type"),
-                    "difficulty": updated_session.get("difficulty"),
-                },
-            )
+            async with conn.transaction():
+                # Build the UPDATE query inline (replicating update_session_status logic)
+                update_fields = ["status = $2", "updated_at = NOW()", "completed_at = NOW()"]
+                params: list = [session_id, "completed"]
+                if elapsed_seconds is not None:
+                    update_fields.append(f"elapsed_seconds = $3")
+                    params.append(elapsed_seconds)
+
+                row = await conn.fetchrow(
+                    f"""
+                    UPDATE sessions
+                    SET {', '.join(update_fields)}
+                    WHERE id = $1
+                    RETURNING {db._SESSION_COLUMNS}
+                    """,
+                    *params,
+                )
+                updated_session = dict(row)
+
+                # Emit the outbox event inside the same transaction so both are atomic
+                await emit_event(
+                    conn,
+                    event_type="session.completed",
+                    aggregate_type="session",
+                    aggregate_id=session_id,
+                    payload={
+                        "session_id": session_id,
+                        "user_id": current_user["id"],
+                        "interview_type": updated_session.get("interview_type"),
+                        "difficulty": updated_session.get("difficulty"),
+                        "language": updated_session.get("language", "python"),
+                        "target_company": updated_session.get("target_company"),
+                    },
+                )
     except Exception as e:
-        # Non-fatal: session is already completed, feedback will be triggered on next poll
         import logging
-        logging.getLogger("routes").warning("Failed to emit outbox event: %s", e)
+        logging.getLogger("routes").error("Failed to complete session atomically: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to complete session. Please try again."
+        )
+
+    await redis_lock.invalidate_cache(f"session:{session_id}")
+    await clear_active_session_for_user(str(updated_session["user_id"]), session_id)
 
     # SESS-08: Upload session snapshot to S3 in background
     if s3_service.is_available():

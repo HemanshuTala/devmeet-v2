@@ -29,12 +29,12 @@ function formatDate(dateStr) {
 export default function ProfilePage() {
     const { user, isLoading: authLoading, refreshUser } = useAuth();
     // ── State ──────────────────────────────────────────────────────────────────
-    const [profile, setProfile] = useState(null);
+    const [profile, setProfile] = useState<any>(null);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [activeTab, setActiveTab] = useState("profile");
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [toast, setToast] = useState(null);
+    const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
     const { data: planData } = usePlan();
     const updateProfileMutation = useUpdateProfile();
     const [showStripeModal, setShowStripeModal] = useState(false);
@@ -45,8 +45,8 @@ export default function ProfilePage() {
     const [cardCVC, setCardCVC] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [bio, setBio] = useState("");
-    const [skills, setSkills] = useState([]);
-    const [targetCompanies, setTargetCompanies] = useState([]);
+    const [skills, setSkills] = useState<string[]>([]);
+    const [targetCompanies, setTargetCompanies] = useState<string[]>([]);
     const [reminderEnabled, setReminderEnabled] = useState(false);
     const [profilePublic, setProfilePublic] = useState(false);
     const [passwordForm, setPasswordForm] = useState({
@@ -59,7 +59,7 @@ export default function ProfilePage() {
     const [avatarUploading, setAvatarUploading] = useState(false);
     // ── Effects ────────────────────────────────────────────────────────────────
     useRequireAuth();
-    const populateForm = useCallback((p)=>{
+    const populateForm = useCallback((p: any)=>{
         setDisplayName(p.display_name ?? "");
         setBio(p.bio ?? "");
         setSkills(p.skills ?? []);
@@ -67,7 +67,7 @@ export default function ProfilePage() {
         setReminderEnabled(p.interview_reminder_enabled ?? false);
         setProfilePublic(p.profile_public ?? false);
     }, []);
-    const showToast = useCallback((type, message)=>{
+    const showToast = useCallback((type: string, message: string)=>{
         setToast({
             type,
             message
@@ -148,7 +148,7 @@ export default function ProfilePage() {
         setAvatarUploading(true);
         try {
             const { avatar_url } = await userApi.uploadAvatar(file);
-            setProfile((p)=>p ? {
+            setProfile((p: any)=>p ? {
                     ...p,
                     avatar_url
                 } : p);

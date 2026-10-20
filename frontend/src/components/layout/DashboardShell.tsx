@@ -115,10 +115,10 @@ export default function DashboardShell({
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const [commandOpen, setCommandOpen] = useState(false);
   const { data: quota } = useQuota();
-  const { isAdmin } = useIsAdmin();
+  const isAdmin = useIsAdmin();
 
   const userProfileItem = NAV_ITEMS.find((item) => item.href === '/profile');
-  const displayName = user?.name || user?.email || 'User';
+  const displayName = user?.display_name || user?.email || 'User';
 
   const getPageTitle = () => {
     if (pathname === '/dashboard') return 'Dashboard Overview';

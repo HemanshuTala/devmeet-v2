@@ -158,20 +158,60 @@ class OutboxPublisher:
     async def _handle_session_completed(self, payload: dict) -> bool:
         """
         Dispatch session.completed → feedback-service to generate feedback.
-        Replaces the old direct HTTP call that was outside the DB transaction.
+        Fetches the full transcript and session metadata from DB so the
+        feedback API receives all required fields: interview_type, difficulty,
+        language, target_company, and transcript.
         """
         if not FEEDBACK_SERVICE_URL:
             logger.warning("FEEDBACK_SERVICE_URL not configured, skipping dispatch")
             return False
 
         session_id = payload.get("session_id")
-        user_id = payload.get("user_id")
+        interview_type = payload.get("interview_type")
+        difficulty = payload.get("difficulty")
+        language = payload.get("language", "python")
+        target_company = payload.get("target_company")
+
+        if not session_id or not interview_type or not difficulty:
+            logger.warning(
+                "Outbox event missing required fields for session %s — skipping feedback generation",
+                session_id,
+            )
+            return True  # mark published so it doesn't retry forever
+
+        # Fetch conversation turns from DB to build the transcript
+        transcript: list = []
+        try:
+            if db.pool:
+                import uuid as _uuid
+                async with db.pool.acquire() as conn:
+                    rows = await conn.fetch(
+                        """
+                        SELECT role, content
+                        FROM conversation_turns
+                        WHERE session_id = $1
+                        ORDER BY turn_number ASC
+                        """,
+                        _uuid.UUID(session_id),
+                    )
+                    transcript = [{"role": r["role"], "content": r["content"]} for r in rows]
+        except Exception as e:
+            logger.error("Failed to fetch turns for session %s: %s", session_id, e)
+            # Proceed without transcript — feedback service will return 0 score
+            # but won't 422. The feedback page request is the reliable path.
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{FEEDBACK_SERVICE_URL}/api/v1/feedback/generate",
-                    json={"session_id": session_id, "user_id": user_id},
+                    json={
+                        "session_id": session_id,
+                        "interview_type": interview_type,
+                        "difficulty": difficulty,
+                        "language": language,
+                        "target_company": target_company,
+                        "transcript": transcript,
+                    },
                 )
                 if response.status_code in (200, 201, 202):
                     logger.info(
