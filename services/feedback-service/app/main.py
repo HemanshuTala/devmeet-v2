@@ -18,8 +18,10 @@ Role & Responsibility:
 """
 
 import os
+from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from .routes import router, close_feedback_http_client
 from .database import db
@@ -71,6 +73,11 @@ async def shutdown_event():
     await close_feedback_http_client()
     await db.disconnect()
 
+
+# Ensure local uploads directory exists and mount for static downloads (PDF reports)
+uploads_dir = Path("uploads")
+uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # Attach all API endpoints under standard /api/v1 prefix
 app.include_router(router)

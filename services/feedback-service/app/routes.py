@@ -21,6 +21,7 @@ Role & Responsibility:
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from typing import Optional
+from pathlib import Path
 import os
 import io
 import logging
@@ -327,7 +328,24 @@ async def download_feedback_pdf(session_id: str):
         "scores": report["scores"],
         "detailed_feedback": report["detailed_feedback"],
     }
-    pdf_bytes = await feedback_generator.generate_pdf(evaluation, session_info)
+    
+    local_pdf = Path("uploads") / f"report_{session_id}.pdf"
+    if local_pdf.exists():
+        try:
+            with open(local_pdf, "rb") as f:
+                pdf_bytes = f.read()
+        except Exception as e:
+            logger.warning(f"Failed reading existing local PDF, regenerating: {e}")
+            pdf_bytes = await feedback_generator.generate_pdf(evaluation, session_info)
+    else:
+        pdf_bytes = await feedback_generator.generate_pdf(evaluation, session_info)
+        try:
+            local_pdf.parent.mkdir(parents=True, exist_ok=True)
+            with open(local_pdf, "wb") as f:
+                f.write(pdf_bytes)
+        except Exception as e:
+            logger.warning(f"Failed saving generated PDF cache: {e}")
+
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",

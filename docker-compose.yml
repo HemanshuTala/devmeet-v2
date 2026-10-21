@@ -179,6 +179,7 @@ services:
       - "8007:8007"
     volumes:
       - ./services/feedback-service/app:/app/app
+      - ./services/feedback-service/uploads:/app/uploads
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432

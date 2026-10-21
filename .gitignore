@@ -86,3 +86,7 @@ playwright-report/
 blob-report/
 *.tsbuildinfo
 
+# Uploads & generated reports
+uploads/
+services/*/uploads/
+

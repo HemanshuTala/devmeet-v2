@@ -206,6 +206,9 @@ async function executeSingleFlightRefresh(): Promise<TokenResponse | null> {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/pdf') || contentType.includes('application/octet-stream')) {
+    return response.blob() as Promise<T>;
+  }
   if (contentType.includes('application/json')) {
     return response.json();
   }
