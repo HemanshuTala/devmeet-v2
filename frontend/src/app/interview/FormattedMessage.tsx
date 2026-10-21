@@ -72,8 +72,16 @@ export default React.memo(function FormattedMessage({ content, isInterviewer }: 
   const blocks = useMemo(() => {
     if (!content) return [];
 
-    const rawParagraphs = content.split(/\n\s*\n/);
-    return rawParagraphs.map((para) => para.trim()).filter(Boolean);
+    // Strip any markdown code fences, ```json, or trailing ```
+    const cleanContent = content
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    const rawParagraphs = cleanContent.split(/\n\s*\n/);
+    return rawParagraphs
+      .map((para) => para.trim())
+      .filter((para) => para.length > 0 && para !== '```json' && para !== '```');
   }, [content]);
 
   return (

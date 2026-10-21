@@ -435,6 +435,12 @@ export const aiApi = {
  */
 export const executionApi = {
   execute: (payload: unknown) => request<any>('/api/v1/execute', json('POST', payload)),
+  runTests: (payload: {
+    code: string;
+    language: string;
+    test_cases: { input: string; expected_output: string; name?: string; is_hidden?: boolean }[];
+    timeout_seconds?: number;
+  }) => request<any>('/api/v1/execute/run-tests', json('POST', payload)),
   executeAsync: (payload: unknown) => request<any>('/api/v1/execute/submit-async', json('POST', payload)),
 };
 

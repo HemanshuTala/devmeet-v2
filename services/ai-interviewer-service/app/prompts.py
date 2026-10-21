@@ -115,8 +115,8 @@ CRITICAL INTERVIEW CONDUCT RULES — follow these exactly at every turn:
 
     # Downstream API parser safety: Require strict JSON serialization
     system += (
-        "\n\nIMPORTANT: Always respond ONLY with valid JSON matching the exact schema requested. "
-        "Do not include markdown, code fences, or any text outside the JSON object."
+        "\n\nIMPORTANT: Always respond ONLY with valid raw JSON matching the exact schema requested. "
+        "Do NOT include markdown, backticks, ```json, or any code fences. Start immediately with '{' and end with '}'."
     )
 
     # Append domain-specific evaluation tracks to ensure deep technical rigor

@@ -91,11 +91,18 @@ export function turnsToMessages(turns: any[]): ChatMessage[] {
  * @returns Rendered question string extracted from the stream
  */
 export function extractStreamingQuestion(jsonStr: string): string {
-  const trimmed = jsonStr.trim();
+  let trimmed = jsonStr.trim();
+  // Strip opening markdown code fence if present
+  trimmed = trimmed.replace(/^```(?:json)?\s*/i, '');
   const braceIdx = trimmed.indexOf('{');
-  if (braceIdx === -1) return trimmed;
+  if (braceIdx === -1) {
+    return trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
 
-  const preText = trimmed.substring(0, braceIdx).trim();
+  let preText = trimmed.substring(0, braceIdx).trim();
+  // Clean preText - if it's code fence characters or markdown wrapper, drop it
+  preText = preText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
   const jsonPart = trimmed.substring(braceIdx);
   const questionKeyIdx = jsonPart.indexOf('"question"');
   if (questionKeyIdx === -1) return preText;
@@ -124,5 +131,6 @@ export function extractStreamingQuestion(jsonStr: string): string {
       content += char;
     }
   }
+  content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   return preText ? `${preText}\n\n${content}` : content;
 }

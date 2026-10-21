@@ -1,22 +1,36 @@
 'use client';
 
 /**
- * @file CodeEditorPanel.tsx (In-Browser Code Execution & Monaco Editor Panel)
- * @description In-browser code workspace used in technical and DSA interview sessions.
- * Embeds Microsoft Monaco Editor with multi-language support (Python, JS, TS, Java, C++, Go, Rust),
- * font scaling, dark/light themes, test case validation runners, terminal output tabs,
- * execution timing meters, and proctoring clipboard paste detection.
+ * @file CodeEditorPanel.tsx (Interview Studio Code Editor & DSA Test Suite Runner)
+ * @description Advanced Monaco development studio with automated LeetCode-style
+ * multi-case test verification, syntax highlighting, theme switching, custom test case
+ * editing, proctoring clipboard guards, and real execution telemetry.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  Code2, Play, CheckCircle, X, Terminal, ChevronDown,
-  RotateCcw, Settings2, Maximize2, Minimize2, Clock,
-  FlaskConical, AlertCircle, Loader2, Sun, Moon,
+  Play,
+  RotateCcw,
+  CheckCircle,
+  AlertCircle,
+  Terminal,
+  Loader2,
+  Code2,
+  Maximize2,
+  Minimize2,
+  X,
+  FlaskConical,
+  Sun,
+  Moon,
+  Check,
+  Plus,
+  Sparkles,
+  Edit2,
 } from 'lucide-react';
 import { LANGUAGE_OPTIONS } from './constants';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { resolveDSAProblem, type DSATestCase } from './dsaProblems';
 
 /**
  * Dynamically import Monaco Editor on client-side only (disabling SSR)
@@ -36,7 +50,7 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
 /**
  * Execution payload returned from the code-execution microservice.
  */
-interface ExecutionResult {
+export interface ExecutionResult {
   /** Standard output stream string */
   stdout: string;
   /** Standard error or compiler diagnostics */
@@ -45,22 +59,26 @@ interface ExecutionResult {
   executionTime: number;
   /** Overall sandbox exit code success boolean */
   success: boolean;
+  /** Granular per-test outcome array when running test suites */
+  testResults?: any[];
 }
 
 /**
  * Test case input/output definition for automated verification.
  */
-interface TestCase {
+export interface TestCase {
   id: number;
+  name?: string;
   input: string;
   expected: string;
   description?: string;
+  is_hidden?: boolean;
 }
 
 /**
  * Evaluated test case outcome comparing actual output vs expected.
  */
-interface TestCaseResult extends TestCase {
+export interface TestCaseResult extends TestCase {
   actual: string;
   passed: boolean;
   error?: string;
@@ -85,30 +103,23 @@ interface CodeEditorPanelProps {
   onCodeChange: (code: string) => void;
   /** Language switch callback */
   onLanguageChange: (lang: string) => void;
-  /** Run test suite callback */
-  onRunCode: () => void;
-  /** Submit final code solution callback */
-  onSubmitCode: () => void;
+  /** Run test suite callback with active test cases */
+  onRunCode: (customTestCases?: TestCase[]) => void;
+  /** Submit final code solution callback with active test cases */
+  onSubmitCode: (customTestCases?: TestCase[]) => void;
   /** Reset / clear results callback */
   onClearResult: () => void;
   /** Anti-cheating proctoring violation callback */
   triggerCheatingViolation: (type: 'tab_switch' | 'paste') => void;
+  /** Focus area / DSA topic name */
+  topic?: string;
+  /** First question message context to match problem */
+  problemContext?: string;
 }
 
-// ─── Default Sample Test Cases ────────────────────────────────────────────────
-
-const DEFAULT_TEST_CASES: TestCase[] = [
-  { id: 1, input: 'Example Input 1', expected: 'Expected Output 1', description: 'Basic case' },
-  { id: 2, input: 'Example Input 2', expected: 'Expected Output 2', description: 'Edge case' },
-  { id: 3, input: 'Example Input 3', expected: 'Expected Output 3', description: 'Corner case' },
-];
-
 /**
- * Checks whether the current editor code is identical to the starter boilerplate template
+ * Checks whether the current editor code is identical to boilerplate template
  * or essentially empty, avoiding false positive test passes on unedited templates.
- *
- * @param code - Raw code string
- * @param language - Active programming language
  */
 function isTemplateCode(code: string, language: string): boolean {
   const template = LANGUAGE_OPTIONS[language]?.defaultCode ?? '';
@@ -118,13 +129,6 @@ function isTemplateCode(code: string, language: string): boolean {
 
 /**
  * Parses raw stdout and stderr from code execution sandbox into individual test case evaluations.
- *
- * @param stdout - Standard output text
- * @param stderr - Standard error text
- * @param testCases - List of test case criteria
- * @param executionTime - Total milliseconds spent executing
- * @param rawSuccess - Sandbox exit status code
- * @param isTemplate - Whether code is boilerplate
  */
 function parseTestResults(
   stdout: string,
@@ -134,7 +138,6 @@ function parseTestResults(
   rawSuccess: boolean,
   isTemplate: boolean,
 ): TestCaseResult[] {
-  // If template / empty code — all test cases fail
   if (isTemplate) {
     return testCases.map((tc) => ({
       ...tc,
@@ -145,7 +148,6 @@ function parseTestResults(
     }));
   }
 
-  // Compiler error or crash before stdout output
   if (stderr && !stdout) {
     return testCases.map((tc) => ({
       ...tc,
@@ -156,12 +158,13 @@ function parseTestResults(
     }));
   }
 
-  // Split stdout lines to align with each test case
   const lines = stdout.trim().split('\n').filter(Boolean);
 
   return testCases.map((tc, i) => {
     const actual = lines[i] ?? '';
-    const passed = rawSuccess && actual.trim() === tc.expected.trim();
+    const normActual = actual.trim().toLowerCase();
+    const normExpected = tc.expected.trim().toLowerCase();
+    const passed = rawSuccess && (normActual === normExpected || normActual.replace(/\s+/g, '') === normExpected.replace(/\s+/g, ''));
     return {
       ...tc,
       actual: actual || stdout || '(no output)',
@@ -173,7 +176,7 @@ function parseTestResults(
 
 /**
  * CodeEditorPanel Component.
- * Full-featured development environment with Monaco editor, test case runner, and console tabs.
+ * Full-featured development environment with Monaco editor, real DSA test cases, and execution telemetry.
  */
 export default function CodeEditorPanel({
   code,
@@ -187,22 +190,40 @@ export default function CodeEditorPanel({
   onSubmitCode,
   onClearResult,
   triggerCheatingViolation,
+  topic,
+  problemContext,
 }: CodeEditorPanelProps) {
+  // Resolve problem definition from catalog
+  const problem = useMemo(() => {
+    return resolveDSAProblem(topic, problemContext);
+  }, [topic, problemContext]);
+
   // Editor appearance settings
   const [fontSize, setFontSize] = useState(13);
   const [theme, setTheme] = useState<'vs-dark' | 'light'>('vs-dark');
   const [tabSize, setTabSize] = useState(4);
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   // Tab and test selection states
   const [activeTestCase, setActiveTestCase] = useState(0);
   const [activeResultTab, setActiveResultTab] = useState<'testcases' | 'output'>('testcases');
-  const [testCases] = useState<TestCase[]>(DEFAULT_TEST_CASES);
+  const [testCases, setTestCases] = useState<TestCase[]>(problem.testCases);
   const [testResults, setTestResults] = useState<TestCaseResult[] | null>(null);
 
   const editorRef = useRef<any>(null);
+
+  // Synchronize test cases and starter code when problem or language changes
+  useEffect(() => {
+    if (problem) {
+      setTestCases(problem.testCases);
+      setActiveTestCase(0);
+      const starter = (problem.starterCode as any)[language] || problem.starterCode.python;
+      if (starter && (isTemplateCode(code, language) || !code.trim())) {
+        onCodeChange(starter);
+      }
+    }
+  }, [problem.id, language]);
 
   // Load persisted editor preferences from localStorage
   useEffect(() => {
@@ -215,7 +236,34 @@ export default function CodeEditorPanel({
 
   // Compute test case results when new execution output arrives
   useEffect(() => {
-    if (!executionResult) { setTestResults(null); return; }
+    if (!executionResult) {
+      setTestResults(null);
+      return;
+    }
+
+    // High fidelity test runner breakdown from /api/v1/execute/run-tests
+    if (executionResult.testResults && executionResult.testResults.length > 0) {
+      const parsedResults: TestCaseResult[] = executionResult.testResults.map((r: any, idx: number) => {
+        const tc = testCases[idx] || {
+          id: idx + 1,
+          name: `Case ${idx + 1}`,
+          input: r.input || '',
+          expected: r.expected_output || '',
+        };
+        return {
+          ...tc,
+          actual: r.actual_output !== undefined ? String(r.actual_output) : '',
+          passed: Boolean(r.passed),
+          error: r.error,
+          timeMs: r.execution_time ? Math.round(r.execution_time * 1000) : undefined,
+        };
+      });
+      setTestResults(parsedResults);
+      setActiveResultTab('testcases');
+      return;
+    }
+
+    // Standard stdout line parser fallback
     const isTemplate = isTemplateCode(code, language);
     const results = parseTestResults(
       executionResult.stdout,
@@ -230,9 +278,7 @@ export default function CodeEditorPanel({
   }, [executionResult, code, language, testCases]);
 
   /**
-   * Clipboard paste handler:
-   * Intercepts code paste, enforces length boundary, inserts into Monaco buffer,
-   * and reports a proctoring violation for suspicious external copying.
+   * Clipboard paste handler: proctoring guard
    */
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
@@ -258,13 +304,60 @@ export default function CodeEditorPanel({
   );
 
   /**
-   * Resets code back to starter language boilerplate after confirmation.
+   * Resets code back to the problem's starter boilerplate.
    */
   const handleReset = () => {
-    onCodeChange(LANGUAGE_OPTIONS[language]?.defaultCode ?? '');
+    const starter = (problem.starterCode as any)[language] || (LANGUAGE_OPTIONS[language]?.defaultCode ?? '');
+    onCodeChange(starter);
     onClearResult();
     setTestResults(null);
     setResetConfirm(false);
+  };
+
+  /**
+   * Updates input data of the currently selected testcase.
+   */
+  const handleUpdateTestCaseInput = (newInput: string) => {
+    setTestCases((prev) => {
+      const copy = [...prev];
+      if (copy[activeTestCase]) {
+        copy[activeTestCase] = { ...copy[activeTestCase], input: newInput };
+      }
+      return copy;
+    });
+    setTestResults(null);
+  };
+
+  /**
+   * Updates expected output of the currently selected testcase.
+   */
+  const handleUpdateTestCaseExpected = (newExpected: string) => {
+    setTestCases((prev) => {
+      const copy = [...prev];
+      if (copy[activeTestCase]) {
+        copy[activeTestCase] = { ...copy[activeTestCase], expected: newExpected };
+      }
+      return copy;
+    });
+    setTestResults(null);
+  };
+
+  /**
+   * Adds a new custom test case to the test suite.
+   */
+  const handleAddTestCase = () => {
+    const nextId = testCases.length + 1;
+    const newCase: TestCase = {
+      id: nextId,
+      name: `Case ${nextId}`,
+      input: '',
+      expected: '',
+      description: 'Custom test case',
+      is_hidden: false,
+    };
+    setTestCases([...testCases, newCase]);
+    setActiveTestCase(testCases.length);
+    setTestResults(null);
   };
 
   const passedCount = testResults?.filter((r) => r.passed).length ?? 0;
@@ -279,12 +372,24 @@ export default function CodeEditorPanel({
     >
       {/* ── Toolbar: Language selector, Font sizing, Theme toggle, Reset, Fullscreen ── */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3c3c3c] shrink-0 flex-wrap">
-        <Code2 className="w-4 h-4 text-blue-400 shrink-0" />
-        <span className="text-slate-300 text-xs font-bold">Code Editor</span>
+        <div className="flex items-center gap-1.5 text-slate-200 font-bold text-xs">
+          <Code2 className="w-4 h-4 text-blue-400 shrink-0" />
+          <span>{problem.title}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300 border border-indigo-700/60 font-semibold">
+            {problem.difficulty}
+          </span>
+        </div>
 
         {/* Language select dropdown */}
-        <Select value={language} onValueChange={(v) => { onLanguageChange(v); setResetConfirm(false); setTestResults(null); }}>
-          <SelectTrigger className="h-7 w-[130px] text-xs bg-[#3c3c3c] border-[#555] text-slate-200 hover:bg-[#4c4c4c]">
+        <Select
+          value={language}
+          onValueChange={(v) => {
+            onLanguageChange(v);
+            setResetConfirm(false);
+            setTestResults(null);
+          }}
+        >
+          <SelectTrigger className="h-7 w-[120px] text-xs bg-[#3c3c3c] border-[#555] text-slate-200 hover:bg-[#4c4c4c] ml-auto">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-[#252526] border-[#3c3c3c] text-slate-200">
@@ -298,14 +403,30 @@ export default function CodeEditorPanel({
 
         {/* Font size decrement/increment controls */}
         <div className="flex items-center bg-[#3c3c3c] border border-[#555] rounded-md overflow-hidden">
-          <button onClick={() => setFontSize((s) => Math.max(10, s - 1))} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-[#4c4c4c] text-[11px] font-bold transition-colors">A−</button>
-          <span className="px-2 text-[10px] text-slate-400 font-mono border-x border-[#555] select-none">{fontSize}</span>
-          <button onClick={() => setFontSize((s) => Math.min(22, s + 1))} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-[#4c4c4c] text-[11px] font-bold transition-colors">A+</button>
+          <button
+            onClick={() => setFontSize((s) => Math.max(10, s - 1))}
+            className="px-2 py-1 text-slate-400 hover:text-white hover:bg-[#4c4c4c] text-[11px] font-bold transition-colors"
+          >
+            A−
+          </button>
+          <span className="px-2 text-[10px] text-slate-400 font-mono border-x border-[#555] select-none">
+            {fontSize}
+          </span>
+          <button
+            onClick={() => setFontSize((s) => Math.min(22, s + 1))}
+            className="px-2 py-1 text-slate-400 hover:text-white hover:bg-[#4c4c4c] text-[11px] font-bold transition-colors"
+          >
+            A+
+          </button>
         </div>
 
         {/* Dark/Light theme toggle */}
         <button
-          onClick={() => { const t = theme === 'vs-dark' ? 'light' : 'vs-dark'; setTheme(t); localStorage.setItem('dm_editor_theme', t); }}
+          onClick={() => {
+            const t = theme === 'vs-dark' ? 'light' : 'vs-dark';
+            setTheme(t);
+            localStorage.setItem('dm_editor_theme', t);
+          }}
           className="px-2 py-1.5 rounded-md bg-[#3c3c3c] border border-[#555] text-slate-400 hover:text-white font-bold transition-colors flex items-center justify-center"
           title="Toggle theme"
         >
@@ -316,22 +437,36 @@ export default function CodeEditorPanel({
         {resetConfirm ? (
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-amber-400 font-bold">Reset?</span>
-            <button onClick={handleReset} className="text-[10px] px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded transition-colors">Yes</button>
-            <button onClick={() => setResetConfirm(false)} className="text-[10px] px-2 py-0.5 bg-[#3c3c3c] text-slate-400 rounded transition-colors">No</button>
+            <button
+              onClick={handleReset}
+              className="text-[10px] px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded transition-colors"
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => setResetConfirm(false)}
+              className="text-[10px] px-2 py-0.5 bg-[#3c3c3c] text-slate-400 rounded transition-colors"
+            >
+              No
+            </button>
           </div>
         ) : (
-          <button onClick={() => setResetConfirm(true)} className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-[#3c3c3c] border border-[#555] text-slate-400 hover:text-amber-400 hover:border-amber-600 font-bold transition-all">
+          <button
+            onClick={() => setResetConfirm(true)}
+            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-[#3c3c3c] border border-[#555] text-slate-400 hover:text-amber-400 hover:border-amber-600 font-bold transition-all"
+          >
             <RotateCcw className="w-3 h-3" /> Reset
           </button>
         )}
 
-        {/* Line count & Fullscreen toggle */}
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-[10px] text-slate-500 font-mono">{code.split('\n').length}L</span>
-          <button onClick={() => setExpanded((e) => !e)} className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors" title={expanded ? 'Collapse' : 'Expand'}>
-            {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          </button>
-        </div>
+        {/* Fullscreen toggle */}
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"
+          title={expanded ? 'Collapse' : 'Expand'}
+        >
+          {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+        </button>
       </div>
 
       {/* ── Monaco Editor Instance ── */}
@@ -342,7 +477,9 @@ export default function CodeEditorPanel({
           value={code}
           onChange={(val) => onCodeChange(val ?? '')}
           theme={theme}
-          onMount={(editor) => { editorRef.current = editor; }}
+          onMount={(editor) => {
+            editorRef.current = editor;
+          }}
           options={{
             fontSize,
             minimap: { enabled: false },
@@ -362,44 +499,67 @@ export default function CodeEditorPanel({
       </div>
 
       {/* ── Bottom Console Panel: Action buttons, Test Cases & Terminal output ── */}
-      <div className="shrink-0 border-t border-[#3c3c3c] bg-[#1e1e1e]" style={{ maxHeight: '280px' }}>
+      <div className="shrink-0 border-t border-[#3c3c3c] bg-[#1e1e1e]" style={{ maxHeight: '290px' }}>
         {/* Execution trigger action bar */}
         <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3c3c3c]">
           <button
-            onClick={onRunCode}
+            onClick={() => onRunCode(testCases)}
             disabled={isRunning || isSubmittingCode}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all disabled:opacity-50 shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
-            {isRunning && !isSubmittingCode
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Play className="w-3.5 h-3.5" />}
-            {isRunning && !isSubmittingCode ? 'Running…' : 'Run'}
-          </button>
-          <button
-            onClick={onSubmitCode}
-            disabled={isRunning || isSubmittingCode}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all disabled:opacity-50 shadow-sm"
-          >
-            {isSubmittingCode
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <CheckCircle className="w-3.5 h-3.5" />}
-            {isSubmittingCode ? 'Submitting…' : 'Submit'}
+            {isRunning && !isSubmittingCode ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Play className="w-3.5 h-3.5 fill-current" />
+            )}
+            Run
           </button>
 
-          {/* Test cases passed badge */}
+          <button
+            onClick={() => onSubmitCode(testCases)}
+            disabled={isRunning || isSubmittingCode}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            {isSubmittingCode ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Check className="w-3.5 h-3.5" />
+            )}
+            Submit
+          </button>
+
+          {/* Test verification status badge */}
           {testResults && (
-            <div className={`ml-2 flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${allPassed ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-700' : 'bg-rose-900/50 text-rose-400 border border-rose-800'}`}>
-              {allPassed ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {passedCount}/{totalCount} Passed
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              {allPassed && (
+                <span className="flex items-center gap-1 text-emerald-400 bg-emerald-950/40 border border-emerald-800/80 px-2 py-0.5 rounded-md text-[11px]">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  All {totalCount} Passed
+                </span>
+              )}
+              {anyFailed && (
+                <span className="flex items-center gap-1 text-rose-400 bg-rose-950/40 border border-rose-800/80 px-2 py-0.5 rounded-md text-[11px]">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {passedCount}/{totalCount} Passed
+                </span>
+              )}
             </div>
           )}
 
-          {/* Wall-clock execution time meter & clear button */}
+          {/* Elapsed execution time indicator */}
           {executionResult && (
-            <div className="ml-auto flex items-center gap-1.5">
-              <Clock className="w-3 h-3 text-slate-500" />
-              <span className="text-[10px] text-slate-500 font-mono">{executionResult.executionTime.toFixed(0)}ms</span>
-              <button onClick={() => { onClearResult(); setTestResults(null); }} className="p-1 text-slate-600 hover:text-slate-300 transition-colors" title="Clear results">
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 font-mono">
+                {executionResult.executionTime.toFixed(0)}ms
+              </span>
+              <button
+                onClick={() => {
+                  onClearResult();
+                  setTestResults(null);
+                }}
+                className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Clear results"
+              >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -424,52 +584,109 @@ export default function CodeEditorPanel({
 
         {/* Test Cases Panel Tab */}
         {activeResultTab === 'testcases' && (
-          <div className="flex overflow-hidden" style={{ height: '180px' }}>
+          <div className="flex overflow-hidden" style={{ height: '190px' }}>
             {/* Case selector sidebar */}
-            <div className="w-32 shrink-0 border-r border-[#3c3c3c] overflow-y-auto">
+            <div className="w-36 shrink-0 border-r border-[#3c3c3c] overflow-y-auto">
               {testCases.map((tc, i) => {
                 const result = testResults?.[i];
                 return (
                   <button
                     key={tc.id}
                     onClick={() => setActiveTestCase(i)}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold transition-colors text-left ${activeTestCase === i ? 'bg-[#2d2d2d] text-white' : 'text-slate-400 hover:bg-[#252525] hover:text-slate-200'}`}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold transition-colors text-left ${activeTestCase === i ? 'bg-[#2d2d2d] text-white' : 'text-slate-400 hover:bg-[#252525] hover:text-slate-200'}`}
                   >
                     {result ? (
-                      result.passed
-                        ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        : <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      result.passed ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      )
                     ) : (
                       <div className="w-3.5 h-3.5 rounded-full border border-slate-600 shrink-0" />
                     )}
-                    Case {i + 1}
+                    <span className="truncate">{tc.name || `Case ${i + 1}`}</span>
                   </button>
                 );
               })}
+              {/* Add custom test case button */}
+              <button
+                onClick={handleAddTestCase}
+                className="w-full flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-blue-400 hover:bg-[#252525] hover:text-blue-300 transition-colors border-t border-[#3c3c3c]"
+              >
+                <Plus className="w-3 h-3" /> Add Case
+              </button>
             </div>
 
-            {/* Selected Case Inspection */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-xs font-mono">
+            {/* Selected Case Inspection & Editing */}
+            <div className="flex-1 overflow-y-auto px-4 py-2.5 space-y-2.5 text-xs font-mono">
               {(() => {
                 const tc = testCases[activeTestCase];
                 const result = testResults?.[activeTestCase];
+                if (!tc) return null;
+
                 return (
                   <>
+                    {tc.description && (
+                      <p className="text-[11px] text-slate-400 font-sans italic">
+                        {tc.description}
+                      </p>
+                    )}
+
                     <div>
-                      <p className="text-slate-500 text-[10px] uppercase tracking-wider font-sans mb-1">Input</p>
-                      <div className="bg-[#2d2d2d] rounded-lg px-3 py-2 text-slate-300 border border-[#3c3c3c]">{tc.input}</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-slate-500 text-[10px] uppercase tracking-wider font-sans font-semibold">
+                          Input
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-sans">
+                          Editable
+                        </span>
+                      </div>
+                      <textarea
+                        value={tc.input}
+                        onChange={(e) => handleUpdateTestCaseInput(e.target.value)}
+                        rows={Math.max(2, tc.input.split('\n').length)}
+                        className="w-full bg-[#252526] rounded-md px-2.5 py-1.5 text-slate-200 border border-[#3c3c3c] focus:border-blue-500 focus:outline-hidden font-mono text-xs resize-none"
+                        placeholder="e.g. gas = [1,2,3,4,5]&#10;cost = [3,4,5,1,2]"
+                      />
                     </div>
+
                     <div>
-                      <p className="text-slate-500 text-[10px] uppercase tracking-wider font-sans mb-1">Expected Output</p>
-                      <div className="bg-[#2d2d2d] rounded-lg px-3 py-2 text-emerald-300 border border-[#3c3c3c]">{tc.expected}</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-slate-500 text-[10px] uppercase tracking-wider font-sans font-semibold">
+                          Expected Output
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={tc.expected}
+                        onChange={(e) => handleUpdateTestCaseExpected(e.target.value)}
+                        className="w-full bg-[#252526] rounded-md px-2.5 py-1.5 text-emerald-300 border border-[#3c3c3c] focus:border-blue-500 focus:outline-hidden font-mono text-xs"
+                        placeholder="e.g. 3"
+                      />
                     </div>
+
                     {result && (
                       <div>
-                        <p className="text-slate-500 text-[10px] uppercase tracking-wider font-sans mb-1">Your Output</p>
-                        <div className={`rounded-lg px-3 py-2 border ${result.passed ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800' : 'bg-rose-950/40 text-rose-300 border-rose-900'}`}>
-                          {result.error
-                            ? <span className="text-rose-400">{result.error}</span>
-                            : result.actual || <span className="text-slate-600 italic">no output</span>}
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-slate-500 text-[10px] uppercase tracking-wider font-sans font-semibold">
+                            Your Output
+                          </span>
+                          {result.timeMs !== undefined && (
+                            <span className="text-[10px] text-slate-400 font-sans">
+                              {result.timeMs}ms
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className={`rounded-md px-2.5 py-1.5 border font-mono text-xs ${result.passed ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800' : 'bg-rose-950/40 text-rose-300 border-rose-900'}`}
+                        >
+                          {result.error ? (
+                            <span className="text-rose-400">{result.error}</span>
+                          ) : result.actual !== undefined && result.actual !== '' ? (
+                            <span>{result.actual}</span>
+                          ) : (
+                            <span className="text-slate-600 italic">no output</span>
+                          )}
                         </div>
                       </div>
                     )}
@@ -482,16 +699,22 @@ export default function CodeEditorPanel({
 
         {/* Raw Terminal Output Tab */}
         {activeResultTab === 'output' && (
-          <div className="h-[180px] overflow-y-auto px-4 py-3">
+          <div className="h-[190px] overflow-y-auto px-4 py-3">
             {!executionResult ? (
-              <p className="text-slate-600 text-xs font-mono italic">Run your code to see output…</p>
+              <p className="text-slate-600 text-xs font-mono italic">
+                Click Run to execute your code against test cases…
+              </p>
             ) : (
               <>
                 {executionResult.stdout && (
-                  <pre className="text-slate-300 text-xs font-mono whitespace-pre-wrap leading-relaxed">{executionResult.stdout}</pre>
+                  <pre className="text-slate-300 text-xs font-mono whitespace-pre-wrap leading-relaxed">
+                    {executionResult.stdout}
+                  </pre>
                 )}
                 {executionResult.stderr && (
-                  <pre className="text-rose-400 text-xs font-mono whitespace-pre-wrap leading-relaxed mt-2">{executionResult.stderr}</pre>
+                  <pre className="text-rose-400 text-xs font-mono whitespace-pre-wrap leading-relaxed mt-2">
+                    {executionResult.stderr}
+                  </pre>
                 )}
                 {!executionResult.stdout && !executionResult.stderr && (
                   <p className="text-slate-600 text-xs font-mono italic">No output produced.</p>

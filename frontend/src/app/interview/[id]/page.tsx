@@ -430,11 +430,36 @@ export default function InterviewRoomPage() {
   /**
    * Dispatches code execution to the Docker sandbox (used by "Run" button).
    */
-  const handleRunCode = useCallback(async () => {
+  const handleRunCode = useCallback(async (customTestCases?: any[]) => {
     setIsRunning(true);
     setExecutionResult(null);
     try {
       const apiLang = language === 'typescript' ? 'javascript' : language;
+      if (customTestCases && customTestCases.length > 0) {
+        const payload = {
+          code,
+          language: apiLang,
+          test_cases: customTestCases.map((tc, idx) => ({
+            input: tc.input,
+            expected_output: tc.expected,
+            name: tc.name || `Case ${idx + 1}`,
+            is_hidden: false,
+          })),
+          timeout_seconds: 10,
+        };
+        const testRes = await executionApi.runTests(payload);
+        if (testRes.success) {
+          setExecutionResult({
+            stdout: testRes.results?.map((r: any) => `[${r.name || 'Test'}] ${r.passed ? 'PASSED' : 'FAILED'} (Output: ${r.actual_output})`).join('\n') || '',
+            stderr: testRes.error || '',
+            executionTime: Math.round(testRes.total_execution_time * 1000),
+            success: testRes.all_passed,
+            testResults: testRes.results,
+          });
+          return;
+        }
+      }
+
       const payload = { code, language: apiLang, timeout_seconds: 10, session_id: session?.id };
       let res;
       if (asyncExecution) {
@@ -454,7 +479,7 @@ export default function InterviewRoomPage() {
   /**
    * Submits candidate's completed code solution to the AI interviewer for review and follow-up.
    */
-  const handleSubmitCode = useCallback(async () => {
+  const handleSubmitCode = useCallback(async (customTestCases?: any[]) => {
     if (!session || isRunning || isSubmittingCode) return;
     setIsSubmittingCode(true);
     setIsRunning(true);
@@ -462,21 +487,51 @@ export default function InterviewRoomPage() {
     setChatError(null);
     try {
       const apiLang = language === 'typescript' ? 'javascript' : language;
-      const payload = { code, language: apiLang, timeout_seconds: 10, session_id: session.id };
-      let res;
-      if (asyncExecution) {
-        try { res = await executionApi.executeAsync(payload); }
-        catch { res = await executionApi.execute(payload); }
-      } else {
-        try { res = await executionApi.execute(payload); }
-        catch (err: any) { res = { success: false, output: '', error: err?.message || 'Execution failed', execution_time: 0 }; }
+      let testSummary = '';
+      let testPassedCount = 0;
+      let totalTests = 0;
+      let executionTimeMs = 0;
+
+      if (customTestCases && customTestCases.length > 0) {
+        try {
+          const testRes = await executionApi.runTests({
+            code,
+            language: apiLang,
+            test_cases: customTestCases.map((tc, idx) => ({
+              input: tc.input,
+              expected_output: tc.expected,
+              name: tc.name || `Case ${idx + 1}`,
+              is_hidden: false,
+            })),
+            timeout_seconds: 10,
+          });
+          if (testRes.success) {
+            testPassedCount = testRes.passed;
+            totalTests = testRes.total;
+            executionTimeMs = Math.round(testRes.total_execution_time * 1000);
+            testSummary = `${testPassedCount}/${totalTests} Test Cases Passed (${executionTimeMs}ms)`;
+            setExecutionResult({
+              stdout: testRes.results?.map((r: any) => `[${r.name || 'Test'}] ${r.passed ? 'PASSED' : 'FAILED'} (Output: ${r.actual_output})`).join('\n') || '',
+              stderr: testRes.error || '',
+              executionTime: executionTimeMs,
+              success: testRes.all_passed,
+              testResults: testRes.results,
+            });
+          }
+        } catch (e) {
+          console.warn('Test suite execution error:', e);
+        }
       }
-      setExecutionResult({ stdout: res.output, stderr: res.error || '', executionTime: res.execution_time || 0, success: res.success });
-      setIsRunning(false);
+
       await sessionApi.submitCode(session.id, language, code);
       const label = LANGUAGE_OPTIONS[language].label;
-      const turnContent = `[Submitted Code (${label})]\n\`\`\`${language}\n${code}\n\`\`\`\n\nExecution Status: ${res.success ? 'Success' : 'Failed'}\nOutput:\n${res.output || '(no output)'}\nError:\n${res.error || '(none)'}`;
-      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'candidate', content: `I have submitted my code solution in ${label}.\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nRun Result: ${res.success ? 'Passed' : 'Failed'}`, timestamp: new Date() };
+      const turnContent = `[Submitted Code (${label})]\n\`\`\`${language}\n${code}\n\`\`\`\n\nTest Results: ${testSummary || 'Executed'}`;
+      const userMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'candidate',
+        content: `I have submitted my code solution in ${label}${testSummary ? ` — ${testSummary}` : ''}.\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nCould you review my approach, check my time and space complexity, and give me feedback on any edge cases?`,
+        timestamp: new Date(),
+      };
       const updated = [...streaming.messages, userMsg];
       streaming.setMessages(updated);
       sessionApi.saveTurn(session.id, 'candidate', turnContent).catch(() => {});
@@ -487,7 +542,7 @@ export default function InterviewRoomPage() {
       setIsSubmittingCode(false);
       setIsRunning(false);
     }
-  }, [session, language, code, asyncExecution, isRunning, isSubmittingCode, streaming]);
+  }, [session, language, code, isRunning, isSubmittingCode, streaming]);
 
   /**
    * Switches programming language and swaps in the starter template.
@@ -684,6 +739,8 @@ export default function InterviewRoomPage() {
             onSubmitCode={handleSubmitCode}
             onClearResult={() => setExecutionResult(null)}
             triggerCheatingViolation={cheating.triggerCheatingViolation}
+            topic={session?.focus_area}
+            problemContext={streaming.messages.find((m) => m.role === 'interviewer')?.content || ''}
           />
         ) : (
           /* Behavioral / System Design: Video stream & strategy tips tabs */

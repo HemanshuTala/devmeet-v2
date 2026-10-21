@@ -265,19 +265,58 @@ class TestRunner:
             return f"""
 import sys
 import io
+import ast
+import inspect
 
 # Capture stdout
-sys.stdout = io.StringIO()
+_captured_stdout = io.StringIO()
+sys.stdout = _captured_stdout
 
 # Inject test input into stdin
-sys.stdin = io.StringIO({repr(input_data)})
+_raw_stdin = {repr(input_data)}
+sys.stdin = io.StringIO(_raw_stdin)
 
 # Original candidate code
 {code}
 
-# Flush captured output
-output = sys.stdout.getvalue()
-print(output, end='')
+# Auto-invoke defined solution function if stdout was not printed explicitly
+_stdout_content = _captured_stdout.getvalue()
+if not _stdout_content.strip():
+    _user_callables = [
+        v for k, v in list(locals().items())
+        if callable(v) and not k.startswith('_') and k not in ('sys', 'io', 'ast', 'inspect')
+    ]
+    if _user_callables:
+        _target_fn = _user_callables[-1]
+        _parsed_args = []
+        for _line in _raw_stdin.strip().splitlines():
+            _line = _line.strip()
+            if not _line:
+                continue
+            _val_str = _line.split('=', 1)[1].strip() if ('=' in _line and not _line.startswith('{{')) else _line
+            try:
+                _parsed_args.append(ast.literal_eval(_val_str))
+            except Exception:
+                _parsed_args.append(_val_str)
+        try:
+            _sig = inspect.signature(_target_fn)
+            _param_count = len(_sig.parameters)
+            if _param_count == len(_parsed_args):
+                _res = _target_fn(*_parsed_args)
+            elif _param_count == 1 and len(_parsed_args) > 1:
+                _res = _target_fn(_parsed_args)
+            else:
+                _res = _target_fn(*_parsed_args)
+            if _res is not None:
+                if isinstance(_res, bool):
+                    _stdout_content = "true" if _res else "false"
+                else:
+                    _stdout_content = str(_res)
+        except Exception as _call_err:
+            _stdout_content = f"Runtime error: {{_call_err}}"
+
+sys.stdout = sys.__stdout__
+print(_stdout_content, end='')
 """
         elif language == "javascript":
             return f"""
@@ -293,6 +332,29 @@ console.log = (...args) => {{
 
 // Original candidate code
 {code}
+
+// Auto-invoke candidate function if console.log was not called explicitly
+if (!output.trim()) {{
+    try {{
+        const lines = input.trim().split('\\n').filter(Boolean);
+        const args = lines.map(line => {{
+            const val = line.includes('=') && !line.trim().startsWith('{{') ? line.split('=')[1].trim() : line.trim();
+            try {{ return JSON.parse(val); }} catch (e) {{ return val; }}
+        }});
+        const fn = typeof canCompleteCircuit === 'function' ? canCompleteCircuit :
+                   typeof solution === 'function' ? solution :
+                   typeof twoSum === 'function' ? twoSum :
+                   typeof lengthOfLongestSubstring === 'function' ? lengthOfLongestSubstring :
+                   typeof isValid === 'function' ? isValid :
+                   typeof wordBreak === 'function' ? wordBreak : null;
+        if (fn) {{
+            const res = fn(...args);
+            if (res !== undefined) output = String(res);
+        }}
+    }} catch (e) {{
+        // ignore fallback errors
+    }}
+}}
 
 // Restore console.log and flush
 console.log = originalLog;
@@ -357,14 +419,19 @@ func main() {{
         """
         Compares candidate output with expected reference output.
 
-        Whitespace Normalization:
+        Whitespace & Boolean Normalization:
           Splits on all consecutive whitespace and joins with a single space.
-          This ensures that differences in line endings (CRLF vs LF) or extra trailing
-          spaces do not cause false test failures.
+          Normalizes booleans ('true' vs 'True').
         """
-        actual_normalized = " ".join(actual.split())
-        expected_normalized = " ".join(expected.split())
-        return actual_normalized == expected_normalized
+        def normalize(s: str) -> str:
+            norm = " ".join(s.split()).strip()
+            if norm.lower() == "true":
+                return "true"
+            if norm.lower() == "false":
+                return "false"
+            return norm
+
+        return normalize(actual) == normalize(expected)
 
     def parse_test_cases_from_json(self, test_cases_json: str) -> List[TestCase]:
         """

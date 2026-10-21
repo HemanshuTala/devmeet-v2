@@ -510,8 +510,14 @@ async def generate_question_stream(
 
             # Final SSE completion packet
             if parsed and isinstance(parsed, dict):
+                import re
                 pre_text = full_text[:start_idx].strip() if start_idx != -1 else ""
+                pre_text = re.sub(r"^```(?:json)?\s*", "", pre_text, flags=re.IGNORECASE)
+                pre_text = re.sub(r"\s*```$", "", pre_text).strip()
                 main_q = parsed.get("question", "")
+                if main_q:
+                    main_q = re.sub(r"^```(?:json)?\s*", "", main_q, flags=re.IGNORECASE)
+                    main_q = re.sub(r"\s*```$", "", main_q).strip()
                 final_q = f"{pre_text}\n\n{main_q}".strip() if pre_text else main_q
                 yield f"data: {json_module.dumps({'token': '', 'done': True, 'question': final_q or full_text.strip(), 'hints': parsed.get('hints', []), 'follow_up_questions': parsed.get('follow_up_questions', [])})}\n\n"
             else:
