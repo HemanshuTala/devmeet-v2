@@ -4,7 +4,7 @@ ANALYTICS SERVICE — DISTRIBUTED TRACING & TELEMETRY MIDDLEWARE
 ================================================================================
 Role & Responsibility:
   This middleware implements correlation tracking and latency monitoring for all
-  inbound HTTP requests to the Analytics Service (Port 8008).
+  inbound HTTP requests to the Analytics Service (Port 8009).
 
 Architectural Value:
   - Distributed Correlation: Extracts or synthesizes `X-Request-ID` to link analytics

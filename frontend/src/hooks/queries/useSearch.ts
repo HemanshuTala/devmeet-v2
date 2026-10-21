@@ -55,11 +55,16 @@ export function useQuestionSearch(params: QuestionSearchParams, enabled = true) 
  *
  * @param interview_type - Optional track constraint.
  * @param difficulty - Optional difficulty constraint.
+ * @param company - Optional company constraint.
  */
-export function useRandomQuestion(interview_type?: string, difficulty?: string) {
+export function useRandomQuestion(
+  interview_type?: string,
+  difficulty?: string,
+  company?: string
+) {
   return useQuery({
-    queryKey: queryKeys.questions.random(interview_type, difficulty),
-    queryFn: () => searchApi.getRandom(interview_type, difficulty),
+    queryKey: queryKeys.questions.random(interview_type, difficulty, company),
+    queryFn: () => searchApi.getRandom(interview_type, difficulty, company),
     enabled: false,
   });
 }

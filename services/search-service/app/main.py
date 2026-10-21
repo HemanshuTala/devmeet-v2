@@ -11,7 +11,7 @@ Key Architectural Responsibilities:
 2. API Routing:
    - Registers all search endpoints under `/api/v1/search`.
 3. Operational Telemetry:
-   - Exposes `/health` diagnostic probe reporting Elasticsearch cluster connectivity status.
+   - Exposes `/health` with the loaded question count.
 """
 
 import os
@@ -42,16 +42,16 @@ app.include_router(router)
 @app.get("/health")
 def health_check():
     """
-    Diagnostic probe returning service status and Elasticsearch cluster connectivity.
+    Diagnostic probe returning service status and the number of loaded questions.
 
     Returns:
-        dict: Health status and boolean flag indicating whether Elasticsearch is connected.
+        dict: Health status, service name, and question count.
     """
     from .search_engine import search_engine
     return {
         "status": "healthy",
         "service": "search-service",
-        "elasticsearch_connected": search_engine.use_es
+        "question_count": len(search_engine.local_db),
     }
 
 

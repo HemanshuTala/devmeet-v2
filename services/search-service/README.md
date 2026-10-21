@@ -1,78 +1,64 @@
-# Search Service (`search-service`)
+# Search Service
 
-## 1. Service Overview
+Search Service provides question search and random question selection for
+DevMeet. It loads the question catalog from `app/questions_seed.py` into memory
+when the service starts and serves requests from that in-process catalog.
 
-The **Search Service** indexes and provides fast in-memory search over DevMeet's question catalog of 2,000+ curated interview problems spanning Data Structures & Algorithms, System Design architectures, and Behavioral leadership scenarios.
+The current seed catalog contains 156 question records. Search is implemented
+with case-insensitive substring matching and simple title-first ranking. There
+is no external search backend or database requirement.
 
-### Key Responsibilities
-- **In-Memory Question Bank Index (`search_engine.py`)**: Tokenizes problem descriptions, focus areas, and company tags for sub-millisecond retrieval.
-- **Multi-Facet Filtering**: Filters questions by interview domain (`dsa`, `system_design`, `behavioral`), difficulty (`easy`, `medium`, `hard`), and target company (Google, Amazon, Meta, Microsoft, Netflix, Apple).
-- **Random Question Selector**: Provides random seed questions for `orchestrator-service` during interview initialization.
-
----
-
-## 2. Question Search Architecture
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Orch as Orchestrator Service (:8003)
-    participant Search as Search Service (:8013)
-    participant Engine as In-Memory Search Engine
-    participant Seed as Question Bank Seed (2,000+ Qs)
-
-    Note over Search,Seed: Service Startup: Load seed data into RAM index
-    Search->>Seed: Ingest question dataset
-    Search->>Engine: Build tokenized inverted index
-
-    Orch->>Search: GET /api/v1/search/questions/random?interview_type=dsa&difficulty=medium&company=Google
-    Search->>Engine: Query index by type='dsa' & difficulty='medium' & tag='Google'
-    Engine-->>Search: Match list or closest difficulty fallback
-    Search-->>Orch: Return selected Question JSON
-```
-
----
-
-## 3. Modular Code Structure
+## Request flow
 
 ```text
-services/search-service/
-├── app/
-│   ├── search_engine.py    # SearchEngine with token index, fuzzy match & ranker
-│   ├── questions_seed.py   # Curated seed database of interview problems
-│   ├── routes.py           # FastAPI endpoints (search, random, get by ID)
-│   ├── models.py           # Pydantic schemas (Question, SearchResponse)
-│   ├── middleware.py       # Request tracing middleware
-│   └── test_search.py      # 20 unit tests verifying search precision & randomizer
-├── Dockerfile
-├── requirements.txt
-└── README.md
+Question Bank frontend
+  -> API Gateway :8000 (/api/v1/search)
+  -> Search Service :8013
+  -> FastAPI route
+  -> in-memory SearchEngine
+  -> JSON response
 ```
 
----
+When the Orchestrator creates an interview session, it calls the random-question
+endpoint directly using `SEARCH_SERVICE_URL` (default in Compose:
+`http://search-service:8013`). The selected question can be used to prefill the
+session focus area.
 
-## 4. API Endpoints
+## Endpoints
 
-### `GET /api/v1/search/questions`
-- **Purpose**: Full-text keyword and facet search across questions.
-- **Query Params**: `q` (text search), `interview_type`, `difficulty`, `company`, `page`, `page_size`.
+All search endpoints use the `/api/v1/search` prefix.
 
-### `GET /api/v1/search/questions/random`
-- **Purpose**: Returns a randomized question matching the requested interview criteria. Used by `orchestrator-service`.
+| Method and path | Purpose |
+|---|---|
+| `GET /questions` | Search/filter questions. Supports `q`, `interview_type`, `difficulty`, `company`, `limit` (1–100), and `offset` (0 or greater). |
+| `GET /questions/random` | Select a random question. Supports optional `interview_type`, `difficulty`, and `company` filters. Returns 404 if nothing matches. |
+| `GET /questions/{question_id}` | Get a question by its ID. Returns 404 if it is not in the catalog. |
+| `POST /questions` | Add a question to the current process's in-memory catalog. |
+| `GET /health` | Return service status and loaded question count. |
 
----
+Search text is matched as a substring in a question's title, description, tags,
+and company tags. Title matches rank above description and topic-tag matches.
+Category and company filters are case-insensitive.
 
-## 5. Testing & Verification
+## Data and persistence
 
-```bash
-# Run search service unit tests
-$env:PYTHONPATH="E:\AI INTERVIEW\services\search-service"
-python -m pytest services/search-service/app/test_search.py -v
+`app/questions_seed.py` is the source of the initial catalog. A question added
+through `POST /questions` is available only until the Search Service process
+restarts; it is not written to a persistent store. The POST route currently
+does not have an authentication dependency, so it should not be treated as an
+admin-only endpoint.
+
+## Run tests
+
+From the repository root in PowerShell:
+
+```powershell
+$env:PYTHONPATH = "E:\AI INTERVIEW\services\search-service"
+python -m pytest services\search-service\app\test_search.py -v
 ```
 
----
+To rebuild and start the Search Service container after dependency changes:
 
-## 6. Common Technical Interview Questions & Answers
-
-### Q1: Why use an in-memory inverted index instead of Elasticsearch for question search?
-> **Answer**: The curated question bank contains approximately 2,000 to 5,000 technical interview questions. At this scale, the entire corpus fits comfortably in ~15 MB of RAM. An in-memory inverted index provides sub-millisecond query responses (< 2ms) without the memory overhead (1-2 GB JVM heap) and cluster management complexity of running an Elasticsearch or OpenSearch cluster.
+```powershell
+docker compose up --build search-service
+```

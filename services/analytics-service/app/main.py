@@ -1,6 +1,6 @@
 """
 ================================================================================
-ANALYTICS SERVICE — APPLICATION LIFECYCLE & ENTRY POINT (PORT 8008)
+ANALYTICS SERVICE — APPLICATION LIFECYCLE & ENTRY POINT (PORT 8009)
 ================================================================================
 Role & Responsibility:
   This module serves as the primary ASGI application entry point for the Analytics Service.

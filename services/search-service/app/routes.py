@@ -68,6 +68,7 @@ async def search_questions(
 async def get_random_question(
     interview_type: Optional[str] = Query(None, description="Constrain to track ('dsa', 'behavioral', 'system_design')"),
     difficulty: Optional[str] = Query(None, description="Constrain to difficulty ('easy', 'medium', 'hard')"),
+    company: Optional[str] = Query(None, description="Constrain to company tag (e.g. 'Google', 'Meta')"),
 ):
     """
     Picks a random question matching the requested interview type and difficulty.
@@ -85,7 +86,7 @@ async def get_random_question(
     Raises:
         HTTPException(404): If no questions match criteria.
     """
-    q = await search_engine.get_random_question(interview_type, difficulty)
+    q = await search_engine.get_random_question(interview_type, difficulty, company)
     if not q:
         raise HTTPException(status_code=404, detail="No matching question found")
     return q

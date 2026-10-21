@@ -3,7 +3,7 @@
 ANALYTICS SERVICE — REST API ROUTING & TELEMETRY CONTROLLER
 ================================================================================
 Role & Responsibility:
-  This module defines the external HTTP API routing surface for the Analytics Service (Port 8008).
+  This module defines the external HTTP API routing surface for the Analytics Service (Port 8009).
   It acts as the primary telemetry collection and business intelligence engine for DevMeet:
     1. Event Ingestion (`POST /api/v1/analytics/event` & `/events/batch`):
        Captures real-time user events, route changes, sandbox runs, and interview milestones.

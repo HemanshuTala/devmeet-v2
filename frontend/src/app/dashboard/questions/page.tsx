@@ -199,7 +199,11 @@ export default function QuestionsPage() {
   const handleRandom = async () => {
     setRandomLoading(true);
     try {
-      const q = await searchApi.getRandom(typeFilter || undefined, difficultyFilter || undefined);
+      const q = await searchApi.getRandom(
+        typeFilter || undefined,
+        difficultyFilter || undefined,
+        companyFilter || undefined
+      );
       await handlePractice(q);
       toast.success('Random question selected!');
     } catch {

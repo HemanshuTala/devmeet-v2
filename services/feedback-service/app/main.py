@@ -23,7 +23,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import router, close_feedback_http_client
+from .routes import router
 from .database import db
 from .middleware import RequestIDMiddleware
 
@@ -68,9 +68,8 @@ async def startup_event():
 async def shutdown_event():
     """
     Application shutdown event handler.
-    Gracefully terminates database connections and pooled HTTP clients to prevent socket leaks.
+    Gracefully terminates database connections to prevent socket leaks.
     """
-    await close_feedback_http_client()
     await db.disconnect()
 
 

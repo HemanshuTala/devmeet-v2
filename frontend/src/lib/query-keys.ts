@@ -38,8 +38,8 @@ export const queryKeys = {
     /** Filtered search query results */
     search: (params: Record<string, any>) => ['questions', 'search', params] as const,
     /** Random problem selection for interview initialization */
-    random: (interviewType?: string, difficulty?: string) =>
-      ['questions', 'random', { interviewType, difficulty }] as const,
+    random: (interviewType?: string, difficulty?: string, company?: string) =>
+      ['questions', 'random', { interviewType, difficulty, company }] as const,
   },
 
   /** Performance analytics queries */

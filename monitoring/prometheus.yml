@@ -14,7 +14,6 @@ scrape_configs:
           - 'code-execution-service:8005'
           - 'video-service:8006'
           - 'feedback-service:8007'
-          - 'notification-service:8008'
           - 'analytics-service:8009'
           - 'admin-service:8010'
           - 'file-service:8011'

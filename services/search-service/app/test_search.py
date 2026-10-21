@@ -24,15 +24,10 @@ search, question discovery, and problem bank microservice:
    - Enforces Pydantic schema validation failures (422) on missing required fields.
 """
 
-import sys
-from unittest.mock import MagicMock
-
-# Mock external binary/network dependencies (elasticsearch) before importing application modules
-sys.modules.setdefault("elasticsearch", MagicMock())
-
 import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
+from app.search_engine import SearchEngine
 
 # Standard test fixtures for problem card representations
 MOCK_QUESTION = {
@@ -77,7 +72,6 @@ def client():
         mock_engine.get_random_question = AsyncMock(return_value=MOCK_QUESTION)
         mock_engine.get_question_by_id = AsyncMock(return_value=MOCK_QUESTION)
         mock_engine.add_question = AsyncMock(return_value=True)
-        mock_engine.use_es = False
 
         from app.main import app
 
@@ -98,6 +92,7 @@ class TestHealthAndRoot:
         data = response.json()
         assert data["status"] == "healthy"
         assert data["service"] == "search-service"
+        assert data["question_count"] > 0
 
     def test_root_endpoint(self, client):
         """Verifies root endpoint service identity banner."""
@@ -203,6 +198,18 @@ class TestRandomQuestion:
         response = c.get("/api/v1/search/questions/random?difficulty=hard")
         assert response.status_code == 200
 
+    def test_get_random_question_with_company(self, client):
+        """Verifies random sampling constrained by company."""
+        c, mock_engine = client
+        response = c.get(
+            "/api/v1/search/questions/random?interview_type=dsa"
+            "&difficulty=easy&company=Google"
+        )
+        assert response.status_code == 200
+        mock_engine.get_random_question.assert_awaited_once_with(
+            "dsa", "easy", "Google"
+        )
+
     def test_get_random_question_none_found(self, client):
         """Ensures 404 Not Found when no questions match criteria."""
         c, mock_engine = client
@@ -296,3 +303,58 @@ class TestCreateQuestion:
             json={"title": "Incomplete"},
         )
         assert response.status_code == 422
+
+
+class TestInMemorySearchEngine:
+    """Tests search against the actual in-memory catalog implementation."""
+
+    @pytest.mark.asyncio
+    async def test_search_filters_and_ranks_seeded_questions(self):
+        engine = SearchEngine()
+
+        result = await engine.search(
+            query="two sum",
+            interview_type="DSA",
+            difficulty="EASY",
+            company="google",
+            limit=5,
+        )
+
+        assert result["total"] == 1
+        assert result["questions"][0]["title"] == "Two Sum"
+
+    @pytest.mark.asyncio
+    async def test_search_paginates_actual_catalog(self):
+        engine = SearchEngine()
+
+        result = await engine.search(limit=3, offset=2)
+
+        assert result["total"] == len(engine.local_db)
+        assert len(result["questions"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_random_question_matches_case_insensitive_filters(self):
+        engine = SearchEngine()
+
+        question = await engine.get_random_question(
+            interview_type="DSA",
+            difficulty="MEDIUM",
+            company="google",
+        )
+
+        assert question is not None
+        assert question["interview_type"] == "dsa"
+        assert question["difficulty"] == "medium"
+        assert "Google" in question["company_tags"]
+
+    @pytest.mark.asyncio
+    async def test_add_question_updates_current_process_catalog(self):
+        engine = SearchEngine()
+        new_question = {
+            **MOCK_QUESTION,
+            "id": "q-added",
+            "title": "Added question",
+        }
+
+        assert await engine.add_question(new_question)
+        assert await engine.get_question_by_id("q-added") == new_question

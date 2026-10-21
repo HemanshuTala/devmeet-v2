@@ -6,26 +6,23 @@ Role & Responsibility:
   This module defines the external HTTP endpoints for the Feedback Service (Port 8007).
   It acts as the primary evaluation controller handling:
     1. Report Generation (`POST /api/v1/feedback/generate`): Synthesizes comprehensive
-       multi-dimensional scores, renders branded PDF scorecards, persists records to
-       PostgreSQL, and schedules asynchronous candidate completion notifications.
+       multi-dimensional scores, renders branded PDF scorecards, and persists records to
+       PostgreSQL.
     2. Feedback Retrieval (`GET /api/v1/feedback/{session_id}`): Serves saved evaluation
        metrics, strengths, weaknesses, code improvements, and percentile benchmarks
        to the candidate's dashboard UI.
     3. Direct PDF Download (`GET /api/v1/feedback/{session_id}/pdf`): Dynamically compiles
        and streams downloadable A4 PDF scorecard binaries directly to the browser.
-    4. Out-of-Band Candidate Notifications: Dispatches transactional completion emails
-       and in-app push alerts when evaluation completes.
 ================================================================================
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import Optional
 from pathlib import Path
 import os
 import io
 import logging
-import httpx
 
 from .models import FeedbackGenerateRequest, FeedbackReportResponse, ScoreBreakdown, PercentileInfo
 from .generator import feedback_generator
@@ -36,117 +33,18 @@ logger = logging.getLogger("feedback-service")
 # Initialize router with standard prefix
 router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
 
-_feedback_http_client: Optional[httpx.AsyncClient] = None
-
-
-def get_feedback_http_client() -> httpx.AsyncClient:
-    """Returns or initializes a pooled HTTP client for feedback inter-service calls."""
-    global _feedback_http_client
-    if _feedback_http_client is None or _feedback_http_client.is_closed:
-        _feedback_http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(5.0, connect=3.0),
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=50)
-        )
-    return _feedback_http_client
-
-
-async def close_feedback_http_client():
-    """Gracefully closes the pooled feedback HTTP client on service shutdown."""
-    global _feedback_http_client
-    if _feedback_http_client and not _feedback_http_client.is_closed:
-        await _feedback_http_client.aclose()
-        _feedback_http_client = None
-
-
-# ==============================================================================
-# ASYNCHRONOUS CANDIDATE NOTIFICATION WORKER
-# ==============================================================================
-
-async def send_completion_notification(
-    session_id: str,
-    overall_score: int,
-    interview_type: str,
-    pdf_url: str,
-):
-    """
-    Dispatches asynchronous email and push notifications when an interview evaluation finishes.
-
-    Parameters:
-      session_id (str): UUID of the completed interview session.
-      overall_score (int): Composite candidate score (0-100).
-      interview_type (str): Domain track ('dsa', 'behavioral', 'system_design').
-      pdf_url (str): Download link or S3 presigned URL for the PDF report.
-
-    Fault Tolerance:
-      Runs in a FastAPI `BackgroundTasks` thread. If the notification service is offline,
-      the exception is caught and logged, ensuring the candidate's feedback report is
-      never delayed or rolled back.
-    """
-    user_details = await db.get_user_details_by_session(session_id)
-    if not user_details:
-        return
-
-    user_id = str(user_details["user_id"])
-    email = user_details["email"]
-    name = user_details["display_name"]
-
-    notification_url = os.getenv("NOTIFICATION_SERVICE_URL", "")
-    if not notification_url:
-        return
-
-    client = get_feedback_http_client()
-
-    # Step 1: Send transactional completion email
-    try:
-        await client.post(
-            f"{notification_url}/api/v1/notifications/email",
-            json={
-                "to": email,
-                "template": "session_complete",
-                "data": {
-                    "name": name,
-                    "interview_type": interview_type.upper(),
-                    "score": overall_score,
-                    "report_url": pdf_url or f"/interview/{session_id}/feedback",
-                },
-            },
-            timeout=5.0,
-        )
-    except Exception as e:
-        logger.error("Failed to send session complete email: %s", e)
-
-    # Step 2: Send real-time in-app push notification
-    try:
-        await client.post(
-            f"{notification_url}/api/v1/notifications/push",
-            json={
-                "user_id": user_id,
-                "type": "success",
-                "title": "Interview Evaluated",
-                "message": f"Your {interview_type.upper()} interview feedback is ready! Score: {overall_score}/100.",
-                "data": {"session_id": session_id},
-            },
-            timeout=5.0,
-        )
-    except Exception as e:
-        logger.error("Failed to send push notification: %s", e)
-
 
 # ==============================================================================
 # ROUTE 1: GENERATE POST-INTERVIEW FEEDBACK REPORT
 # ==============================================================================
 
 @router.post("/generate", response_model=FeedbackReportResponse)
-async def generate_feedback(
-    request: FeedbackGenerateRequest,
-    background_tasks: BackgroundTasks,
-):
+async def generate_feedback(request: FeedbackGenerateRequest):
     """
     Generates AI-driven evaluation, computes percentile rankings, and compiles a PDF report.
 
     Parameters:
       request (FeedbackGenerateRequest): Session ID, interview track, seniority, transcript.
-      background_tasks (BackgroundTasks): In-process task queue for notifications.
 
     Returns:
       FeedbackReportResponse: Composite score, dimension breakdown, strengths/weaknesses, and PDF link.
@@ -156,7 +54,6 @@ async def generate_feedback(
       2. Renders print-ready HTML and compiles binary PDF scorecard via WeasyPrint.
       3. Uploads PDF to AWS S3 (generating a 7-day presigned URL) or local storage.
       4. Persists evaluation report to PostgreSQL database (`feedback_reports` table).
-      5. Enqueues background notification task to alert candidate via email and push.
     """
     try:
         # Step 1: Analyze transcript and compute multi-dimensional scores
@@ -192,16 +89,7 @@ async def generate_feedback(
             pdf_url=pdf_url,
         )
 
-        # Step 4: Schedule background notification tasks
-        background_tasks.add_task(
-            send_completion_notification,
-            session_id=request.session_id,
-            overall_score=evaluation["overall_score"],
-            interview_type=request.interview_type,
-            pdf_url=pdf_url,
-        )
-
-        # Step 5: Format response DTO
+        # Step 4: Format response DTO
         raw_scores = evaluation["scores"]
         scores_breakdown = ScoreBreakdown(
             communication_score=raw_scores["communication_score"],
@@ -224,7 +112,21 @@ async def generate_feedback(
 
 
 # ==============================================================================
-# ROUTE 2: RETRIEVE EXISTING FEEDBACK REPORT
+# ROUTE 2: HEALTH PROBE
+# ==============================================================================
+
+@router.get("/health")
+async def feedback_health():
+    """Returns feedback service health and database connection status."""
+    return {
+        "status": "healthy",
+        "service": "feedback-service",
+        "postgres_connected": db.use_db,
+    }
+
+
+# ==============================================================================
+# ROUTE 3: RETRIEVE EXISTING FEEDBACK REPORT
 # ==============================================================================
 
 @router.get("/{session_id}", response_model=FeedbackReportResponse)

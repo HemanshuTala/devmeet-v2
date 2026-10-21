@@ -46,16 +46,16 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-async def send_email_notification(to: str, template: str, data: dict):
+async def log_auth_email_event(to: str, template: str, data: dict):
     """
     Simulates transactional email dispatch for authentication events.
 
     Parameters:
         to (str): Target recipient email address.
-        template (str): Notification template ('welcome', 'verify_email', 'reset_password', 'security_alert').
+        template (str): Email event template ('welcome', 'verify_email', 'reset_password', 'security_alert').
         data (dict): Template variables (e.g. candidate name, OTP code, reset link).
     """
-    logger.info(f"[Auth Email Dispatch] To: {to} | Template: {template} | Data: {data}")
+    logger.info(f"[Auth Email Event] To: {to} | Template: {template} | Data: {data}")
 
 
 async def _send_registration_verification_otp(user_id: str, email: str, display_name: str) -> None:
@@ -68,7 +68,7 @@ async def _send_registration_verification_otp(user_id: str, email: str, display_
     r = await get_redis()
     if r:
         await r.setex(f"email_verify:{user_id}", 86400, otp)
-    await send_email_notification(
+    await log_auth_email_event(
         to=email,
         template="verify_email",
         data={"name": display_name, "otp": otp},
@@ -289,9 +289,9 @@ async def register(user_data: UserRegister, request: Request, background_tasks: 
         access_token = auth_manager.create_access_token(token_data)
         refresh_token = auth_manager.create_refresh_token(token_data)
         
-        # 7. Asynchronous notification tasks
+        # 7. Asynchronous welcome email event logging
         background_tasks.add_task(
-            send_email_notification,
+            log_auth_email_event,
             to=user["email"],
             template="welcome",
             data={"name": user["display_name"]}
@@ -393,7 +393,7 @@ async def login(user_data: UserLogin, request: Request, background_tasks: Backgr
     # Alert user if login triggered high anomaly score
     if risk_assessment["risk_level"] == "high":
         background_tasks.add_task(
-            send_email_notification,
+            log_auth_email_event,
             to=user["email"],
             template="security_alert",
             data={
@@ -760,7 +760,7 @@ async def reset_password_request(request_data: ResetPasswordRequest, request: Re
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     reset_url = f"{frontend_url}/reset-password?token={reset_token}"
     background_tasks.add_task(
-        send_email_notification,
+        log_auth_email_event,
         to=user["email"],
         template="reset_password",
         data={"reset_url": reset_url}
@@ -832,7 +832,7 @@ async def verify_email_request(background_tasks: BackgroundTasks, current_user: 
         await r.setex(cooldown_key, 60, "1")  # 60s resend cooldown
 
     background_tasks.add_task(
-        send_email_notification,
+        log_auth_email_event,
         to=current_user["email"],
         template="verify_email",
         data={"name": current_user["display_name"], "otp": otp}

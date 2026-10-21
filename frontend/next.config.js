@@ -42,14 +42,11 @@ const nextConfig = {
     NEXT_PUBLIC_EXEC_URL: process.env.NEXT_PUBLIC_EXEC_URL || GATEWAY_URL,
     NEXT_PUBLIC_VIDEO_URL: process.env.NEXT_PUBLIC_VIDEO_URL || GATEWAY_URL,
     NEXT_PUBLIC_FEEDBACK_URL: process.env.NEXT_PUBLIC_FEEDBACK_URL || GATEWAY_URL,
-    NEXT_PUBLIC_NOTIF_URL: process.env.NEXT_PUBLIC_NOTIF_URL || GATEWAY_URL,
     NEXT_PUBLIC_ANALYTICS_URL: process.env.NEXT_PUBLIC_ANALYTICS_URL || GATEWAY_URL,
     NEXT_PUBLIC_ADMIN_URL: process.env.NEXT_PUBLIC_ADMIN_URL || GATEWAY_URL,
     NEXT_PUBLIC_FILE_URL: process.env.NEXT_PUBLIC_FILE_URL || GATEWAY_URL,
     NEXT_PUBLIC_PAYMENT_URL: process.env.NEXT_PUBLIC_PAYMENT_URL || GATEWAY_URL,
     NEXT_PUBLIC_SEARCH_URL: process.env.NEXT_PUBLIC_SEARCH_URL || GATEWAY_URL,
-    // WebSocket endpoint connects directly to Notification Service
-    NEXT_PUBLIC_NOTIF_WS_URL: process.env.NEXT_PUBLIC_NOTIF_WS_URL || 'ws://localhost:8008',
   },
 
   /**
@@ -66,7 +63,6 @@ const nextConfig = {
     const EXEC_SVC     = process.env.NEXT_PUBLIC_EXEC_URL     || 'http://localhost:8005';
     const VIDEO_SVC    = process.env.NEXT_PUBLIC_VIDEO_URL    || 'http://localhost:8006';
     const FEEDBACK_SVC = process.env.NEXT_PUBLIC_FEEDBACK_URL || 'http://localhost:8007';
-    const NOTIF_SVC    = process.env.NEXT_PUBLIC_NOTIF_URL    || 'http://localhost:8008';
     const ANALYTICS_SVC= process.env.NEXT_PUBLIC_ANALYTICS_URL|| 'http://localhost:8009';
     const ADMIN_SVC    = process.env.NEXT_PUBLIC_ADMIN_URL    || 'http://localhost:8010';
     const FILE_SVC     = process.env.NEXT_PUBLIC_FILE_URL     || 'http://localhost:8011';
@@ -88,8 +84,6 @@ const nextConfig = {
       { source: '/api/v1/video/:path*',         destination: `${VIDEO_SVC}/api/v1/video/:path*` },
       // Feedback Service (rubric evaluation, radar chart scores, PDF export)
       { source: '/api/v1/feedback/:path*',      destination: `${FEEDBACK_SVC}/api/v1/feedback/:path*` },
-      // Notification Service (email alerts, system notifications)
-      { source: '/api/v1/notifications/:path*', destination: `${NOTIF_SVC}/api/v1/notifications/:path*` },
       // Analytics Service (streak calendars, score heatmaps, pass rates)
       { source: '/api/v1/analytics/:path*',     destination: `${ANALYTICS_SVC}/api/v1/analytics/:path*` },
       // Admin Service (candidate oversight, account suspension, audit trail)

@@ -1,115 +1,77 @@
-# Feedback Service (`feedback-service`)
+# Feedback Service
 
-## 1. Service Overview
+Feedback Service evaluates a completed interview transcript, saves a score
+report, and provides report/PDF endpoints. It is a FastAPI application on port
+`8007`. Evaluation uses Groq when configured and otherwise uses a local
+rule-based heuristic. The report record is stored in PostgreSQL when available.
 
-The **Feedback Service** evaluates candidate performance across technical and behavioral interview sessions, produces 6-dimensional scorecards, benchmarks candidate percentiles against peer cohorts, and generates styled PDF evaluation reports stored in AWS S3.
-
-### Key Responsibilities
-- **6-Dimensional Evaluation Matrix**:
-  1. *Problem Solving Score* (0-100)
-  2. *Code Quality Score* (0-100)
-  3. *System Architecture Score* (0-100)
-  4. *Behavioral / STAR Alignment Score* (0-100)
-  5. *Communication Score* (0-100)
-  6. *Time & Space Complexity Score* (0-100)
-- **Cohort Percentile Benchmarking (`percentiles.py`)**: Ranks candidate performance relative to simulated and historical cohorts based on interview type and difficulty.
-- **HTML Report Templating (`report_template.py`)**: Builds responsive, print-optimized HTML scorecards with CSS paged media rules (`@page`).
-- **PDF Compilation & Storage (`generator.py`)**: Converts HTML reports into PDF documents using WeasyPrint and uploads them to AWS S3 with 7-day presigned download URLs.
-
----
-
-## 2. Request Lifecycle & Generation Architecture
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Candidate as Candidate / Frontend
-    participant Feedback as Feedback Service (:8007)
-    participant Groq as Groq LLM
-    participant DB as PostgreSQL
-    participant Weasy as WeasyPrint Engine
-    participant S3 as AWS S3 Storage
-
-    Candidate->>Feedback: POST /api/v1/feedback/generate
-    Feedback->>Feedback: Guard: verify transcript has meaningful answers
-    alt Transcript Empty or Minimal (< 15 words)
-        Feedback-->>Candidate: Return zero-score incomplete evaluation
-    else Transcript Valid
-        Feedback->>Groq: Prompt LLM with 6D scoring rubric
-        Groq-->>Feedback: Structured JSON score & qualitative feedback
-        Feedback->>Feedback: Calculate percentile ranking (percentiles.py)
-        Feedback->>Feedback: Build HTML report template (report_template.py)
-        Feedback->>Weasy: Compile HTML to PDF bytes
-        Feedback->>S3: Upload PDF to S3 (AES256 encrypted)
-        Feedback->>DB: INSERT into feedback_reports
-        Feedback-->>Candidate: Return FeedbackReportResponse with presigned PDF URL
-    end
-```
-
----
-
-## 3. Modular Code Structure
+## How it is called
 
 ```text
-services/feedback-service/
-├── app/
-│   ├── percentiles.py         # Cohort percentile calculation tables
-│   ├── report_template.py     # HTML/CSS template builder for evaluation report
-│   ├── generator.py           # FeedbackGenerator coordinating LLM, PDF, and S3
-│   ├── database.py            # PostgreSQL feedback_reports queries
-│   ├── routes.py              # FastAPI endpoints (generate, get, pdf)
-│   ├── models.py              # Pydantic schemas
-│   ├── middleware.py          # Request tracing middleware
-│   └── test_feedback.py      # 12 unit tests verifying generation & fallback
-├── Dockerfile
-├── requirements.txt
-└── README.md
+Candidate completes interview
+  -> Orchestrator transaction writes session.completed outbox event
+  -> Orchestrator outbox worker fetches transcript
+  -> POST feedback-service:8007/api/v1/feedback/generate
+  -> Feedback Service evaluates, optionally creates PDF, saves report
+  -> Feedback page loads saved report (or requests generation if missing)
 ```
 
----
+The Feedback page can also request generation directly when no report is
+available. Thus evaluation may be requested from both the Orchestrator and
+the page. The database uses an upsert by `session_id`, but concurrent repeated
+evaluation may still call the evaluator more than once.
 
-## 4. API Endpoints
+## Endpoints
 
-### `POST /api/v1/feedback/generate`
-- **Purpose**: Generates full evaluation report from an interview transcript.
-- **Request Body**:
-  ```json
-  {
-    "session_id": "sess-uuid-123",
-    "interview_type": "dsa",
-    "difficulty": "medium",
-    "language": "python",
-    "target_company": "Google",
-    "transcript": [
-      {"role": "interviewer", "content": "How would you solve Two Sum?"},
-      {"role": "candidate", "content": "I would use a hash map to store complements in O(n) time."}
-    ]
-  }
-  ```
-- **Response**: Full scorecard JSON with `overall_score`, 6D scores, strengths, weaknesses, and presigned `pdf_url`.
+| Method and path | Purpose |
+|---|---|
+| `GET /health` | Reports service liveness and whether PostgreSQL connected. |
+| `POST /api/v1/feedback/generate` | Evaluates transcript, optionally creates/uploads PDF, saves report, schedules notifications, and returns scorecard JSON. |
+| `GET /api/v1/feedback/{session_id}` | Retrieves a saved report; 404 if missing. |
+| `GET /api/v1/feedback/{session_id}/pdf` | Generates/streams a PDF from the saved report. |
+| `GET /uploads/{file}` | Serves local PDF files through FastAPI static files. |
 
-### `GET /api/v1/feedback/{session_id}`
-- **Purpose**: Retrieves previously generated feedback report from PostgreSQL.
+The feedback routes do not declare an authentication dependency in their
+current implementation. Do not assume that knowing a session ID is an
+authorization check.
 
-### `GET /api/v1/feedback/{session_id}/pdf`
-- **Purpose**: Directly streams the evaluation PDF bytes as `application/pdf`.
+## Evaluation and percentile details
 
----
+`FeedbackGenerator.generate_feedback()` checks for meaningful candidate
+participation, then calls Groq if `GROQ_API_KEY` is present. If Groq is absent
+or raises an error, the service calculates scores with local rules based on
+answer length, question coverage, and keyword presence. This fallback is not
+an LLM evaluation.
 
-## 5. Testing & Verification
+Percentiles come from fixed score buckets in `percentiles.py`; they are not
+calculated from live historical candidate records. The configured
+`peer_group_size` value is a constant.
 
-```bash
-# Run feedback service unit tests
-$env:PYTHONPATH="E:\AI INTERVIEW\services\feedback-service"
-python -m pytest services/feedback-service/app/test_feedback.py -v
+## PDF and storage
+
+PDF rendering uses WeasyPrint and `report_template.py`. The upload sequence is:
+
+1. AWS S3 if the configured bucket/client is accessible.
+2. File Service if S3 upload fails or is unavailable.
+3. Local `uploads/` directory if the File Service request fails.
+
+Compose mounts `services/feedback-service/uploads` into `/app/uploads`, making
+the local fallback survive container recreation on that host. A generated
+`pdf_url` may be an S3 presigned URL, a File Service URL, or a relative local
+`/uploads/...` URL depending on the successful path.
+
+## Configuration and running
+
+Important Compose variables include `GROQ_API_KEY`, `GROQ_MODEL`,
+`POSTGRES_*`, `FILE_SERVICE_URL`, and AWS credentials/bucket settings. See
+`docker-compose.yml` for values passed to this service.
+
+Run tests from the repository root in PowerShell:
+
+```powershell
+$env:PYTHONPATH = "E:\AI INTERVIEW\services\feedback-service"
+python -m pytest services\feedback-service\app\test_feedback.py -v
 ```
 
----
-
-## 6. Common Technical Interview Questions & Answers
-
-### Q1: Why did you separate HTML templating from PDF generation?
-> **Answer**: `generator.py` originally contained over 700 lines with hardcoded HTML tables, CSS stylesheets, and percentile lookup dictionaries embedded directly inside business logic methods. By separating the styling into `report_template.py` and benchmark calculations into `percentiles.py`, the core `FeedbackGenerator` class remains focused solely on orchestrating LLM calls, WeasyPrint compilation, and S3 uploads.
-
-### Q2: How does the system handle WeasyPrint dependencies on systems without GTK/Pango libraries?
-> **Answer**: WeasyPrint requires native C libraries (`libpango`, `libcairo`). In `generator.py`, we gracefully handle `ImportError: cannot import name HTML from weasyprint` so that the service can continue operating in local development environments without crashing, while compiling PDFs inside the Linux Docker container where GTK libraries are pre-installed.
+The test fixture mocks PostgreSQL and external Groq/PDF/AWS dependencies, so
+passing tests do not prove those integrations work in the current environment.
