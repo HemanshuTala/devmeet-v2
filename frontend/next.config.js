@@ -18,7 +18,7 @@
  */
 
 // Default API Gateway root URL
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost';
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://api-gateway:8000';
 
 const nextConfig = {
   // Enforce React strict mode for highlighting potential side-effects and hydration bugs
@@ -56,18 +56,18 @@ const nextConfig = {
    * @returns {Promise<Array<Object>>} List of Next.js URL rewrite rules.
    */
   async rewrites() {
-    const AI_SVC       = process.env.NEXT_PUBLIC_AI_URL       || 'http://localhost:8004';
-    const AUTH_SVC     = process.env.NEXT_PUBLIC_AUTH_URL     || 'http://localhost:8001';
-    const USER_SVC     = process.env.NEXT_PUBLIC_USER_URL     || 'http://localhost:8002';
-    const ORCH_SVC     = process.env.NEXT_PUBLIC_ORCH_URL     || 'http://localhost:8003';
-    const EXEC_SVC     = process.env.NEXT_PUBLIC_EXEC_URL     || 'http://localhost:8005';
-    const VIDEO_SVC    = process.env.NEXT_PUBLIC_VIDEO_URL    || 'http://localhost:8006';
-    const FEEDBACK_SVC = process.env.NEXT_PUBLIC_FEEDBACK_URL || 'http://localhost:8007';
-    const ANALYTICS_SVC= process.env.NEXT_PUBLIC_ANALYTICS_URL|| 'http://localhost:8009';
-    const ADMIN_SVC    = process.env.NEXT_PUBLIC_ADMIN_URL    || 'http://localhost:8010';
-    const FILE_SVC     = process.env.NEXT_PUBLIC_FILE_URL     || 'http://localhost:8011';
-    const PAYMENT_SVC  = process.env.NEXT_PUBLIC_PAYMENT_URL  || 'http://localhost:8012';
-    const SEARCH_SVC   = process.env.NEXT_PUBLIC_SEARCH_URL   || 'http://localhost:8013';
+    const AI_SVC       = process.env.NEXT_PUBLIC_AI_URL       || 'http://ai-interviewer-service:8004';
+    const AUTH_SVC     = process.env.NEXT_PUBLIC_AUTH_URL     || 'http://auth-service:8001';
+    const USER_SVC     = process.env.NEXT_PUBLIC_USER_URL     || 'http://user-service:8002';
+    const ORCH_SVC     = process.env.NEXT_PUBLIC_ORCH_URL     || 'http://orchestrator-service:8003';
+    const EXEC_SVC     = process.env.NEXT_PUBLIC_EXEC_URL     || 'http://code-execution-service:8005';
+    const VIDEO_SVC    = process.env.NEXT_PUBLIC_VIDEO_URL    || 'http://video-service:8006';
+    const FEEDBACK_SVC = process.env.NEXT_PUBLIC_FEEDBACK_URL || 'http://feedback-service:8007';
+    const ANALYTICS_SVC= process.env.NEXT_PUBLIC_ANALYTICS_URL|| 'http://analytics-service:8009';
+    const ADMIN_SVC    = process.env.NEXT_PUBLIC_ADMIN_URL    || 'http://admin-service:8010';
+    const FILE_SVC     = process.env.NEXT_PUBLIC_FILE_URL     || 'http://file-service:8011';
+    const PAYMENT_SVC  = process.env.NEXT_PUBLIC_PAYMENT_URL  || 'http://payment-service:8012';
+    const SEARCH_SVC   = process.env.NEXT_PUBLIC_SEARCH_URL   || 'http://search-service:8013';
 
     return [
       // AI Interviewer Service (LLM streaming, speech recognition, hint generator)

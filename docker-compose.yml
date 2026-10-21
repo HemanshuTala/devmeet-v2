@@ -290,8 +290,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000
-        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        - NEXT_PUBLIC_GATEWAY_URL=http://api-gateway:8000
+        - NEXT_PUBLIC_API_URL=http://api-gateway:8000
+        - NEXT_PUBLIC_AUTH_URL=http://auth-service:8001
+        - NEXT_PUBLIC_USER_URL=http://user-service:8002
+        - NEXT_PUBLIC_ORCH_URL=http://orchestrator-service:8003
+        - NEXT_PUBLIC_AI_URL=http://ai-interviewer-service:8004
+        - NEXT_PUBLIC_EXEC_URL=http://code-execution-service:8005
+        - NEXT_PUBLIC_VIDEO_URL=http://video-service:8006
+        - NEXT_PUBLIC_FEEDBACK_URL=http://feedback-service:8007
+        - NEXT_PUBLIC_ANALYTICS_URL=http://analytics-service:8009
+        - NEXT_PUBLIC_ADMIN_URL=http://admin-service:8010
+        - NEXT_PUBLIC_FILE_URL=http://file-service:8011
+        - NEXT_PUBLIC_PAYMENT_URL=http://payment-service:8012
+        - NEXT_PUBLIC_SEARCH_URL=http://search-service:8013
     ports:
       - "3000:3000"
     environment:
