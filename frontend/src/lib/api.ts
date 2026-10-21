@@ -36,12 +36,13 @@ import { ApiError } from './api-errors';
 
 // Base Gateway URL resolved from environment variables with local fallback and tunnel resilience
 const getApiBaseUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_GATEWAY_URL) return process.env.NEXT_PUBLIC_GATEWAY_URL;
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return ''; // Remote tunnel/domain: leverage Next.js rewrite proxy
+  if (typeof window !== 'undefined') {
+    // In the browser, always use relative paths so requests stay on the current origin
+    // (whether accessing via localhost, custom domain, or a Cloudflare tunnel URL).
+    // This completely eliminates CORS preflight failures and mixed-content blocking.
+    return '';
   }
-  return 'http://localhost:8000';
+  return process.env.NEXT_PUBLIC_GATEWAY_URL || process.env.NEXT_PUBLIC_API_URL || 'http://api-gateway:8000';
 };
 const API_BASE_URL = getApiBaseUrl();
 
