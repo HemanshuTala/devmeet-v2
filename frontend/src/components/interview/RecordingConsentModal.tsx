@@ -33,7 +33,6 @@ import {
   Square,
   AlertCircle,
 } from 'lucide-react';
-import { videoApi } from '@/lib/api';
 
 /**
  * Props accepted by RecordingConsentModal.
@@ -47,7 +46,7 @@ interface RecordingConsentModalProps {
   userId: string;
   /** Current subscription tier ('free' | 'pro' | 'enterprise'). */
   userPlan: 'free' | 'pro' | 'enterprise';
-  /** Callback fired after recording is successfully initialized on the backend. */
+  /** Callback fired after recording consent is confirmed. */
   onConsent: () => void;
   /** Callback fired if the user cancels, closes, or skips recording. */
   onDecline: () => void;
@@ -70,26 +69,15 @@ export default function RecordingConsentModal({
 }: RecordingConsentModalProps) {
   // Checkbox consent agreement state
   const [agreed, setAgreed] = useState(false);
-  // Async submission state
-  const [isStarting, setIsStarting] = useState(false);
   // Error message state
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Dispatches recording start request to video-service after user provides consent.
+   * Confirms user recording consent and delegates start to session recorder.
    */
-  const handleStart = async () => {
+  const handleStart = () => {
     if (!agreed) return;
-    setIsStarting(true);
-    setError(null);
-    try {
-      await videoApi.startRecording(roomName, userId, true);
-      onConsent();
-    } catch (err: any) {
-      setError(err?.message || 'Failed to start recording. Please try again.');
-    } finally {
-      setIsStarting(false);
-    }
+    onConsent();
   };
 
   /**
@@ -262,24 +250,17 @@ export default function RecordingConsentModal({
               <button
                 id="recording-consent-confirm-btn"
                 onClick={handleStart}
-                disabled={!agreed || isStarting}
+                disabled={!agreed}
                 className={`flex-1 px-4 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${
-                  agreed && !isStarting
+                  agreed
                     ? 'bg-red-500 hover:bg-red-600 text-white shadow-sm shadow-red-500/25'
                     : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               >
-                {isStarting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Starting…
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                    Start Recording
-                  </span>
-                )}
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  Start Recording
+                </span>
               </button>
             </div>
           </motion.div>
