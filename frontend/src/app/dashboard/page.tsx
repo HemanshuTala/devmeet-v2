@@ -177,43 +177,44 @@ export default function DashboardPage() {
       }));
     }
     const completed = filteredSessions
-      .filter((s: any) => s.status === 'completed')
+      .filter((s: any) => s.status === 'completed' && (s.score !== undefined || s.overall_score !== undefined))
       .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     if (completed.length === 0) return [];
-    return completed.map((s: any, i: number) => ({
+    return completed.map((s: any) => ({
       date: new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      score: 65 + (i % 5) * 5,
+      score: Math.round(s.score ?? s.overall_score ?? 0),
     }));
   }, [filteredSessions, scoreTrendData]);
 
   // 5-axis competency score matrix calculation
   const radarScores = useMemo(() => {
-    if (dashboardData?.type_breakdown && Object.keys(dashboardData.type_breakdown).length > 0) {
-      const breakdown = dashboardData.type_breakdown;
-      const totalSess = dashboardData.total_sessions || 1;
-      const dsaRatio = ((breakdown.dsa ?? 0) / totalSess) * 100;
-      const behavRatio = ((breakdown.behavioral ?? 0) / totalSess) * 100;
-      const sysRatio = ((breakdown.system_design ?? 0) / totalSess) * 100;
-      const baseScore = dashboardData.average_score ?? 70;
+    // If dashboardData provides rubric domain scores, use candidate's actual competency averages
+    if (dashboardData && (dashboardData.total_sessions > 0 || dashboardData.avg_score > 0)) {
+      const typeBreakdown = Array.isArray(dashboardData.type_breakdown)
+        ? dashboardData.type_breakdown
+        : [];
+      const dsaEntry = typeBreakdown.find((t: any) => t.type === 'dsa');
+      const behavEntry = typeBreakdown.find((t: any) => t.type === 'behavioral');
+      const sysEntry = typeBreakdown.find((t: any) => t.type === 'system_design');
+
       return {
-        dsa: Math.min(Math.round(baseScore * 0.9 + dsaRatio * 0.1), 100),
-        behavioral: Math.min(Math.round(baseScore * 0.85 + behavRatio * 0.1), 100),
-        system_design: Math.min(Math.round(baseScore * 0.8 + sysRatio * 0.1), 100),
-        communication: Math.min(Math.round(baseScore * 1.05), 100),
-        optimizations: Math.min(Math.round(baseScore * 0.95), 100),
+        dsa: Math.round(dsaEntry?.avg_score || dashboardData.avg_problem_solving_score || dashboardData.avg_score || 0),
+        behavioral: Math.round(behavEntry?.avg_score || dashboardData.avg_behavioral_score || dashboardData.avg_score || 0),
+        system_design: Math.round(sysEntry?.avg_score || dashboardData.avg_score || 0),
+        communication: Math.round(dashboardData.avg_communication_score || dashboardData.avg_score || 0),
+        optimizations: Math.round(dashboardData.avg_code_quality_score || dashboardData.avg_score || 0),
       };
     }
-    if (filteredSessions.length === 0) {
-      return { dsa: 75, behavioral: 80, system_design: 60, communication: 85, optimizations: 70 };
-    }
+
+    // Default clean zero baseline when no interviews have been completed yet
     return {
-      dsa: Math.min(filteredSessions.filter((s: any) => s.interview_type === 'dsa').length * 15 + 65, 95),
-      behavioral: Math.min(filteredSessions.filter((s: any) => s.interview_type === 'behavioral').length * 15 + 60, 95),
-      system_design: Math.min(filteredSessions.filter((s: any) => s.interview_type === 'system_design').length * 15 + 55, 95),
-      communication: 82,
-      optimizations: 76,
+      dsa: 0,
+      behavioral: 0,
+      system_design: 0,
+      communication: 0,
+      optimizations: 0,
     };
-  }, [filteredSessions, dashboardData]);
+  }, [dashboardData]);
 
   // Loading skeleton while verifying user authentication
   if (authLoading || !user) {

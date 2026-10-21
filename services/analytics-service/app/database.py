@@ -4,37 +4,43 @@ ANALYTICS SERVICE — POSTGRESQL AGGREGATION & DATA ACCESS LAYER
 ================================================================================
 Role & Responsibility:
   This module acts as the analytical query engine and event ingestion store for the
-  entire platform. It collects telemetry from auth-service, orchestrator-service,
-  code-execution-service, and feedback-service, providing:
-    1. Event Ingestion (`save_event`): High-throughput persistence of raw platform
-       telemetry into `analytics_events` (supporting JSONB event properties).
+  entire platform. It directly queries primary database entities (sessions,
+  feedback_reports, user_profiles, code_submissions) as well as the event log,
+  providing:
+    1. Event Ingestion (`save_event`): Persistence of platform telemetry into `analytics_events`.
     2. Executive Metrics KPI Compilation: Computes platform-wide metrics (total users,
        completed sessions, active rooms, score averages, language distributions).
     3. Candidate Performance Telemetry: Calculates per-user performance trends,
        consecutive-day interview streaks, track mastery distributions, and score timelines.
-    4. Funnel & Retention Analysis: Computes conversion rates across Session Started ->
-       Completed -> Feedback Viewed, as well as D1/D7/D30 user retention metrics.
-    5. In-Memory & Demo Fallback: If PostgreSQL is unreachable or a new candidate has
-       no interview history, provides realistic baseline visualizations so UI dashboards
-       render smoothly without blank errors.
+    4. Funnel & Retention Analysis: Computes conversion rates across Session Created ->
+       Started -> Completed -> Feedback Generated, and real cohort retention metrics.
+    5. Clean Zero Baseline: If a candidate has no completed interviews yet, cleanly
+       reports true 0-state metrics without injecting fabricated mock or demo data.
 ================================================================================
 """
 
 import os
 import asyncpg
 import json
+import uuid
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, date
+
+
+def is_valid_uuid(val: Any) -> bool:
+    """Checks whether the given value is a syntactically valid UUID string."""
+    if not val:
+        return False
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 
 class AnalyticsDatabase:
     """
     Data access and aggregation engine for platform analytics and user progression metrics.
-
-    Attributes:
-      pool (Optional[asyncpg.Pool]): PostgreSQL async connection pool.
-      use_db (bool): True if PostgreSQL connection succeeded; False if falling back to local memory.
-      local_events (List[Dict[str, Any]]): Ephemeral list of events kept in RAM during DB outages.
     """
 
     def __init__(self):
@@ -46,11 +52,6 @@ class AnalyticsDatabase:
     async def connect(self):
         """
         Initializes the asyncpg connection pool using environment credentials.
-
-        Configuration:
-          - Min pool size: 2 connections.
-          - Max pool size: 10 connections.
-          - Command timeout: 15 seconds to prevent runaway analytical aggregations from hanging.
         """
         try:
             self.pool = await asyncpg.create_pool(
@@ -83,14 +84,7 @@ class AnalyticsDatabase:
         ip_address: Optional[str],
     ):
         """
-        Records an analytics event into the database or memory buffer.
-
-        Parameters:
-          event_type (str): Categorized action (e.g., 'session_started', 'code_executed').
-          user_id (Optional[str]): Authenticated candidate identifier.
-          session_id (Optional[str]): Associated interview session UUID.
-          properties (Optional[dict]): Contextual metadata dictionary.
-          ip_address (Optional[str]): Originating client IP address.
+        Records an analytics event into the database.
         """
         event_time = datetime.utcnow()
         props_str = json.dumps(properties or {})
@@ -103,7 +97,12 @@ class AnalyticsDatabase:
                         INSERT INTO analytics_events (event_type, user_id, session_id, properties, ip_address, created_at)
                         VALUES ($1, $2, $3, $4, $5, $6)
                         """,
-                        event_type, user_id, session_id, props_str, ip_address, event_time,
+                        event_type,
+                        str(user_id) if user_id else None,
+                        str(session_id) if session_id else None,
+                        props_str,
+                        ip_address,
+                        event_time,
                     )
                 return
             except Exception as e:
@@ -121,42 +120,37 @@ class AnalyticsDatabase:
 
     async def get_metrics(self) -> dict:
         """
-        Aggregates system-wide key performance indicators (KPIs) from events.
-
-        Returns:
-          dict: Total users, total sessions, active rooms, average score, and track breakdown.
+        Aggregates system-wide key performance indicators (KPIs) from real platform tables.
         """
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
                     row = await conn.fetchrow("""
                         SELECT
-                            COUNT(DISTINCT user_id) FILTER (WHERE user_id IS NOT NULL) as total_users,
-                            COUNT(DISTINCT session_id) FILTER (WHERE session_id IS NOT NULL) as total_sessions,
-                            COUNT(*) FILTER (WHERE event_type = 'session_completed') as completed_sessions,
-                            COUNT(*) FILTER (WHERE event_type = 'session_started') as started_sessions,
-                            COUNT(*) FILTER (WHERE event_type = 'session_cancelled') as cancelled_sessions,
-                            COUNT(*) FILTER (WHERE event_type = 'session_created' AND created_at >= NOW() - INTERVAL '1 day') as sessions_today,
-                            AVG(CAST(properties->>'overall_score' AS INTEGER)) FILTER (WHERE event_type = 'feedback_generated' AND properties->>'overall_score' IS NOT NULL) as avg_score,
-                            COUNT(*) FILTER (WHERE event_type = 'session_created' AND properties->>'interview_type' = 'dsa') as dsa_sessions,
-                            COUNT(*) FILTER (WHERE event_type = 'session_created' AND properties->>'interview_type' = 'behavioral') as behavioral_sessions,
-                            COUNT(*) FILTER (WHERE event_type = 'session_created' AND properties->>'interview_type' = 'system_design') as system_design_sessions
-                        FROM analytics_events
+                            (SELECT COUNT(*) FROM user_profiles)                                      AS total_users,
+                            (SELECT COUNT(*) FROM sessions)                                           AS total_sessions,
+                            (SELECT COUNT(*) FROM sessions WHERE status = 'completed')                AS completed_sessions,
+                            (SELECT COUNT(*) FROM sessions WHERE status IN ('in_progress', 'active')) AS active_sessions,
+                            (SELECT COUNT(*) FROM sessions WHERE created_at >= NOW() - INTERVAL '1 day') AS sessions_today,
+                            (SELECT COALESCE(ROUND(AVG(overall_score)::numeric, 1), 0.0)
+                             FROM feedback_reports WHERE overall_score > 0)                           AS avg_score,
+                            (SELECT COUNT(*) FROM sessions WHERE interview_type = 'dsa')              AS dsa_sessions,
+                            (SELECT COUNT(*) FROM sessions WHERE interview_type = 'behavioral')       AS behavioral_sessions,
+                            (SELECT COUNT(*) FROM sessions WHERE interview_type = 'system_design')    AS system_design_sessions
                     """)
-                    active_sessions = max(0, (row["started_sessions"] or 0) - (row["completed_sessions"] or 0) - (row["cancelled_sessions"] or 0))
                     return {
                         "total_users": row["total_users"] or 0,
                         "total_sessions": row["total_sessions"] or 0,
                         "completed_sessions": row["completed_sessions"] or 0,
-                        "active_sessions": active_sessions,
+                        "active_sessions": row["active_sessions"] or 0,
                         "sessions_today": row["sessions_today"] or 0,
-                        "avg_session_score": round(float(row["avg_score"] or 0), 1),
+                        "avg_session_score": float(row["avg_score"] or 0.0),
                         "dsa_sessions": row["dsa_sessions"] or 0,
                         "behavioral_sessions": row["behavioral_sessions"] or 0,
                         "system_design_sessions": row["system_design_sessions"] or 0,
                     }
             except Exception as e:
-                print(f"Analytics DB: Failed to query DB metrics: {e}. Using in-memory fallback calculations.")
+                print(f"Analytics DB: Failed to query DB metrics: {e}")
 
         # Local fallback calculation using in-memory event array
         events = self.local_events
@@ -164,51 +158,32 @@ class AnalyticsDatabase:
         sids = {e["session_id"] for e in events if e["session_id"]}
         completed = sum(1 for e in events if e["event_type"] == "session_completed")
         started = sum(1 for e in events if e["event_type"] == "session_started")
-        cancelled = sum(1 for e in events if e["event_type"] == "session_cancelled")
-        active = max(0, started - completed - cancelled)
-
-        one_day_ago = datetime.utcnow() - timedelta(days=1)
-        today_sessions = sum(1 for e in events if e["event_type"] == "session_created" and e["created_at"] >= one_day_ago)
-
-        feedback_events = [e for e in events if e["event_type"] == "feedback_generated"]
-        scores = [int(e["properties"].get("overall_score", 0)) for e in feedback_events if "overall_score" in e["properties"]]
-        avg_score = sum(scores) / len(scores) if scores else 0.0
-
-        created_events = [e for e in events if e["event_type"] == "session_created"]
-        dsa = sum(1 for e in created_events if e["properties"].get("interview_type") == "dsa")
-        beh = sum(1 for e in created_events if e["properties"].get("interview_type") == "behavioral")
-        sys = sum(1 for e in created_events if e["properties"].get("interview_type") == "system_design")
+        active = max(0, started - completed)
 
         return {
             "total_users": len(uids),
             "total_sessions": len(sids),
             "completed_sessions": completed,
             "active_sessions": active,
-            "sessions_today": today_sessions,
-            "avg_session_score": round(avg_score, 1),
-            "dsa_sessions": dsa,
-            "behavioral_sessions": beh,
-            "system_design_sessions": sys,
+            "sessions_today": 0,
+            "avg_session_score": 0.0,
+            "dsa_sessions": 0,
+            "behavioral_sessions": 0,
+            "system_design_sessions": 0,
         }
 
     async def get_daily_sessions(self, days: int = 30) -> list:
         """
-        Compiles trailing daily interview creation counts.
-
-        Parameters:
-          days (int): Lookback window in days (default: 30).
-
-        Returns:
-          list: Array of `{"date": "YYYY-MM-DD", "count": int}` dicts sorted chronologically.
+        Compiles trailing daily interview creation counts from the real sessions table.
         """
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
                     rows = await conn.fetch(
                         """
-                        SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as date_str, COUNT(*) as count 
-                        FROM analytics_events 
-                        WHERE event_type = 'session_created' AND created_at >= NOW() - $1 * INTERVAL '1 day'
+                        SELECT TO_CHAR(created_at, 'YYYY-MM-DD') AS date_str, COUNT(*) AS count 
+                        FROM sessions 
+                        WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
                         GROUP BY date_str
                         ORDER BY date_str ASC
                         """,
@@ -218,76 +193,47 @@ class AnalyticsDatabase:
             except Exception as e:
                 print(f"Analytics DB: Failed to query daily sessions: {e}")
 
-        # Local in-memory calculation
-        counts = {}
-        cutoff = datetime.utcnow() - timedelta(days=days)
-        for e in self.local_events:
-            if e["event_type"] == "session_created" and e["created_at"] >= cutoff:
-                date_str = e["created_at"].strftime("%Y-%m-%d")
-                counts[date_str] = counts.get(date_str, 0) + 1
-
-        sorted_dates = sorted(counts.keys())
-        return [{"date": d, "count": counts[d]} for d in sorted_dates]
+        return []
 
     async def get_language_distribution(self) -> list:
         """
-        Aggregates frequency of code execution by programming language.
-
-        Returns:
-          list: Array of `{"language": str, "count": int}` dicts sorted by popularity descending.
+        Aggregates frequency of code execution by programming language from code_submissions.
         """
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
                     rows = await conn.fetch(
                         """
-                        SELECT properties->>'language' as lang, COUNT(*) as count
-                        FROM analytics_events
-                        WHERE event_type = 'code_executed' AND properties->>'language' IS NOT NULL
+                        SELECT LOWER(language) AS lang, COUNT(*) AS count
+                        FROM code_submissions
+                        WHERE language IS NOT NULL AND TRIM(language) != ''
                         GROUP BY lang
                         ORDER BY count DESC
                         """
                     )
-                    return [{"language": r["lang"], "count": r["count"]} for r in rows if r["lang"]]
+                    if rows:
+                        return [{"language": r["lang"], "count": r["count"]} for r in rows]
             except Exception as e:
                 print(f"Analytics DB: Failed to query language distribution: {e}")
 
-        # Local in-memory calculation
-        counts = {}
-        for e in self.local_events:
-            if e["event_type"] == "code_executed":
-                lang = e["properties"].get("language")
-                if lang:
-                    counts[lang] = counts.get(lang, 0) + 1
-        return [{"language": l, "count": counts[l]} for l in sorted(counts, key=counts.get, reverse=True)]
+        return []
 
     async def get_score_distribution(self) -> list:
         """
-        Compiles candidate score distribution into 5 histogram brackets (0-20, 21-40, ...).
-
-        Returns:
-          list: Array of `{"range": str, "count": int}` dicts.
+        Compiles candidate score distribution into 5 histogram brackets from real feedback_reports.
         """
-        ranges = [
-            ("0-20", 0, 20),
-            ("21-40", 21, 40),
-            ("41-60", 41, 60),
-            ("61-80", 61, 80),
-            ("81-100", 81, 100),
-        ]
-
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
                     row = await conn.fetchrow("""
                         SELECT
-                            COUNT(*) FILTER (WHERE CAST(properties->>'overall_score' AS INTEGER) BETWEEN 0 AND 20) as r1,
-                            COUNT(*) FILTER (WHERE CAST(properties->>'overall_score' AS INTEGER) BETWEEN 21 AND 40) as r2,
-                            COUNT(*) FILTER (WHERE CAST(properties->>'overall_score' AS INTEGER) BETWEEN 41 AND 60) as r3,
-                            COUNT(*) FILTER (WHERE CAST(properties->>'overall_score' AS INTEGER) BETWEEN 61 AND 80) as r4,
-                            COUNT(*) FILTER (WHERE CAST(properties->>'overall_score' AS INTEGER) BETWEEN 81 AND 100) as r5
-                        FROM analytics_events
-                        WHERE event_type = 'feedback_generated'
+                            COUNT(*) FILTER (WHERE overall_score BETWEEN 0 AND 20)   AS r1,
+                            COUNT(*) FILTER (WHERE overall_score BETWEEN 21 AND 40)  AS r2,
+                            COUNT(*) FILTER (WHERE overall_score BETWEEN 41 AND 60)  AS r3,
+                            COUNT(*) FILTER (WHERE overall_score BETWEEN 61 AND 80)  AS r4,
+                            COUNT(*) FILTER (WHERE overall_score BETWEEN 81 AND 100) AS r5
+                        FROM feedback_reports
+                        WHERE overall_score IS NOT NULL AND overall_score > 0
                     """)
                     return [
                         {"range": "0-20", "count": row["r1"] or 0},
@@ -299,29 +245,41 @@ class AnalyticsDatabase:
             except Exception as e:
                 print(f"Analytics DB: Failed to query score distribution: {e}")
 
-        # Local in-memory calculation
-        results = {r[0]: 0 for r in ranges}
-        for e in self.local_events:
-            if e["event_type"] == "feedback_generated":
-                score = int(e["properties"].get("overall_score", 0))
-                for label, low, high in ranges:
-                    if low <= score <= high:
-                        results[label] += 1
-                        break
-        return [{"range": r, "count": results[r]} for r in results]
+        return [
+            {"range": "0-20", "count": 0},
+            {"range": "21-40", "count": 0},
+            {"range": "41-60", "count": 0},
+            {"range": "61-80", "count": 0},
+            {"range": "81-100", "count": 0},
+        ]
 
     async def get_user_stats(self, user_id: str, days: int = 90) -> dict:
         """
         Compiles personalized performance dashboard metrics for an authenticated user.
-
-        Parameters:
-          user_id (str): Candidate's UUID.
-          days (int): Lookback window in days (default: 90).
-
-        Returns:
-          dict: Total sessions, completion rate, average score, metric averages,
-                consecutive day streak, and best/worst interview track.
+        If user has no completed sessions, returns clean zero-state metrics (never fake demo data).
         """
+        empty_stats = {
+            "total_sessions": 0,
+            "completed_sessions": 0,
+            "completion_rate": 0.0,
+            "avg_score": 0.0,
+            "dsa_sessions": 0,
+            "behavioral_sessions": 0,
+            "system_design_sessions": 0,
+            "avg_communication_score": 0.0,
+            "avg_problem_solving_score": 0.0,
+            "avg_code_quality_score": 0.0,
+            "avg_behavioral_score": 0.0,
+            "best_interview_type": None,
+            "worst_interview_type": None,
+            "current_streak_days": 0,
+            "type_breakdown": [],
+            "data_source": "database",
+        }
+
+        if not is_valid_uuid(user_id):
+            return empty_stats
+
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
@@ -344,8 +302,12 @@ class AnalyticsDatabase:
                         WHERE s.user_id = $1::uuid
                           AND s.created_at >= NOW() - ($2 * INTERVAL '1 day')
                     """, user_id, days)
+
                     total = row["total"] or 0
                     completed = row["completed"] or 0
+
+                    if total == 0:
+                        return empty_stats
 
                     # Compute best/worst interview track
                     type_scores = await conn.fetch("""
@@ -361,7 +323,7 @@ class AnalyticsDatabase:
                         ORDER BY avg_score DESC
                     """, user_id, days)
 
-                    # Consecutive active day streak calculation
+                    # Consecutive active practice day streak
                     streak_rows = await conn.fetch("""
                         SELECT DISTINCT DATE(s.created_at AT TIME ZONE 'UTC') AS day
                         FROM sessions s
@@ -390,15 +352,15 @@ class AnalyticsDatabase:
                     return {
                         "total_sessions": total,
                         "completed_sessions": completed,
-                        "completion_rate": round(completed / total * 100, 1) if total else 0,
-                        "avg_score": round(float(row["avg_score"] or 0), 1),
+                        "completion_rate": round(completed / total * 100, 1) if total else 0.0,
+                        "avg_score": round(float(row["avg_score"] or 0.0), 1),
                         "dsa_sessions": row["dsa"] or 0,
                         "behavioral_sessions": row["beh"] or 0,
                         "system_design_sessions": row["sys"] or 0,
-                        "avg_communication_score": round(float(row["avg_comm"] or 0), 1),
-                        "avg_problem_solving_score": round(float(row["avg_ps"] or 0), 1),
-                        "avg_code_quality_score": round(float(row["avg_cq"] or 0), 1),
-                        "avg_behavioral_score": round(float(row["avg_beh_score"] or 0), 1),
+                        "avg_communication_score": round(float(row["avg_comm"] or 0.0), 1),
+                        "avg_problem_solving_score": round(float(row["avg_ps"] or 0.0), 1),
+                        "avg_code_quality_score": round(float(row["avg_cq"] or 0.0), 1),
+                        "avg_behavioral_score": round(float(row["avg_beh_score"] or 0.0), 1),
                         "best_interview_type": best_type,
                         "worst_interview_type": worst_type,
                         "current_streak_days": streak,
@@ -406,80 +368,68 @@ class AnalyticsDatabase:
                             {"type": r["interview_type"], "avg_score": float(r["avg_score"]), "count": r["cnt"]}
                             for r in type_scores
                         ],
+                        "data_source": "database",
                     }
             except Exception as e:
                 print(f"Analytics DB: get_user_stats error: {e}")
 
-        # In-memory / Demo fallback
-        user_events = [e for e in self.local_events if e.get("user_id") == user_id]
-        cutoff = datetime.utcnow() - timedelta(days=days)
-        user_events = [e for e in user_events if e["created_at"] >= cutoff]
-
-        if not user_events:
-            return _demo_user_stats()
-
-        created = [e for e in user_events if e["event_type"] == "session_created"]
-        completed = sum(1 for e in user_events if e["event_type"] == "session_completed")
-        total = len({e.get("session_id") for e in created if e.get("session_id")})
-
-        feedback_events = [e for e in user_events if e["event_type"] == "feedback_generated"]
-        scores = [int(e["properties"].get("overall_score", 0)) for e in feedback_events if "overall_score" in e["properties"]]
-        avg_score = round(sum(scores) / len(scores), 1) if scores else 0.0
-
-        dsa = sum(1 for e in created if e["properties"].get("interview_type") == "dsa")
-        beh = sum(1 for e in created if e["properties"].get("interview_type") == "behavioral")
-        sys = sum(1 for e in created if e["properties"].get("interview_type") == "system_design")
-
-        return {
-            "total_sessions": total,
-            "completed_sessions": completed,
-            "completion_rate": round(completed / total * 100, 1) if total else 0,
-            "avg_score": avg_score,
-            "dsa_sessions": dsa,
-            "behavioral_sessions": beh,
-            "system_design_sessions": sys,
-            "avg_communication_score": 0.0,
-            "avg_problem_solving_score": 0.0,
-            "avg_code_quality_score": 0.0,
-            "avg_behavioral_score": 0.0,
-            "best_interview_type": None,
-            "worst_interview_type": None,
-            "current_streak_days": 0,
-            "type_breakdown": [],
-        }
+        return empty_stats
 
     async def get_user_sessions(self, user_id: str, limit: int = 50, offset: int = 0) -> list:
         """
-        Retrieves paginated historical interview sessions for a candidate.
-
-        Parameters:
-          user_id (str): Target candidate UUID.
-          limit (int): Pagination page size.
-          offset (int): Pagination offset.
+        Retrieves paginated historical interview sessions for a candidate directly from sessions table.
         """
+        if not is_valid_uuid(user_id):
+            return []
+
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
                     rows = await conn.fetch(
-                        "SELECT session_id, event_type, properties, created_at FROM analytics_events WHERE user_id = $1 AND event_type = 'session_created' ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+                        """
+                        SELECT
+                            s.id AS session_id,
+                            s.created_at,
+                            s.interview_type,
+                            s.difficulty,
+                            s.status,
+                            s.duration_minutes,
+                            s.target_company,
+                            fr.overall_score
+                        FROM sessions s
+                        LEFT JOIN feedback_reports fr ON fr.session_id = s.id
+                        WHERE s.user_id = $1::uuid
+                        ORDER BY s.created_at DESC
+                        LIMIT $2 OFFSET $3
+                        """,
                         user_id, limit, offset,
                     )
-                    return [{"session_id": r["session_id"], "created_at": r["created_at"].isoformat(), "properties": dict(r["properties"] or {})} for r in rows]
+                    return [
+                        {
+                            "session_id": str(r["session_id"]),
+                            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                            "interview_type": r["interview_type"],
+                            "difficulty": r["difficulty"],
+                            "status": r["status"],
+                            "duration_minutes": r["duration_minutes"],
+                            "target_company": r["target_company"],
+                            "score": r["overall_score"],
+                        }
+                        for r in rows
+                    ]
             except Exception as e:
                 print(f"Analytics DB: get_user_sessions error: {e}")
-        return [e for e in self.local_events if e.get("user_id") == user_id][offset:offset + limit]
+
+        return []
 
     async def get_user_score_trend(self, user_id: str, days: int = 30) -> list:
         """
-        Calculates time-series progression of a candidate's average score over time.
-
-        Parameters:
-          user_id (str): Target candidate UUID.
-          days (int): Lookback period in days.
-
-        Returns:
-          list: Array of `{"date": "YYYY-MM-DD", "score": float}` dicts.
+        Calculates time-series progression of a candidate's average score from real feedback reports.
+        Returns empty list if no completed scored sessions exist (never fake random points).
         """
+        if not is_valid_uuid(user_id):
+            return []
+
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
@@ -502,100 +452,158 @@ class AnalyticsDatabase:
             except Exception as e:
                 print(f"Analytics DB: get_user_score_trend error: {e}")
 
-        # In-memory fallback
-        user_feedback = [
-            e for e in self.local_events
-            if e.get("user_id") == user_id and e["event_type"] == "feedback_generated"
-        ]
-        if user_feedback:
-            cutoff = datetime.utcnow() - timedelta(days=days)
-            points: dict = {}
-            for e in user_feedback:
-                if e["created_at"] >= cutoff:
-                    score = int(e["properties"].get("overall_score", 0))
-                    if score > 0:
-                        d = e["created_at"].strftime("%Y-%m-%d")
-                        points.setdefault(d, []).append(score)
-            return [{"date": d, "score": round(sum(v) / len(v), 1)} for d, v in sorted(points.items())]
-
-        return _demo_score_trend(days)
+        return []
 
     async def get_funnel_metrics(self) -> dict:
         """
-        Computes platform funnel conversion: Started -> Completed -> Feedback Viewed.
+        Computes platform funnel conversion from real session progression: Created -> Started -> Completed -> Feedback.
         """
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
-                    started = await conn.fetchval("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'session_started'") or 0
-                    completed = await conn.fetchval("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'session_completed'") or 0
-                    feedback_viewed = await conn.fetchval("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'feedback_viewed'") or 0
+                    row = await conn.fetchrow("""
+                        SELECT
+                            COUNT(*)                                                               AS created,
+                            COUNT(*) FILTER (WHERE status IN ('in_progress', 'completed', 'paused')) AS started,
+                            COUNT(*) FILTER (WHERE status = 'completed')                           AS completed
+                        FROM sessions
+                    """)
+                    feedback_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM feedback_reports WHERE overall_score IS NOT NULL"
+                    ) or 0
+
+                    created = row["created"] or 0
+                    started = row["started"] or 0
+                    completed = row["completed"] or 0
+
                     return {
                         "funnel": [
-                            {"stage": "Session Started", "count": started},
-                            {"stage": "Session Completed", "count": completed, "rate": round(completed / started * 100, 1) if started else 0},
-                            {"stage": "Feedback Viewed", "count": feedback_viewed, "rate": round(feedback_viewed / completed * 100, 1) if completed else 0},
+                            {
+                                "stage": "Session Created",
+                                "count": created,
+                                "rate": 100.0 if created > 0 else 0.0,
+                            },
+                            {
+                                "stage": "Session Started",
+                                "count": started,
+                                "rate": round(started / created * 100, 1) if created > 0 else 0.0,
+                            },
+                            {
+                                "stage": "Session Completed",
+                                "count": completed,
+                                "rate": round(completed / started * 100, 1) if started > 0 else 0.0,
+                            },
+                            {
+                                "stage": "Feedback Generated",
+                                "count": feedback_count,
+                                "rate": round(feedback_count / completed * 100, 1) if completed > 0 else 0.0,
+                            },
                         ],
                     }
             except Exception as e:
                 print(f"Analytics DB: get_funnel_metrics error: {e}")
-        return {"funnel": [{"stage": "Session Started", "count": 100}, {"stage": "Session Completed", "count": 80, "rate": 80.0}, {"stage": "Feedback Viewed", "count": 65, "rate": 81.25}]}
+
+        return {
+            "funnel": [
+                {"stage": "Session Created", "count": 0, "rate": 0.0},
+                {"stage": "Session Started", "count": 0, "rate": 0.0},
+                {"stage": "Session Completed", "count": 0, "rate": 0.0},
+                {"stage": "Feedback Generated", "count": 0, "rate": 0.0},
+            ]
+        }
 
     async def get_retention_metrics(self) -> dict:
         """
-        Returns Day 1, Day 7, and Day 30 cohort retention statistics.
-        """
-        return {
-            "d1_retention": 68.2,
-            "d7_retention": 42.1,
-            "d30_retention": 28.4,
-            "note": "Cohort retention computed from first-session cohorts",
-        }
-
-    async def get_raw_sessions_for_export(self, days: int = 30, interview_type: str = None) -> list:
-        """
-        Exports raw session telemetry records for CSV download and administrative compliance audits.
+        Computes real cohort retention (D1, D7, D30) from user interview return frequency.
         """
         if self.use_db and self.pool:
             try:
                 async with self.pool.acquire() as conn:
+                    retention_row = await conn.fetchrow("""
+                        WITH user_first_session AS (
+                            SELECT user_id, MIN(created_at) AS first_session_at
+                            FROM sessions
+                            GROUP BY user_id
+                        ),
+                        retention_counts AS (
+                            SELECT
+                                COUNT(DISTINCT u.user_id) FILTER (WHERE u.first_session_at <= NOW() - INTERVAL '1 day') AS eligible_d1,
+                                COUNT(DISTINCT s.user_id) FILTER (WHERE u.first_session_at <= NOW() - INTERVAL '1 day' AND s.created_at >= u.first_session_at + INTERVAL '1 day') AS retained_d1,
+                                COUNT(DISTINCT u.user_id) FILTER (WHERE u.first_session_at <= NOW() - INTERVAL '7 days') AS eligible_d7,
+                                COUNT(DISTINCT s.user_id) FILTER (WHERE u.first_session_at <= NOW() - INTERVAL '7 days' AND s.created_at >= u.first_session_at + INTERVAL '7 days') AS retained_d7,
+                                COUNT(DISTINCT u.user_id) FILTER (WHERE u.first_session_at <= NOW() - INTERVAL '30 days') AS eligible_d30,
+                                COUNT(DISTINCT s.user_id) FILTER (WHERE u.first_session_at <= NOW() - INTERVAL '30 days' AND s.created_at >= u.first_session_at + INTERVAL '30 days') AS retained_d30
+                            FROM user_first_session u
+                            LEFT JOIN sessions s ON s.user_id = u.user_id
+                        )
+                        SELECT * FROM retention_counts
+                    """)
+                    e_d1 = retention_row["eligible_d1"] or 0
+                    r_d1 = retention_row["retained_d1"] or 0
+                    e_d7 = retention_row["eligible_d7"] or 0
+                    r_d7 = retention_row["retained_d7"] or 0
+                    e_d30 = retention_row["eligible_d30"] or 0
+                    r_d30 = retention_row["retained_d30"] or 0
+
+                    d1_rate = round((r_d1 / e_d1) * 100, 1) if e_d1 > 0 else 0.0
+                    d7_rate = round((r_d7 / e_d7) * 100, 1) if e_d7 > 0 else 0.0
+                    d30_rate = round((r_d30 / e_d30) * 100, 1) if e_d30 > 0 else 0.0
+
+                    return {
+                        "d1_retention": d1_rate,
+                        "d7_retention": d7_rate,
+                        "d30_retention": d30_rate,
+                        "eligible_d1_users": e_d1,
+                        "retained_d1_users": r_d1,
+                        "data_source": "database",
+                    }
+            except Exception as e:
+                print(f"Analytics DB: get_retention_metrics error: {e}")
+
+        return {
+            "d1_retention": 0.0,
+            "d7_retention": 0.0,
+            "d30_retention": 0.0,
+            "data_source": "none",
+        }
+
+    async def get_raw_sessions_for_export(self, days: int = 30, interview_type: Optional[str] = None) -> list:
+        """
+        Exports real session telemetry records for CSV export.
+        """
+        if self.use_db and self.pool:
+            try:
+                async with self.pool.acquire() as conn:
+                    query = """
+                        SELECT
+                            s.id AS session_id,
+                            s.user_id,
+                            s.interview_type,
+                            s.difficulty,
+                            s.status,
+                            COALESCE(fr.overall_score, 0) AS score,
+                            s.duration_minutes,
+                            s.created_at
+                        FROM sessions s
+                        LEFT JOIN feedback_reports fr ON fr.session_id = s.id
+                        WHERE s.created_at >= NOW() - ($1 * INTERVAL '1 day')
+                    """
+                    params: list = [days]
                     if interview_type:
-                        rows = await conn.fetch(
-                            """SELECT session_id, user_id, properties, created_at FROM analytics_events
-                               WHERE event_type = 'session_created'
-                                 AND properties->>'interview_type' = $1
-                                 AND created_at >= NOW() - $2 * INTERVAL '1 day'
-                               ORDER BY created_at DESC LIMIT 5000""",
-                            interview_type, days,
-                        )
-                    else:
-                        rows = await conn.fetch(
-                            """SELECT session_id, user_id, properties, created_at FROM analytics_events
-                               WHERE event_type = 'session_created'
-                                 AND created_at >= NOW() - $1 * INTERVAL '1 day'
-                               ORDER BY created_at DESC LIMIT 5000""",
-                            days,
-                        )
-                    return [
-                        {
-                            "session_id": r["session_id"],
-                            "user_id": r["user_id"],
-                            "interview_type": (r["properties"] or {}).get("interview_type", ""),
-                            "difficulty": (r["properties"] or {}).get("difficulty", ""),
-                            "status": (r["properties"] or {}).get("status", ""),
-                            "score": (r["properties"] or {}).get("overall_score", ""),
-                            "duration_minutes": (r["properties"] or {}).get("duration_minutes", ""),
-                            "created_at": r["created_at"].isoformat(),
-                        }
-                        for r in rows
-                    ]
+                        query += " AND s.interview_type = $2"
+                        params.append(interview_type)
+                    query += " ORDER BY s.created_at DESC LIMIT 10000"
+
+                    rows = await conn.fetch(query, *params)
+                    return [dict(r) for r in rows]
             except Exception as e:
                 print(f"Analytics DB: get_raw_sessions_for_export error: {e}")
+
         return []
 
-    async def get_raw_events_for_export(self, days: int = 7, event_type: str = None) -> list:
+    async def get_raw_events_for_export(self, days: int = 7, event_type: Optional[str] = None) -> list:
         """
-        Exports raw granular event logs for data warehouse ingestion.
+        Streams raw clickstream event logs as a CSV file.
         """
         if self.use_db and self.pool:
             try:
@@ -626,59 +634,13 @@ class AnalyticsDatabase:
                         "SELECT COUNT(*) FROM analytics_events WHERE created_at >= NOW() - INTERVAL '1 minute'"
                     ) or 0
                     active = await conn.fetchval(
-                        "SELECT COUNT(*) FROM analytics_events WHERE event_type = 'session_heartbeat' AND created_at >= NOW() - INTERVAL '2 minutes'"
+                        "SELECT COUNT(*) FROM sessions WHERE status IN ('in_progress', 'active')"
                     ) or 0
                     return {"events_per_minute": last_min, "active_sessions_estimate": active}
             except Exception as e:
                 print(f"Analytics DB: get_realtime_stats error: {e}")
-        local_minute_ago = datetime.utcnow() - timedelta(minutes=1)
-        recent = sum(1 for e in self.local_events if e["created_at"] >= local_minute_ago)
-        return {"events_per_minute": recent, "active_sessions_estimate": 0}
 
-
-# ==============================================================================
-# DEMO / FALLBACK GENERATORS (PREVENTS EMPTY CHARTS ON NEW ACCOUNTS)
-# ==============================================================================
-
-def _demo_user_stats() -> dict:
-    """Generates synthetic baseline metrics for newly registered candidate profiles."""
-    return {
-        "total_sessions": 12,
-        "completed_sessions": 9,
-        "completion_rate": 75.0,
-        "avg_score": 68.5,
-        "dsa_sessions": 6,
-        "behavioral_sessions": 4,
-        "system_design_sessions": 2,
-        "avg_communication_score": 71.0,
-        "avg_problem_solving_score": 65.0,
-        "avg_code_quality_score": 70.0,
-        "avg_behavioral_score": 72.0,
-        "best_interview_type": "behavioral",
-        "worst_interview_type": "system_design",
-        "current_streak_days": 3,
-        "type_breakdown": [
-            {"type": "behavioral", "avg_score": 72.0, "count": 4},
-            {"type": "dsa", "avg_score": 68.0, "count": 6},
-            {"type": "system_design", "avg_score": 61.0, "count": 2},
-        ],
-        "data_source": "demo",
-    }
-
-
-def _demo_score_trend(days: int = 30) -> list:
-    """Generates a plausible score progression curve across trailing calendar days."""
-    import random
-    random.seed(42)
-    today = date.today()
-    result = []
-    score = 55.0
-    step = max(1, days // 10)
-    for i in range(0, days, step):
-        d = today - timedelta(days=days - i)
-        score = min(100, max(30, score + random.uniform(-5, 8)))
-        result.append({"date": d.strftime("%Y-%m-%d"), "score": round(score, 1)})
-    return result
+        return {"events_per_minute": 0, "active_sessions_estimate": 0}
 
 
 # Global singleton database instance

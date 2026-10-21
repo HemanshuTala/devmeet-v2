@@ -129,7 +129,6 @@ export default function AnalyticsPage() {
   }
 
   const d = dashboard ?? {};
-  const isDemo = d.data_source === 'demo';
   const points: Array<{ date: string; score: number }> = trendData?.trend ?? [];
 
   const completionRate =
@@ -137,7 +136,7 @@ export default function AnalyticsPage() {
       ? Math.round((d.completed_sessions / d.total_sessions) * 100)
       : (d.completion_rate ?? 0);
 
-  const isEmpty = !dashboardError && d.total_sessions === 0;
+  const isEmpty = !dashboardError && (d.total_sessions === 0 || d.total_sessions === undefined);
 
   return (
     <DashboardShell>
@@ -156,11 +155,6 @@ export default function AnalyticsPage() {
               Comprehensive 90-day trajectory, domain competencies, and score telemetry.
             </p>
           </div>
-          {isDemo && (
-            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 py-1.5 text-xs font-bold text-amber-700 shadow-xs">
-              Demo sample telemetry — complete an interview to see live metrics
-            </span>
-          )}
         </div>
 
         {/* ── Error Banner ── */}
@@ -176,7 +170,7 @@ export default function AnalyticsPage() {
           <StatCard label="Total Interviews" value={d.total_sessions ?? 0} icon={Activity} color="blue" />
           <StatCard label="Completed Sessions" value={d.completed_sessions ?? 0} icon={CheckCircle} color="green" />
           <StatCard label="Average Score" value={d.avg_score > 0 ? `${d.avg_score}%` : '—'} icon={BarChart2} color="purple" />
-          <StatCard label="Completion Rate" value={`${completionRate}%`} icon={Target} color="orange" />
+          <StatCard label="Completion Rate" value={d.total_sessions > 0 ? `${completionRate}%` : '—'} icon={Target} color="orange" />
         </div>
 
         {/* ── Practice Streak & Key Competencies ── */}
@@ -250,10 +244,10 @@ export default function AnalyticsPage() {
               </p>
             </div>
             <div className="flex flex-col gap-4">
-              <ScoreBar label="Communication" value={d.avg_communication_score ?? 82} icon={MessageSquare} />
-              <ScoreBar label="Problem Solving" value={d.avg_problem_solving_score ?? 76} icon={Brain} />
-              <ScoreBar label="Code Quality" value={d.avg_code_quality_score ?? 78} icon={Code} />
-              <ScoreBar label="Behavioral & STAR" value={d.avg_behavioral_score ?? 80} icon={Users} />
+              <ScoreBar label="Communication" value={d.avg_communication_score ?? 0} icon={MessageSquare} />
+              <ScoreBar label="Problem Solving" value={d.avg_problem_solving_score ?? 0} icon={Brain} />
+              <ScoreBar label="Code Quality" value={d.avg_code_quality_score ?? 0} icon={Code} />
+              <ScoreBar label="Behavioral & STAR" value={d.avg_behavioral_score ?? 0} icon={Users} />
             </div>
           </div>
 

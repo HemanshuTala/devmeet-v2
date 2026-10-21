@@ -40,16 +40,17 @@ interface SkillRadarProps {
  * @param {SkillRadarProps} props
  * @returns {JSX.Element} Spider/Radar chart card.
  */
-export default function SkillRadar({ radarScores, scores, totalSessions = 5 }: SkillRadarProps) {
+export default function SkillRadar({ radarScores, scores, totalSessions = 0 }: SkillRadarProps) {
   const activeScores = radarScores || scores || {};
+  const hasScores = Object.values(activeScores).some((val) => typeof val === 'number' && val > 0);
 
   // Formatted data array expected by Recharts RadarChart
   const data = [
-    { subject: 'DSA', score: activeScores.dsa ?? 50, fullMark: 100 },
-    { subject: 'Behavioral', score: activeScores.behavioral ?? 50, fullMark: 100 },
-    { subject: 'System Design', score: activeScores.system_design ?? 50, fullMark: 100 },
-    { subject: 'Communication', score: activeScores.communication ?? 50, fullMark: 100 },
-    { subject: 'Optimizations', score: activeScores.optimizations ?? 50, fullMark: 100 },
+    { subject: 'DSA', score: activeScores.dsa || 0, fullMark: 100 },
+    { subject: 'Behavioral', score: activeScores.behavioral || 0, fullMark: 100 },
+    { subject: 'System Design', score: activeScores.system_design || 0, fullMark: 100 },
+    { subject: 'Communication', score: activeScores.communication || 0, fullMark: 100 },
+    { subject: 'Optimizations', score: activeScores.optimizations || 0, fullMark: 100 },
   ];
 
   return (
@@ -61,7 +62,7 @@ export default function SkillRadar({ radarScores, scores, totalSessions = 5 }: S
           Skill Radar
         </h3>
         <p className="text-slate-500 text-xs mt-0.5 font-medium">
-          Automated mock capability matrix
+          Evaluation rubric capability matrix
         </p>
       </div>
 
@@ -85,11 +86,15 @@ export default function SkillRadar({ radarScores, scores, totalSessions = 5 }: S
       </div>
 
       {/* Baseline Calibration Notice */}
-      {totalSessions < 3 && (
-        <p className="text-[9px] text-slate-500 italic text-center select-none">
-          * Showing calibration baseline. Complete more sessions to calibrate.
+      {!hasScores ? (
+        <p className="text-[10px] text-slate-400 font-medium text-center select-none">
+          Complete mock interviews to populate your personalized skill radar.
         </p>
-      )}
+      ) : totalSessions < 3 ? (
+        <p className="text-[10px] text-slate-400 font-medium text-center select-none">
+          Calibrating from recent evaluations. Complete more sessions for higher precision.
+        </p>
+      ) : null}
     </div>
   );
 }
