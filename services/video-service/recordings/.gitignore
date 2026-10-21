@@ -1,0 +1,5 @@
+# Retain recordings directory structure
+!.gitkeep
+*.webm
+*.mp4
+*.mkv
