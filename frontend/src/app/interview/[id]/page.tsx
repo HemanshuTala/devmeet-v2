@@ -195,36 +195,18 @@ export default function InterviewRoomPage() {
     return () => timer.stopTimer();
   }, [session?.id, session?.status, sessionPaused]);
 
-  // ── Visibility Change Listener: Auto-pause session when candidate leaves tab ──
+  // ── Visibility Change Listener: Keep timer running seamlessly across tab switches ──
   useEffect(() => {
-    if (!session || (session.status !== 'in_progress' && session.status !== 'paused')) return;
-    const handleVisibility = async () => {
+    if (!session || session.status !== 'in_progress') return;
+    const handleVisibility = () => {
       if (document.hidden) {
-        // Tab hidden or blurred: record cheating violation and pause session
+        // Tab backgrounded: stop speech-to-text recording to avoid ambient noise, but DO NOT pause session or timer
         speech.stopRecording();
-        isPausedRef.current = true;
-        setSessionPaused(true);
-        timer.stopTimer();
-        cheating.triggerCheatingViolation('tab_switch');
-        sessionApi.pause(session.id, timer.elapsedSeconds).catch(() => {});
-      } else {
-        // Tab regained focus: attempt seamless resumption
-        if (!isPausedRef.current) return;
-        isPausedRef.current = false;
-        try {
-          const updated = await sessionApi.resume(session.id);
-          setSession(updated);
-          if (updated.elapsed_seconds > 0) timer.setElapsedSeconds(updated.elapsed_seconds);
-          timer.startTimer();
-          setSessionPaused(false);
-        } catch {
-          setChatError('Failed to auto-resume session.');
-        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [session, timer.elapsedSeconds]);
+  }, [session?.status, speech]);
 
   // ── Session Data Fetching & Hydration on Initial Mount ──
   useEffect(() => {

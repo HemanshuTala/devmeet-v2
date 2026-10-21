@@ -44,20 +44,54 @@ interface SessionTimerOptions {
  */
 export function useSessionTimer(sessionId: string | undefined) {
   // Total elapsed session duration in seconds
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // True when heartbeats are failing, prompting an amber connection warning banner
-  const [connectionWarning, setConnectionWarning] = useState(false);
+  const [elapsedSeconds, setElapsedSecondsState] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+  const accumulatedSecondsRef = useRef<number>(0);
 
   // Interval timer references
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Counter tracking consecutive failed heartbeat attempts
   const missedHeartbeatsRef = useRef(0);
+  // True when heartbeats are failing, prompting an amber connection warning banner
+  const [connectionWarning, setConnectionWarning] = useState(false);
+
+  /**
+   * Updates state from exact wall-clock time delta.
+   * Completely immune to browser background tab throttling.
+   */
+  const syncWallClockTime = useCallback(() => {
+    if (startTimeRef.current !== null) {
+      const delta = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const total = accumulatedSecondsRef.current + delta;
+      setElapsedSecondsState(total);
+    }
+  }, []);
+
+  /**
+   * Sets elapsed seconds explicitly (e.g. from session initialization or resume).
+   */
+  const setElapsedSeconds = useCallback((val: number | ((prev: number) => number)) => {
+    setElapsedSecondsState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      accumulatedSecondsRef.current = next;
+      if (startTimeRef.current !== null) {
+        startTimeRef.current = Date.now();
+      }
+      return next;
+    });
+  }, []);
 
   /**
    * Halts the local seconds counter.
    */
   const stopTimer = useCallback(() => {
+    if (startTimeRef.current !== null) {
+      const delta = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      accumulatedSecondsRef.current += delta;
+      setElapsedSecondsState(accumulatedSecondsRef.current);
+      startTimeRef.current = null;
+    }
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -75,14 +109,34 @@ export function useSessionTimer(sessionId: string | undefined) {
   }, []);
 
   /**
-   * Starts or resumes the local 1-second elapsed timer.
+   * Starts or resumes the local elapsed timer using wall-clock timestamps.
    */
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
+    startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      syncWallClockTime();
     }, 1000);
-  }, []);
+  }, [syncWallClockTime]);
+
+  /**
+   * Automatically re-synchronize elapsed seconds whenever the tab gains focus
+   * or changes visibility, ensuring exact wall-clock accuracy across tab switches.
+   */
+  useEffect(() => {
+    const handleSync = () => {
+      syncWallClockTime();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleSync);
+      window.addEventListener('visibilitychange', handleSync);
+      return () => {
+        window.removeEventListener('focus', handleSync);
+        window.removeEventListener('visibilitychange', handleSync);
+      };
+    }
+  }, [syncWallClockTime]);
 
   /**
    * Initiates periodic heartbeat pings every 15 seconds to sync state with orchestrator.

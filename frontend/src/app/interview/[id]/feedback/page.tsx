@@ -17,7 +17,7 @@
  * 7. Celebration Confetti: Fires celebratory particle confetti for high scores (>= 70%).
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ChevronLeft, Award, Download, TrendingUp, AlertTriangle,
