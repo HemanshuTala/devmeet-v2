@@ -101,12 +101,23 @@ export function useMediaStream(addLog: (msg: string) => void) {
   // Auto-request permissions on hook mount (initial page load)
   useEffect(() => { requestPermissions(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bind live MediaStream to the video element's srcObject when stream changes
+  // Bind live MediaStream to the video element's srcObject whenever element mounts or stream changes
+  const bindVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    (videoRef as any).current = el;
+    if (el && stream && el.srcObject !== stream) {
+      el.srcObject = stream;
+      el.play().catch(() => {});
+    }
+  }, [stream]);
+
   useEffect(() => {
     if (!stream) return;
     const el = videoRef.current;
-    if (el) { el.srcObject = stream; el.play().catch(() => {}); }
-  }, [stream, permissionStatus]);
+    if (el && el.srcObject !== stream) {
+      el.srcObject = stream;
+      el.play().catch(() => {});
+    }
+  });
 
   // Enumerate available camera and microphone devices once permission is granted.
   // Also listens for hardware plug/unplug events via devicechange.
@@ -206,7 +217,7 @@ export function useMediaStream(addLog: (msg: string) => void) {
   };
 
   return {
-    stream, videoRef, permissionStatus, videoActive, audioActive, useAudioOnly,
+    stream, videoRef, bindVideoRef, permissionStatus, videoActive, audioActive, useAudioOnly,
     errorMessage, videoDevices, audioDevices, selectedVideoId, selectedAudioId,
     setUseAudioOnly, requestPermissions, getPermissionInstructions,
     changeVideoDevice, changeAudioDevice, toggleVideo, toggleAudio,

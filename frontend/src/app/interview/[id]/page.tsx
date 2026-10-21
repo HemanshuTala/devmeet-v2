@@ -748,24 +748,35 @@ export default function InterviewRoomPage() {
                   ))}
                 </TabsList>
               </div>
-              <AnimatePresence mode="wait">
-                {rightPanelTab === 'video' ? (
-                  <motion.div key="video" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="flex-1 overflow-hidden">
-                    <VideoPanel
-                      sessionId={session.id}
-                      userDisplayName={user?.display_name || user?.email || 'Candidate'}
-                      userId={user?.id || session?.user_id || `candidate_${session.id.slice(0, 8)}`}
-                      isActive={session.status === 'in_progress'}
-                      aiState={streaming.isAiTyping ? 'thinking' : streaming.messages.length > 0 && streaming.messages[streaming.messages.length - 1].role === 'interviewer' ? 'speaking' : 'listening'}
-                      onProctorViolation={cheating.triggerCheatingViolation}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div key="tips" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="flex-1 overflow-hidden">
-                    <InterviewTipsPanel type={session.interview_type} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <div className="flex-1 flex flex-col overflow-hidden relative">
+                {/* Live Video Panel - NEVER UNMOUNTED so camera stream and WebRTC stay active */}
+                <div
+                  className={`w-full transition-all duration-300 ease-in-out ${
+                    rightPanelTab === 'video'
+                      ? 'flex-1 h-full overflow-hidden'
+                      : 'h-[145px] flex-shrink-0 border-b border-slate-200 shadow-sm'
+                  }`}
+                >
+                  <VideoPanel
+                    sessionId={session.id}
+                    userDisplayName={user?.display_name || user?.email || 'Candidate'}
+                    userId={user?.id || session?.user_id || `candidate_${session.id.slice(0, 8)}`}
+                    isActive={session.status === 'in_progress'}
+                    aiState={streaming.isAiTyping ? 'thinking' : streaming.messages.length > 0 && streaming.messages[streaming.messages.length - 1].role === 'interviewer' ? 'speaking' : 'listening'}
+                    onProctorViolation={cheating.triggerCheatingViolation}
+                    compact={rightPanelTab === 'tips'}
+                  />
+                </div>
+
+                {/* When on Tips & Guide tab, tips panel renders below the live video ribbon */}
+                <div
+                  className={`flex-1 flex flex-col overflow-hidden ${
+                    rightPanelTab === 'tips' ? 'flex' : 'hidden'
+                  }`}
+                >
+                  <InterviewTipsPanel type={session.interview_type} />
+                </div>
+              </div>
             </Tabs>
           </section>
         )}

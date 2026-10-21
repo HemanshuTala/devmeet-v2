@@ -196,7 +196,7 @@ export default function VideoPanel({
           {media.permissionStatus === 'granted' && !media.useAudioOnly ? (
             <div className="relative w-full h-full bg-slate-950">
               <video
-                ref={media.videoRef}
+                ref={media.bindVideoRef}
                 autoPlay
                 playsInline
                 muted
@@ -301,7 +301,7 @@ export default function VideoPanel({
           {media.permissionStatus === 'granted' && !media.useAudioOnly ? (
             <div className="relative w-full h-full bg-slate-950">
               <video
-                ref={media.videoRef}
+                ref={media.bindVideoRef}
                 autoPlay
                 playsInline
                 muted
