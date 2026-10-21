@@ -149,6 +149,7 @@ services:
       - "8005:8005"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./services/code-execution-service/app:/app/app
     environment:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672

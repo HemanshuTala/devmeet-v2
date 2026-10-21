@@ -250,10 +250,27 @@ export default function CodeEditorPanel({
           input: r.input || '',
           expected: r.expected_output || '',
         };
+        const actualStr = r.actual_output !== undefined ? String(r.actual_output).trim() : '';
+        const expectedStr = (tc.expected || '').trim();
+        const normActual = actualStr.replace(/\s+/g, '');
+        const normExpected = expectedStr.replace(/\s+/g, '');
+        let isMatch = normActual !== '' && normActual === normExpected;
+        if (!isMatch && normActual.startsWith('[') && normExpected.startsWith('[')) {
+          try {
+            const aArr = JSON.parse(normActual);
+            const eArr = JSON.parse(normExpected);
+            if (Array.isArray(aArr) && Array.isArray(eArr) && aArr.length === eArr.length) {
+              const aSort = [...aArr].sort();
+              const eSort = [...eArr].sort();
+              isMatch = JSON.stringify(aSort) === JSON.stringify(eSort);
+            }
+          } catch (_) {}
+        }
+        const passed = Boolean(r.passed) || isMatch;
         return {
           ...tc,
-          actual: r.actual_output !== undefined ? String(r.actual_output) : '',
-          passed: Boolean(r.passed),
+          actual: actualStr,
+          passed,
           error: r.error,
           timeMs: r.execution_time ? Math.round(r.execution_time * 1000) : undefined,
         };

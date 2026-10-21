@@ -30,6 +30,8 @@ from typing import List, Dict, Any, Optional
 import tempfile
 import os
 import json
+import re
+import ast
 import time
 import logging
 from .executor import CodeExecutor
@@ -349,7 +351,7 @@ if (!output.trim()) {{
                    typeof wordBreak === 'function' ? wordBreak : null;
         if (fn) {{
             const res = fn(...args);
-            if (res !== undefined) output = (Array.isArray(res) || (res !== null && typeof res === 'object')) ? JSON.stringify(res) : String(res);
+            if (res !== undefined) output = (Array.isArray(res)) ? ('[' + res.join(', ') + ']') : ((res !== null && typeof res === 'object') ? JSON.stringify(res) : String(res));
         }}
     }} catch (e) {{
         // ignore fallback errors
@@ -417,21 +419,61 @@ func main() {{
 
     def _compare_outputs(self, actual: str, expected: str) -> bool:
         """
-        Compares candidate output with expected reference output.
-
-        Whitespace & Boolean Normalization:
-          Splits on all consecutive whitespace and joins with a single space.
-          Normalizes booleans ('true' vs 'True').
+        Compares candidate output with expected reference output with multi-format normalization:
+          - Direct string equivalence (after stripping)
+          - Whitespace-collapsed & whitespace-stripped equivalence (e.g. '[0,1]' vs '[0, 1]')
+          - JSON / literal evaluation for arrays, dicts, numbers (e.g. [0, 1] vs [0,1], or unordered pairs)
+          - Boolean normalization ('true' vs 'True')
+          - Numeric equivalence for floating points (tolerance 1e-5)
         """
-        def normalize(s: str) -> str:
-            norm = " ".join(s.split()).strip()
-            if norm.lower() == "true":
-                return "true"
-            if norm.lower() == "false":
-                return "false"
-            return norm
+        act_str = str(actual).strip()
+        exp_str = str(expected).strip()
 
-        return normalize(actual) == normalize(expected)
+        # 1. Exact match
+        if act_str == exp_str:
+            return True
+
+        # 2. Whitespace-insensitive string match (e.g. "[0,1]" == "[0, 1]")
+        clean_act = re.sub(r'\s+', '', act_str)
+        clean_exp = re.sub(r'\s+', '', exp_str)
+        if clean_act and clean_act == clean_exp:
+            return True
+
+        # 3. Boolean normalization
+        if act_str.lower() in ("true", "false") and exp_str.lower() in ("true", "false"):
+            return act_str.lower() == exp_str.lower()
+
+        # 4. JSON / Structured data comparison
+        for parser in (json.loads, ast.literal_eval):
+            try:
+                act_data = parser(act_str)
+                exp_data = parser(exp_str)
+                if act_data == exp_data:
+                    return True
+                # Allow sorted comparison for list results if elements are comparable
+                if isinstance(act_data, list) and isinstance(exp_data, list):
+                    if len(act_data) == len(exp_data):
+                        try:
+                            if sorted(act_data) == sorted(exp_data):
+                                return True
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        # 5. Numeric tolerance
+        try:
+            act_num = float(act_str)
+            exp_num = float(exp_str)
+            if abs(act_num - exp_num) < 1e-5:
+                return True
+        except ValueError:
+            pass
+
+        # 6. Fallback whitespace collapsed
+        norm_act = " ".join(act_str.split())
+        norm_exp = " ".join(exp_str.split())
+        return norm_act == norm_exp
 
     def parse_test_cases_from_json(self, test_cases_json: str) -> List[TestCase]:
         """
