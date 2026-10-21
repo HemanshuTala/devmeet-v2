@@ -42,9 +42,20 @@ interface Feedback {
   overall_score: number;
   technical_score: number;
   communication_score: number;
+  code_quality_score?: number;
+  time_complexity_score?: number;
+  behavioral_score?: number;
   strengths: string[];
   weaknesses: string[];
   recommendations: string[];
+  code_improvements?: string[];
+  question_scores?: {
+    turn: number;
+    question_summary: string;
+    score: number;
+    feedback: string;
+  }[];
+  hiring_recommendation?: string;
   percentile?: { percentile: number; message: string };
   pdf_url?: string;
 }
@@ -116,7 +127,7 @@ export default function InterviewFeedbackPage() {
         }
 
         // Step 2: Generate fresh report from LLM if not found
-        if (!fb || !fb.overall_score) {
+        if (!fb || fb.overall_score == null) {
           try {
             fb = await feedbackApi.generate(sessionId, {
               interview_type: s.interview_type,
@@ -136,13 +147,21 @@ export default function InterviewFeedbackPage() {
 
         // If backend returned valid score, normalize and set
         if (fb && fb.overall_score != null) {
+          const detailed = fb.detailed_feedback || {};
+          const scores = fb.scores || {};
           const normalized: Feedback = {
             overall_score: fb.overall_score ?? 0,
-            technical_score: fb.scores?.problem_solving_score ?? fb.technical_score ?? 0,
-            communication_score: fb.scores?.communication_score ?? fb.communication_score ?? 0,
-            strengths: fb.detailed_feedback?.strengths ?? fb.strengths ?? [],
-            weaknesses: fb.detailed_feedback?.weaknesses ?? fb.weaknesses ?? [],
-            recommendations: fb.detailed_feedback?.recommendations ?? fb.recommendations ?? [],
+            technical_score: scores.problem_solving_score ?? fb.technical_score ?? 0,
+            communication_score: scores.communication_score ?? fb.communication_score ?? 0,
+            code_quality_score: scores.code_quality_score ?? fb.code_quality_score,
+            time_complexity_score: scores.time_complexity_score ?? fb.time_complexity_score,
+            behavioral_score: scores.behavioral_score ?? fb.behavioral_score,
+            strengths: detailed.strengths ?? fb.strengths ?? [],
+            weaknesses: detailed.weaknesses ?? fb.weaknesses ?? [],
+            recommendations: detailed.recommendations ?? fb.recommendations ?? [],
+            code_improvements: detailed.code_improvements ?? fb.code_improvements ?? [],
+            question_scores: detailed.question_scores ?? fb.question_scores ?? [],
+            hiring_recommendation: detailed.hiring_recommendation ?? fb.hiring_recommendation,
             percentile: fb.percentile ?? undefined,
             pdf_url: fb.pdf_url ?? undefined,
           };
@@ -267,18 +286,21 @@ export default function InterviewFeedbackPage() {
     const o = feedback.overall_score;
     const tech = feedback.technical_score;
     const comm = feedback.communication_score;
+    const codeQual = feedback.code_quality_score ?? Math.max(0, Math.round(tech * 0.9));
+    const timeComp = feedback.time_complexity_score ?? Math.max(0, Math.round(tech * 0.8));
 
     if (t === 'dsa') {
       return [
         { subject: 'Problem Solving', value: tech, fullMark: 100 },
-        { subject: 'Code Quality', value: Math.max(0, Math.round(tech * 0.9)), fullMark: 100 },
+        { subject: 'Code Quality', value: codeQual, fullMark: 100 },
         { subject: 'Edge Cases', value: Math.max(0, Math.round(o * 0.85)), fullMark: 100 },
         { subject: 'Communication', value: comm, fullMark: 100 },
-        { subject: 'Efficiency', value: Math.max(0, Math.round(tech * 0.8)), fullMark: 100 },
+        { subject: 'Efficiency', value: timeComp, fullMark: 100 },
       ];
     } else if (t === 'behavioral') {
+      const behav = feedback.behavioral_score ?? tech;
       return [
-        { subject: 'STAR Structure', value: tech, fullMark: 100 },
+        { subject: 'STAR Structure', value: behav, fullMark: 100 },
         { subject: 'Leadership', value: Math.max(0, Math.round(o * 0.9)), fullMark: 100 },
         { subject: 'Communication', value: comm, fullMark: 100 },
         { subject: 'Conciseness', value: Math.max(0, Math.round(o * 0.85)), fullMark: 100 },
@@ -472,6 +494,26 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
             </div>
           </div>
           <div className="flex items-center gap-4 relative">
+            {feedback.hiring_recommendation && (
+              <div
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-sm ${
+                  feedback.hiring_recommendation === 'strong_yes'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : feedback.hiring_recommendation === 'yes'
+                    ? 'bg-blue-50 border-blue-200 text-blue-700'
+                    : feedback.hiring_recommendation === 'borderline'
+                    ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    : 'bg-rose-50 border-rose-200 text-rose-700'
+                }`}
+              >
+                <div>
+                  <p className="text-[10px] uppercase font-bold tracking-wider opacity-80">Verdict</p>
+                  <p className="text-sm font-black capitalize">
+                    {feedback.hiring_recommendation.replace('_', ' ')}
+                  </p>
+                </div>
+              </div>
+            )}
             {feedback.overall_score >= 70 && (
               <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-xl shadow-sm">
                 <Trophy className="w-5 h-5 text-emerald-600" />
@@ -580,8 +622,14 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
           </section>
         )}
 
-        {/* Strengths / Weaknesses / Recommendations */}
-        <FeedbackCards strengths={feedback.strengths} weaknesses={feedback.weaknesses} recommendations={feedback.recommendations} />
+        {/* Strengths / Weaknesses / Recommendations / Improvements */}
+        <FeedbackCards
+          strengths={feedback.strengths}
+          weaknesses={feedback.weaknesses}
+          recommendations={feedback.recommendations}
+          code_improvements={feedback.code_improvements}
+          question_scores={feedback.question_scores}
+        />
 
         {/* Transcript Accordion */}
         {turns.length > 0 && <TranscriptViewer turns={turns} interviewType={session.interview_type} />}
