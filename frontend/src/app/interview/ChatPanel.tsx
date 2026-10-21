@@ -136,6 +136,45 @@ export default function ChatPanel({
     [onInputChange],
   );
 
+  // Contextual quick demo answer suggestions for live presentations
+  const demoAnswers = useMemo(() => {
+    const t = session?.interview_type;
+    if (t === 'dsa') {
+      return [
+        {
+          label: 'O(n) Hash Map Approach',
+          text: 'I can solve Two Sum in O(n) time using a hash map. For each element num at index i, we calculate complement = target - num. If the complement is already in our map, we return [seen[complement], i]. Otherwise, we store seen[num] = i. This achieves O(n) linear time with O(n) auxiliary space.',
+        },
+        {
+          label: 'Complexity & Edge Cases',
+          text: 'Time complexity is O(n) for a single linear pass with O(1) hash map operations. Space complexity is O(n) to store previous elements. Key edge cases include: negative integers, duplicate values, and ensuring the same index is not used twice.',
+        },
+      ];
+    }
+    if (t === 'behavioral') {
+      return [
+        {
+          label: 'STAR: Production Outage',
+          text: 'Situation: During a Black Friday flash sale, our payment gateway began failing with a 35% error spike due to partner timeouts. Task: As senior engineer on call, I had to recover checkout reliability within 15 minutes to prevent customer abandonment. Action: I initiated incident response, enabled dynamic circuit-breaker routing to our secondary gateway, and deployed an async worker queue with idempotency keys. Result: Payment success restored to 99.8% within 9 minutes with zero duplicate billings, saving over $85,000 in transactions.',
+        },
+        {
+          label: 'STAR: Cross-Team Conflict',
+          text: 'Situation: Two teams disagreed on whether to migrate our core API to GraphQL or REST with gRPC. Task: As tech lead, I needed to align both teams on a unified design without delaying our quarterly roadmap. Action: I ran a data-driven benchmark evaluating mobile payload sizes, caching viability, and developer ergonomics, then hosted an alignment workshop. Result: We adopted REST with gRPC for internal microservices and GraphQL for customer clients, cutting mobile payload by 42% and shipping on time.',
+        },
+      ];
+    }
+    return [
+      {
+        label: 'URL Shortener Architecture',
+        text: '1. Requirements: 100M writes/month (~40 writes/sec), 10B reads/month (~4,000 reads/sec, 100:1 read-heavy ratio). Sub-10ms redirect latency, 99.99% availability. 2. API Design: POST /api/v1/shorten {url} returns {short_url}; GET /{short_code} returns HTTP 302 Redirect with Location header. 3. Data & Storage: 64-bit Snowflake ID encoded with Base62 (7 characters for 3.5T URLs). Distributed NoSQL key-value store (DynamoDB/Cassandra) with Redis caching top 20% hot links with LRU eviction.',
+      },
+      {
+        label: '50K QPS Scaling Strategy',
+        text: 'To handle 50K QPS: 1. Deploy stateless API gateways behind ALB. 2. Distributed Redis cluster with read replicas and consistent hashing for in-memory redirection. 3. Database sharding partitioned by short_code hash prefix. 4. Cloudflare CDN edge caching for popular viral short URLs to absorb 80% of read traffic before reaching origin.',
+      },
+    ];
+  }, [session?.interview_type]);
+
   return (
     <section className="flex flex-col border-r border-slate-200 bg-[#f8fafc]" style={{ width: isDSA ? '55%' : '100%' }}>
       {/* Chat header bar: Mode indicators, Voice synthesis toggle, Video toggle */}
@@ -311,6 +350,26 @@ export default function ChatPanel({
 
       {/* Input Composer & Toolbar */}
       <div className="px-4 pb-4 pt-2 border-t border-slate-200 bg-white flex-shrink-0">
+        {/* Quick Demo Response Chips for Live Presentations */}
+        {demoAnswers.length > 0 && (
+          <div className="pb-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <span className="text-[10px] text-indigo-700 font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+              <Sparkles className="w-2.5 h-2.5 text-indigo-600" /> Demo Answers:
+            </span>
+            {demoAnswers.map((demo, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onInputChange(demo.text)}
+                className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 border border-slate-200 text-slate-600 font-medium whitespace-nowrap transition-all cursor-pointer"
+                title="Click to insert demo answer into input field"
+              >
+                {demo.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="bg-white border border-slate-200 p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-200 rounded-xl transition-all shadow-sm">
           {/*
            * Textarea with proctoring anti-cheat handler onPaste:

@@ -20,7 +20,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Code2, MessageSquare, Layout, Plus, BookOpen, ArrowRight } from 'lucide-react';
+import { Code2, MessageSquare, Layout, Plus, BookOpen, ArrowRight, Sparkles, Play } from 'lucide-react';
 import SessionBadge from '@/components/SessionBadge';
 
 /** Valid interview track types */
@@ -181,6 +181,93 @@ export default function QuickSelect() {
           >
             <Plus className="w-3.5 h-3.5" />
             Custom
+          </Link>
+        </div>
+      </div>
+
+      {/* ── Interactive Presentation Demo Showcase ── */}
+      <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-slate-50/80 border border-blue-200/80 rounded-3xl p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Live Interview Demo Mode</h3>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-100 border border-blue-200 px-2.5 py-0.5 rounded-full">
+                  1-Click Presentation Ready
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Ready-to-demo sessions with pre-configured questions, test cases, and solution loaders.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          {/* DSA Demo: Two Sum */}
+          <Link
+            href="/dashboard/create-session?type=dsa&difficulty=easy&focus=Two+Sum&company=Google"
+            className="bg-white border border-blue-100 hover:border-blue-400 p-4 rounded-2xl flex flex-col justify-between hover:shadow-md transition-all group cursor-pointer"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                  DSA Live Demo
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 group-hover:text-blue-600 flex items-center gap-1 transition-colors">
+                  Launch <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors">Two Sum (LeetCode #1)</h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                Includes 3 automated test cases, 1-click O(n) Hash Map solution loader, test runner, and complexity evaluation.
+              </p>
+            </div>
+          </Link>
+
+          {/* Behavioral Demo: STAR Outage */}
+          <Link
+            href="/dashboard/create-session?type=behavioral&difficulty=medium&focus=STAR+Method+Incident+Response&company=Meta"
+            className="bg-white border border-indigo-100 hover:border-indigo-400 p-4 rounded-2xl flex flex-col justify-between hover:shadow-md transition-all group cursor-pointer"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                  Behavioral Demo
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 group-hover:text-indigo-600 flex items-center gap-1 transition-colors">
+                  Launch <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 mb-1 group-hover:text-indigo-600 transition-colors">Production Outage (STAR)</h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                Situation, Task, Action, Result incident response evaluation with quick-response candidate answers.
+              </p>
+            </div>
+          </Link>
+
+          {/* System Design Demo: URL Shortener */}
+          <Link
+            href="/dashboard/create-session?type=system_design&difficulty=hard&focus=Scalable+URL+Shortener&company=Uber"
+            className="bg-white border border-teal-100 hover:border-teal-400 p-4 rounded-2xl flex flex-col justify-between hover:shadow-md transition-all group cursor-pointer"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                  System Design Demo
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 group-hover:text-teal-600 flex items-center gap-1 transition-colors">
+                  Launch <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 mb-1 group-hover:text-teal-600 transition-colors">Distributed URL Shortener</h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                High-scale architecture: Base62 hashing, Cassandra storage, Redis cache tier, and 50K QPS scaling strategy.
+              </p>
+            </div>
           </Link>
         </div>
       </div>
