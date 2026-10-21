@@ -14,7 +14,7 @@ export function LandingHeader() {
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 border-b border-slate-200/60 backdrop-blur-xl bg-white/80 shadow-sm transition-all" role="banner">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <nav role="navigation" className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between" aria-label="Main Navigation">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-500/20 text-white">
@@ -63,7 +63,7 @@ export function LandingHeader() {
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
-      </div>
+      </nav>
 
       {/* Mobile Navigation Dropdown */}
       <AnimatePresence>
