@@ -24,10 +24,12 @@
 
 'use client';
 
+import React, { useState } from 'react';
 import Link from 'next/link';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUserDashboard, useUserScoreTrend } from '@/hooks/queries/useAnalytics';
+import { analyticsApi } from '@/lib/api';
 import StatCard from '@/components/StatCard';
 import {
   BarChart2,
@@ -45,6 +47,10 @@ import {
   Users,
   PlusCircle,
   Sparkles,
+  Download,
+  FileSpreadsheet,
+  RefreshCw,
+  Check,
 } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -131,6 +137,9 @@ export default function AnalyticsPage() {
   const d = dashboard ?? {};
   const points: Array<{ date: string; score: number }> = trendData?.trend ?? [];
 
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
+
   const completionRate =
     d.total_sessions > 0
       ? Math.round((d.completed_sessions / d.total_sessions) * 100)
@@ -138,11 +147,69 @@ export default function AnalyticsPage() {
 
   const isEmpty = !dashboardError && (d.total_sessions === 0 || d.total_sessions === undefined);
 
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    setExportSuccess(false);
+    try {
+      const blob = await analyticsApi.exportSessionsCsv(90);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `DevMeet_Analytics_90d_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 3000);
+    } catch {
+      // Client-side fallback compilation
+      const rows: string[] = [
+        'DEVMEET 90-DAY CANDIDATE PERFORMANCE ANALYTICS',
+        `Export Date,${new Date().toISOString()}`,
+        '',
+        'METRIC,VALUE',
+        `Total Interviews,${d.total_sessions ?? 0}`,
+        `Completed Sessions,${d.completed_sessions ?? 0}`,
+        `Average Score,${d.avg_score ?? 0}%`,
+        `Completion Rate,${completionRate}%`,
+        `Practice Streak Days,${d.current_streak_days ?? 0}`,
+        `Strongest Domain,"${typeLabel(d.best_interview_type)}"`,
+        `Needs Improvement,"${typeLabel(d.worst_interview_type)}"`,
+        '',
+        'COMPETENCY RUBRIC,AVERAGE SCORE',
+        `Communication,${d.avg_communication_score ?? 0}%`,
+        `Problem Solving,${d.avg_problem_solving_score ?? 0}%`,
+        `Code Quality,${d.avg_code_quality_score ?? 0}%`,
+        `Behavioral & STAR,${d.avg_behavioral_score ?? 0}%`,
+      ];
+      if (points.length > 0) {
+        rows.push('');
+        rows.push('HISTORICAL SCORE TREND');
+        rows.push('DATE,SCORE (%)');
+        points.forEach((p) => rows.push(`${p.date},${p.score}`));
+      }
+      const blob = new Blob([rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `DevMeet_Analytics_Summary_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 3000);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <DashboardShell>
       <div className="flex flex-col gap-8 py-4 pb-12">
         {/* ── Page Header ── */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-600 mb-2">
               <Sparkles className="w-3.5 h-3.5" />
@@ -154,6 +221,39 @@ export default function AnalyticsPage() {
             <p className="mt-1 text-sm text-slate-500 font-medium">
               Comprehensive 90-day trajectory, domain competencies, and score telemetry.
             </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCsv}
+              disabled={isExporting}
+              title="Download platform analytics and score history as CSV"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-bold transition-all shadow-xs disabled:opacity-60"
+            >
+              {isExporting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Exporting...</span>
+                </>
+              ) : exportSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-700">Downloaded!</span>
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Download CSV</span>
+                </>
+              )}
+            </button>
+            <Link
+              href="/dashboard/create-session"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs shadow-blue-500/20"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>New Interview</span>
+            </Link>
           </div>
         </div>
 

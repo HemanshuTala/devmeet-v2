@@ -23,6 +23,7 @@ import {
   ChevronLeft, Award, Download, TrendingUp, AlertTriangle,
   RefreshCw, Sparkles, Trophy, Target, Zap, Brain,
   MessageSquare, Code2, Users, RotateCcw, ExternalLink,
+  ChevronDown, FileSpreadsheet, FileText, Check, FileCode,
 } from 'lucide-react';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -77,6 +78,22 @@ export default function InterviewFeedbackPage() {
   const [usingFallback, setUsingFallback] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [lastExported, setLastExported] = useState<string | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    }
+    if (showExportMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showExportMenu]);
 
   // Confetti canvas ref hook
   const confettiRef = useConfetti(showConfetti);
@@ -321,44 +338,126 @@ export default function InterviewFeedbackPage() {
    */
   const handleExportPDF = useCallback(async () => {
     if (!feedback || !sessionId) return;
-    if (feedback.pdf_url && feedback.pdf_url.startsWith('http')) {
-      window.open(feedback.pdf_url, '_blank');
-      return;
-    }
     setIsExporting(true);
+    setShowExportMenu(false);
     try {
       const blob = await feedbackApi.downloadPdf(sessionId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `DevMeet_Feedback_${sessionId.slice(0, 8)}.pdf`;
+      link.download = `DevMeet_Feedback_${session?.interview_type || 'report'}_${sessionId.slice(0, 8)}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      setLastExported('PDF');
     } catch {
       if (feedback.pdf_url) {
         window.open(feedback.pdf_url, '_blank');
+        setLastExported('PDF');
         return;
       }
-      const typeLabel =
-        session?.interview_type === 'dsa'
-          ? 'Algorithms & Data Structures'
-          : session?.interview_type === 'behavioral'
-          ? 'Behavioral (STAR)'
-          : 'System Design';
+      handleExportHTML();
+    } finally {
+      setIsExporting(false);
+    }
+  }, [feedback, sessionId, session]);
 
-      const scoreColor = (s: number) => (s >= 80 ? '#10b981' : s >= 60 ? '#3b82f6' : '#f59e0b');
-      const transcriptRows = turns
-        .map(
-          (t) => `<tr style="border-bottom:1px solid #e2e8f0;">
-            <td style="padding:10px 14px;font-weight:700;color:${t.role === 'interviewer' ? '#3b82f6' : '#1e293b'};white-space:nowrap;vertical-align:top;">${t.role === 'interviewer' ? 'AI' : 'You'}</td>
-            <td style="padding:10px 14px;color:#334155;line-height:1.6;">${t.content}</td>
-          </tr>`
-        )
-        .join('');
+  /**
+   * Generates and downloads a structured, auditable CSV export of all rubrics, scores, and turn dialogue.
+   */
+  const handleExportCSV = useCallback(() => {
+    if (!feedback || !sessionId) return;
+    setShowExportMenu(false);
 
-      const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>DevMeet Feedback Report</title>
+    const typeLabel =
+      session?.interview_type === 'dsa'
+        ? 'Algorithms & Data Structures'
+        : session?.interview_type === 'behavioral'
+        ? 'Behavioral (STAR)'
+        : 'System Design';
+
+    const escapeCsv = (val: string | number | undefined | null) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const lines: string[] = [
+      'DEVMEET AI INTERVIEW PERFORMANCE EVALUATION REPORT',
+      `Session ID,${escapeCsv(sessionId)}`,
+      `Interview Type,${escapeCsv(typeLabel)}`,
+      `Difficulty,${escapeCsv(session?.difficulty || 'Medium')}`,
+      `Export Timestamp,${escapeCsv(new Date().toISOString())}`,
+      '',
+      'EVALUATION METRIC,PERCENTAGE SCORE',
+      `Overall Score,${feedback.overall_score}%`,
+      `Technical Competency,${feedback.technical_score}%`,
+      `Communication & Articulation,${feedback.communication_score}%`,
+      feedback.code_quality_score != null ? `Code Quality & Cleanliness,${feedback.code_quality_score}%` : '',
+      feedback.time_complexity_score != null ? `Algorithmic Complexity & Big-O,${feedback.time_complexity_score}%` : '',
+      feedback.behavioral_score != null ? `Behavioral Alignment & STAR,${feedback.behavioral_score}%` : '',
+      feedback.percentile?.percentile != null ? `Cohort Percentile Benchmark,${feedback.percentile.percentile}%` : '',
+      '',
+      'KEY CANDIDATE STRENGTHS',
+      ...feedback.strengths.map((s, idx) => `${idx + 1},${escapeCsv(s)}`),
+      '',
+      'AREAS FOR IMPROVEMENT',
+      ...feedback.weaknesses.map((w, idx) => `${idx + 1},${escapeCsv(w)}`),
+      '',
+      'ACTIONABLE RECOMMENDATIONS',
+      ...feedback.recommendations.map((r, idx) => `${idx + 1},${escapeCsv(r)}`),
+    ].filter(Boolean);
+
+    if (turns.length > 0) {
+      lines.push('');
+      lines.push('TURN SEQUENCE,SPEAKER,TRANSCRIPT DIALOGUE');
+      turns.forEach((t, idx) => {
+        const speaker = t.role === 'interviewer' || t.role === 'ai' || t.role === 'assistant' ? 'AI Interviewer' : 'Candidate';
+        lines.push(`${idx + 1},${speaker},${escapeCsv(t.content)}`);
+      });
+    }
+
+    const csvContent = lines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `DevMeet_Feedback_${session?.interview_type || 'report'}_${sessionId.slice(0, 8)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setLastExported('CSV');
+  }, [feedback, sessionId, session, turns]);
+
+  /**
+   * Generates and downloads a self-contained responsive offline HTML report.
+   */
+  const handleExportHTML = useCallback(() => {
+    if (!feedback || !sessionId) return;
+    setShowExportMenu(false);
+
+    const typeLabel =
+      session?.interview_type === 'dsa'
+        ? 'Algorithms & Data Structures'
+        : session?.interview_type === 'behavioral'
+        ? 'Behavioral (STAR)'
+        : 'System Design';
+
+    const scoreColor = (s: number) => (s >= 80 ? '#10b981' : s >= 60 ? '#3b82f6' : '#f59e0b');
+    const transcriptRows = turns
+      .map(
+        (t) => `<tr style="border-bottom:1px solid #e2e8f0;">
+          <td style="padding:10px 14px;font-weight:700;color:${t.role === 'interviewer' ? '#3b82f6' : '#1e293b'};white-space:nowrap;vertical-align:top;">${t.role === 'interviewer' ? 'AI' : 'You'}</td>
+          <td style="padding:10px 14px;color:#334155;line-height:1.6;">${t.content}</td>
+        </tr>`
+      )
+      .join('');
+
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>DevMeet Feedback Report</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#1e293b;padding:32px 24px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.06)}h1{font-size:24px;font-weight:800;color:#0f172a}h2{font-size:14px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px}.scores{display:flex;gap:20px;flex-wrap:wrap;margin:18px 0}.score-box{flex:1;min-width:160px;text-align:center;border-radius:12px;padding:20px 10px;border:1px solid #e2e8f0}.score-val{font-size:36px;font-weight:900}ul{list-style:none;display:flex;flex-direction:column;gap:8px}li{padding:10px 14px;border-radius:8px;font-size:13.5px;line-height:1.5}li.strength{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}li.weakness{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}li.rec{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#64748b;background:#f8fafc;border-bottom:2px solid #e2e8f0}.footer{text-align:center;font-size:11px;color:#94a3b8;margin-top:32px}</style></head>
 <body><div style="max-width:860px;margin:0 auto">
 <div class="card"><h1>DevMeet Interview Report</h1><p style="color:#64748b;font-size:13px;margin-top:6px">Session ID: <strong>${sessionId.slice(0, 8)}</strong> · ${typeLabel}</p></div>
@@ -374,18 +473,16 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
 <div class="footer">Generated by DevMeet AI Interview Platform</div>
 </div></body></html>`;
 
-      const blobHtml = new Blob([html], { type: 'text/html' });
-      const url2 = URL.createObjectURL(blobHtml);
-      const link2 = document.createElement('a');
-      link2.href = url2;
-      link2.download = `DevMeet_Feedback_${session?.interview_type}_${sessionId.slice(0, 8)}.html`;
-      document.body.appendChild(link2);
-      link2.click();
-      document.body.removeChild(link2);
-      URL.revokeObjectURL(url2);
-    } finally {
-      setIsExporting(false);
-    }
+    const blobHtml = new Blob([html], { type: 'text/html' });
+    const url2 = URL.createObjectURL(blobHtml);
+    const link2 = document.createElement('a');
+    link2.href = url2;
+    link2.download = `DevMeet_Feedback_${session?.interview_type || 'report'}_${sessionId.slice(0, 8)}.html`;
+    document.body.appendChild(link2);
+    link2.click();
+    document.body.removeChild(link2);
+    URL.revokeObjectURL(url2);
+    setLastExported('HTML');
   }, [session, feedback, turns, sessionId]);
 
   // Loading spinner during LLM evaluation
@@ -449,23 +546,113 @@ ${turns.length > 0 ? `<div class="card"><h2>Transcript</h2><table><thead><tr><th
               <ExternalLink className="w-3.5 h-3.5" />
               View Replay
             </button>
+            {/* Direct Quick CSV Export Button */}
             <button
-              onClick={handleExportPDF}
-              disabled={isExporting}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-blue-100 hover:bg-blue-50 hover:border-blue-200 text-slate-700 text-xs font-bold tracking-wide transition-all disabled:opacity-60 shadow-sm"
+              onClick={handleExportCSV}
+              title="Download raw report, rubric metrics, and dialogue transcript as CSV"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-emerald-200/80 hover:bg-emerald-50/60 hover:border-emerald-300 text-emerald-700 text-xs font-bold tracking-wide transition-all shadow-sm"
             >
-              {isExporting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5" />
-                  Export Report
-                </>
-              )}
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Download CSV</span>
             </button>
+
+            {/* Comprehensive Export Menu Dropdown */}
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => setShowExportMenu((prev) => !prev)}
+                disabled={isExporting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold tracking-wide transition-all disabled:opacity-60 shadow-sm shadow-blue-500/20"
+              >
+                {isExporting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export Report</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                  </>
+                )}
+              </button>
+
+              {/* Floating Dropdown Card */}
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-slate-200/90 shadow-xl z-50 p-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3 py-2 border-b border-slate-100">
+                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Export Formats</p>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">Choose your preferred export file type</p>
+                  </div>
+
+                  <div className="flex flex-col gap-1 mt-1">
+                    {/* PDF Option */}
+                    <button
+                      onClick={handleExportPDF}
+                      className="w-full text-left flex items-start gap-3 p-2.5 rounded-xl hover:bg-blue-50/80 transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">Executive PDF Scorecard</span>
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">.PDF</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
+                          Branded scorecard with percentiles, rubrics & recommendations
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* CSV Option */}
+                    <button
+                      onClick={handleExportCSV}
+                      className="w-full text-left flex items-start gap-3 p-2.5 rounded-xl hover:bg-emerald-50/80 transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">Tabular CSV Data</span>
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">.CSV</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
+                          Raw scores, feedback points & turn-by-turn dialogue
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* HTML Option */}
+                    <button
+                      onClick={handleExportHTML}
+                      className="w-full text-left flex items-start gap-3 p-2.5 rounded-xl hover:bg-purple-50/80 transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-purple-100/80 text-purple-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                        <FileCode className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">Interactive Offline HTML</span>
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">.HTML</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
+                          Self-contained responsive page to view or print anytime
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+
+                  {lastExported && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600">
+                      <Check className="w-3 h-3" />
+                      <span>{lastExported} downloaded successfully</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

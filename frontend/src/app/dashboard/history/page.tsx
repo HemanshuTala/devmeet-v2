@@ -16,7 +16,8 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   History, ChevronLeft, Search, Filter, Clock, Calendar, AlertCircle,
-  ExternalLink, PlayCircle, Award, CheckCircle2, RotateCcw, Building2, Sparkles, Plus
+  ExternalLink, PlayCircle, Award, CheckCircle2, RotateCcw, Building2, Sparkles, Plus,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useSessions } from '@/hooks/queries/useSessions';
@@ -168,6 +169,43 @@ export default function HistoryPage() {
   // Determine if any filter condition is currently divergent from default
   const hasActiveFilters = Boolean(query || typeFilter !== 'all' || difficultyFilter !== 'all' || statusFilter !== 'all' || dateFrom || dateTo);
 
+  // Quick CSV Export Handler
+  const handleExportCsv = () => {
+    if (filteredSessions.length === 0) return;
+    const escapeCsv = (val: any) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const lines = [
+      'Session ID,Interview Type,Difficulty,Target Company,Focus Area,Status,Duration (Min),Score (%),Created At',
+      ...filteredSessions.map((s) =>
+        [
+          escapeCsv(s.id),
+          escapeCsv(s.interview_type),
+          escapeCsv(s.difficulty),
+          escapeCsv(s.target_company || ''),
+          escapeCsv(s.focus_area || ''),
+          escapeCsv(s.status),
+          escapeCsv(s.duration_minutes || s.actual_duration_minutes || 0),
+          escapeCsv(s.score ?? ''),
+          escapeCsv(s.created_at),
+        ].join(',')
+      ),
+    ];
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `DevMeet_History_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <DashboardShell maxWidth="max-w-6xl">
       {loading ? (
@@ -191,13 +229,25 @@ export default function HistoryPage() {
               <p className="text-xs text-slate-500 font-medium">Review your past mock sessions, AI feedback, and code submissions</p>
             </div>
 
-            <Button
-              onClick={() => router.push('/dashboard/create-session')}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              New Session
-            </Button>
+            <div className="flex items-center gap-2.5">
+              <Button
+                variant="outline"
+                onClick={handleExportCsv}
+                disabled={filteredSessions.length === 0}
+                className="border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs flex items-center gap-2"
+                title="Download filtered interview session history as CSV"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Export CSV</span>
+              </Button>
+              <Button
+                onClick={() => router.push('/dashboard/create-session')}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                New Session
+              </Button>
+            </div>
           </div>
 
           {/* Quick Metrics Cards */}

@@ -44,6 +44,13 @@ from .database import db
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 security = HTTPBearer(auto_error=False)
 
+
+@router.get("/health")
+async def health():
+    """Liveness probe under standard API prefix."""
+    return {"status": "healthy", "service": "analytics-service", "postgres_connected": db.use_db}
+
+
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
 
 _analytics_http_client: Optional[httpx.AsyncClient] = None

@@ -206,7 +206,11 @@ async function executeSingleFlightRefresh(): Promise<TokenResponse | null> {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/pdf') || contentType.includes('application/octet-stream')) {
+  if (
+    contentType.includes('application/pdf') ||
+    contentType.includes('application/octet-stream') ||
+    contentType.includes('text/csv')
+  ) {
     return response.blob() as Promise<T>;
   }
   if (contentType.includes('application/json')) {
@@ -457,6 +461,20 @@ export const analyticsApi = {
     request<any>(`/api/v1/analytics/user/${userId}/dashboard?days=${days}`),
   getUserScoreTrend: (userId: string, days = 30) =>
     request<any>(`/api/v1/analytics/user/${userId}/score-trend?days=${days}`),
+  exportSessionsCsv: async (days = 30, interviewType?: string) => {
+    const query = new URLSearchParams({ days: String(days) });
+    if (interviewType) query.set('interview_type', interviewType);
+    return request<Blob>(`/api/v1/analytics/export/sessions.csv?${query.toString()}`, {
+      headers: { Accept: 'text/csv' },
+    });
+  },
+  exportEventsCsv: async (days = 7, eventType?: string) => {
+    const query = new URLSearchParams({ days: String(days) });
+    if (eventType) query.set('event_type', eventType);
+    return request<Blob>(`/api/v1/analytics/export/events.csv?${query.toString()}`, {
+      headers: { Accept: 'text/csv' },
+    });
+  },
 };
 
 /**
@@ -506,10 +524,11 @@ export const searchApi = {
     });
     return request<any>(`/api/v1/search/questions?${qs.toString()}`);
   },
-  getRandom: (interview_type?: string, difficulty?: string) => {
+  getRandom: (interview_type?: string, difficulty?: string, company?: string) => {
     const qs = new URLSearchParams();
     if (interview_type) qs.set('interview_type', interview_type);
     if (difficulty) qs.set('difficulty', difficulty);
+    if (company) qs.set('company', company);
     return request<any>(`/api/v1/search/questions/random?${qs.toString()}`);
   },
 };
