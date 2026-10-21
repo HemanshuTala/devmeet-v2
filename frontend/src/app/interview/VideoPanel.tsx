@@ -195,6 +195,7 @@ export default function VideoPanel({
               />
               <ProctorOverlays
                 activeWarning={proctor.activeWarning}
+                gazeDirection={proctor.gazeDirection}
                 blurPerformanceWarning={proctor.blurPerformanceWarning}
                 modelsLoaded={proctor.modelsLoaded}
                 isDegraded={proctor.isDegraded}
@@ -299,6 +300,7 @@ export default function VideoPanel({
               />
               <ProctorOverlays
                 activeWarning={proctor.activeWarning}
+                gazeDirection={proctor.gazeDirection}
                 blurPerformanceWarning={proctor.blurPerformanceWarning}
                 modelsLoaded={proctor.modelsLoaded}
                 isDegraded={proctor.isDegraded}

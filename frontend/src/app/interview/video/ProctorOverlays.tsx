@@ -6,6 +6,8 @@ import { AlertTriangle, RefreshCw, VideoOff, ShieldCheck } from 'lucide-react';
 interface ProctorOverlaysProps {
   /** Active cheating / face detection warning message */
   activeWarning: string | null;
+  /** Current candidate gaze direction */
+  gazeDirection?: 'aligned' | 'left' | 'right' | 'up' | 'down' | 'none';
   /** Performance / blur warning if WebGL acceleration is slow */
   blurPerformanceWarning: string | null;
   /** Status flag indicating if MediaPipe & COCO-SSD models have finished loading */
@@ -27,6 +29,7 @@ interface ProctorOverlaysProps {
  */
 export function ProctorOverlays({
   activeWarning,
+  gazeDirection = 'aligned',
   blurPerformanceWarning,
   modelsLoaded,
   isDegraded = false,
@@ -39,17 +42,49 @@ export function ProctorOverlays({
 
   return (
     <>
+      {/* Live AI Gaze Alignment Tracking Pill */}
+      {videoActive && (
+        <div
+          className={`absolute ${
+            isSmall ? 'top-2 right-2' : 'top-3 right-3'
+          } z-20 flex items-center gap-1.5 bg-slate-950/85 backdrop-blur-md px-2 py-0.5 rounded-lg text-[9px] font-bold border border-slate-700/60 shadow-sm`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              gazeDirection === 'aligned'
+                ? 'bg-emerald-400 animate-pulse'
+                : gazeDirection === 'left' || gazeDirection === 'right' || gazeDirection === 'up' || gazeDirection === 'down'
+                ? 'bg-amber-400 animate-bounce'
+                : 'bg-rose-500'
+            }`}
+          />
+          <span className="text-slate-300 font-mono tracking-wider text-[9px] uppercase">
+            {gazeDirection === 'aligned'
+              ? 'Gaze: Center'
+              : gazeDirection === 'left'
+              ? 'Gaze: Left ⚠️'
+              : gazeDirection === 'right'
+              ? 'Gaze: Right ⚠️'
+              : gazeDirection === 'up'
+              ? 'Gaze: Up ⚠️'
+              : gazeDirection === 'down'
+              ? 'Gaze: Down ⚠️'
+              : 'Face: Absent ⚠️'}
+          </span>
+        </div>
+      )}
+
       {/* Real-time active violation / warning banner */}
       {activeWarning && (
         <div
           role="alert"
           className={`absolute ${
-            isSmall ? 'top-10 left-2 right-2' : 'top-12 left-3 right-3'
-          } z-20 bg-rose-600/90 backdrop-blur-md border border-rose-500 text-white ${
+            isSmall ? 'top-8 left-2 right-2' : 'top-10 left-3 right-3'
+          } z-30 bg-rose-600/95 backdrop-blur-md border border-rose-400 text-white ${
             isSmall ? 'text-[9px] py-1 px-2 rounded-lg' : 'text-xs py-2 px-3 rounded-xl'
-          } font-bold flex items-center gap-1.5 shadow-lg animate-pulse`}
+          } font-bold flex items-center gap-1.5 shadow-xl animate-pulse`}
         >
-          <AlertTriangle className={`${isSmall ? 'w-3 h-3' : 'w-4 h-4'} shrink-0`} />
+          <AlertTriangle className={`${isSmall ? 'w-3 h-3' : 'w-4 h-4'} shrink-0 text-amber-200`} />
           <span className={isSmall ? 'truncate' : ''}>{activeWarning}</span>
         </div>
       )}
