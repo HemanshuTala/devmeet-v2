@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, Calendar, User, Shield, X, Camera, Loader2, Settings, CreditCard } from 'lucide-react';
+import { Mail, Calendar, User, Shield, X, Camera, Loader2, Settings, CreditCard, Sparkles } from 'lucide-react';
 import { authApi, userApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfile, usePlan, useUpdateProfile } from '@/hooks/queries/useUser';
@@ -385,7 +385,7 @@ export default function ProfilePage() {
 
             {/* Subscription badge */}
             <span
-              className={`text-xs font-bold px-3 py-1 rounded-full border ${
+              className={`text-xs font-bold px-3 py-1 rounded-full border inline-flex items-center gap-1 ${
                 currentPlan === 'pro'
                   ? 'bg-blue-50 text-blue-700 border-blue-200'
                   : currentPlan === 'enterprise'
@@ -393,7 +393,8 @@ export default function ProfilePage() {
                   : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}
             >
-              ✦ {displayPlanLabel}
+              <Sparkles className="w-3 h-3 text-current" />
+              <span>{displayPlanLabel}</span>
             </span>
 
             <div className="w-full h-px bg-blue-50" />

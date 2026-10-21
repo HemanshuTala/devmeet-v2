@@ -14,7 +14,7 @@
  *    - Conditionally mounts the staff Admin Panel launcher when `useIsAdmin()` is true.
  * 4. Header Bar & Breadcrumb Title:
  *    - Dynamically computes page title from `pathname` with animated entry transitions.
- *    - Global Search launcher opening the `CommandMenu` (⌘K shortcut).
+ *    - Global Search launcher opening the `CommandMenu` (Ctrl+K shortcut).
  *    - Profile avatar badge and sign-out button.
  * 5. Page Transitions:
  *    - Wraps child page contents in [PageTransition](file:///e:/AI%20INTERVIEW/frontend/src/components/layout/PageTransition.tsx) for fluid route switches.
@@ -347,7 +347,7 @@ export default function DashboardShell({
           </AnimatePresence>
 
           <div className="flex items-center gap-3">
-            {/* Quick Command Launcher (⌘K) */}
+            {/* Quick Command Launcher (Ctrl+K) */}
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
@@ -357,8 +357,8 @@ export default function DashboardShell({
                 <Search className="w-3.5 h-3.5 text-slate-400" />
                 <span>Search...</span>
               </div>
-              <kbd className="text-[10px] font-semibold bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-400">
-                ⌘K
+              <kbd className="text-[10px] font-semibold bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-400 font-mono">
+                Ctrl+K
               </kbd>
             </button>
 

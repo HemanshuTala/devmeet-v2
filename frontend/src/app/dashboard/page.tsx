@@ -251,7 +251,7 @@ export default function DashboardPage() {
                 <span>AI Mock Interview Platform</span>
               </div>
               <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
-                Welcome back, {displayName}! 👋
+                Welcome back, {displayName}!
               </h2>
               <p className="text-slate-300 text-sm leading-relaxed">
                 Ready to level up your technical interview skills? Start a customized DSA or System Design session with real-time AI feedback.

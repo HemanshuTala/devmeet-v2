@@ -395,8 +395,8 @@ export default function InterviewRoomPage() {
     // Free tier: provide complimentary practice hint without navigating away or breaking fullscreen
     if (userPlan === 'free') {
       const freeHint = isDSA
-        ? '💡 Practice Hint: Consider using a hash map to achieve O(n) lookup time by storing previously seen values.'
-        : '💡 Practice Hint: Structure your response around trade-offs, constraints, and edge cases.';
+        ? 'Practice Hint: Consider using a hash map to achieve O(n) lookup time by storing previously seen values.'
+        : 'Practice Hint: Structure your response around trade-offs, constraints, and edge cases.';
       streaming.setHints((prev) => (prev.includes(freeHint) ? prev : [...prev, freeHint]));
       setShowHints(true);
       toast.info('Complimentary practice hint unlocked. Upgrade to Pro for unlimited dynamic AI hints!');

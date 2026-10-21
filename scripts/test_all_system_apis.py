@@ -363,7 +363,7 @@ class ApiTestSuite:
         md.append("|:---|:---|:---|:---:|:---:|:---:|:---:|")
 
         for r in self.results:
-            status_badge = "✅ PASS" if r["success"] else "❌ FAIL"
+            status_badge = "PASS" if r["success"] else "FAIL"
             exp = str(r["expected"])
             md.append(f"| {r['domain']} | `{r['method']}` | `{r['endpoint']}` | `{exp}` | `{r['actual']}` | {r['latency_ms']}ms | {status_badge} |")
 
@@ -379,7 +379,7 @@ class ApiTestSuite:
             d_tot = len(items)
             md.append(f"### {dom} ({d_pass}/{d_tot} passed)\n")
             for it in items:
-                mark = "✅" if it["success"] else "❌"
+                mark = "[PASS]" if it["success"] else "[FAIL]"
                 md.append(f"- **{mark} {it['name']}** (`{it['method']} {it['endpoint']}`)")
                 md.append(f"  - Status: `{it['actual']}` (Expected: `{it['expected']}`) | Latency: `{it['latency_ms']}ms`")
                 if it["preview"]:

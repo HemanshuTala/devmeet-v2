@@ -13,7 +13,7 @@ import dynamic from 'next/dynamic';
 import {
   Code2, Play, CheckCircle, X, Terminal, ChevronDown,
   RotateCcw, Settings2, Maximize2, Minimize2, Clock,
-  FlaskConical, AlertCircle, Loader2,
+  FlaskConical, AlertCircle, Loader2, Sun, Moon,
 } from 'lucide-react';
 import { LANGUAGE_OPTIONS } from './constants';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -306,10 +306,10 @@ export default function CodeEditorPanel({
         {/* Dark/Light theme toggle */}
         <button
           onClick={() => { const t = theme === 'vs-dark' ? 'light' : 'vs-dark'; setTheme(t); localStorage.setItem('dm_editor_theme', t); }}
-          className="px-2 py-1 rounded-md bg-[#3c3c3c] border border-[#555] text-[10px] text-slate-400 hover:text-white font-bold transition-colors"
+          className="px-2 py-1.5 rounded-md bg-[#3c3c3c] border border-[#555] text-slate-400 hover:text-white font-bold transition-colors flex items-center justify-center"
           title="Toggle theme"
         >
-          {theme === 'vs-dark' ? '☀' : '🌙'}
+          {theme === 'vs-dark' ? <Sun className="w-3 h-3 text-amber-400" /> : <Moon className="w-3 h-3 text-blue-400" />}
         </button>
 
         {/* Reset starter code button */}

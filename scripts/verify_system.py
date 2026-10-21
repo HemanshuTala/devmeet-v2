@@ -157,8 +157,8 @@ def generate_report(test_results, db_ok, redis_ok, db_tables):
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("# DevMeet Full System Verification Report\n\n")
         f.write("## 1. Infrastructure Status\n\n")
-        f.write(f"- **PostgreSQL DB**: {'🟢 Healthy' if db_ok else '🔴 Unreachable'}\n")
-        f.write(f"- **Redis Cache**: {'🟢 Healthy' if redis_ok else '🔴 Unreachable'}\n\n")
+        f.write(f"- **PostgreSQL DB**: {'[OK] Healthy' if db_ok else '[ERROR] Unreachable'}\n")
+        f.write(f"- **Redis Cache**: {'[OK] Healthy' if redis_ok else '[ERROR] Unreachable'}\n\n")
         
         f.write("### Database Tables Found\n")
         if db_tables:
@@ -173,7 +173,7 @@ def generate_report(test_results, db_ok, redis_ok, db_tables):
         f.write("| :--- | :--- | :--- | :--- | :--- |\n")
         
         for s, res in sorted(test_results.items()):
-            status = "🟢 Pass" if res.get("passed") else "🔴 Fail"
+            status = "PASS" if res.get("passed") else "FAIL"
             code = res.get("code", "N/A")
             note = res.get("notes", "Unit tests executed successfully.") if res.get("passed") else res.get("error", "Unit test errors encountered.")
             f.write(f"| `{s}` | {res.get('type')} | {status} | `{code}` | {note} |\n")

@@ -210,16 +210,16 @@ all_ok=true
 for url in "${ENDPOINTS[@]}"; do
   status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${url}" 2>/dev/null || echo "000")
   if [[ "$status" == "200" ]]; then
-    echo -e "  ${GREEN}✓${NC} ${url}"
+    echo -e "  ${GREEN}[OK]${NC} ${url}"
   else
-    echo -e "  ${RED}✗${NC} ${url} (HTTP ${status})"
+    echo -e "  ${RED}[FAIL]${NC} ${url} (HTTP ${status})"
     all_ok=false
   fi
 done
 
 echo ""
 if [[ "$all_ok" == true ]]; then
-  info "All services healthy. Deployment complete! 🚀"
+  info "All services healthy. Deployment complete!"
 else
   warn "Some services not yet healthy. Check with:"
   warn "  docker compose -f docker-compose.prod.yml logs --tail=50 <service>"

@@ -34,11 +34,16 @@
 
 import { ApiError } from './api-errors';
 
-// Base Gateway URL resolved from environment variables with local fallback
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:8000';
+// Base Gateway URL resolved from environment variables with local fallback and tunnel resilience
+const getApiBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_GATEWAY_URL) return process.env.NEXT_PUBLIC_GATEWAY_URL;
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return ''; // Remote tunnel/domain: leverage Next.js rewrite proxy
+  }
+  return 'http://localhost:8000';
+};
+const API_BASE_URL = getApiBaseUrl();
 
 
 // ─── Domain Interface Declarations ───────────────────────────────────────────
