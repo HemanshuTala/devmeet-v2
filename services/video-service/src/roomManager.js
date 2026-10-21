@@ -24,7 +24,7 @@ const ROOM_INACTIVITY_TIMEOUT = parseInt(process.env.ROOM_INACTIVITY_TIMEOUT || 
 // In-memory state registries
 const roomInactivityTimers = new Map(); // room_name -> NodeJS.Timeout
 const roomLastActivity = new Map();     // room_name -> timestamp in ms
-const activeRooms = new Map();          // room_name -> { room_name, created_at, participants: Set }
+const activeRooms = new Map();          // room_name -> { room_name, session_id, created_at, participants: Set }
 const networkQualityMetrics = new Map();// room_name -> [{ participant_identity, metrics, timestamp }]
 
 /**
@@ -58,16 +58,30 @@ function resetInactivityTimer(room_name) {
  * Retrieves an existing video room record or registers a new room in memory.
  *
  * @param {string} room_name - Unique identifier of the room session.
+ * @param {string} [session_id] - Optional interview session UUID.
  * @returns {Object} Room state object containing participant set and creation timestamp.
  */
-function getOrCreateRoom(room_name) {
+function getOrCreateRoom(room_name, session_id = null) {
   if (!activeRooms.has(room_name)) {
     activeRooms.set(room_name, {
       room_name,
+      session_id: session_id || null,
       created_at: new Date().toISOString(),
       participants: new Set()
     });
+  } else if (session_id && !activeRooms.get(room_name).session_id) {
+    activeRooms.get(room_name).session_id = session_id;
   }
+  return activeRooms.get(room_name);
+}
+
+/**
+ * Gets a room if it exists.
+ *
+ * @param {string} room_name
+ * @returns {Object|undefined}
+ */
+function getRoom(room_name) {
   return activeRooms.get(room_name);
 }
 
@@ -127,6 +141,7 @@ module.exports = {
   networkQualityMetrics,
   resetInactivityTimer,
   getOrCreateRoom,
+  getRoom,
   removeRoom,
   recordQualityMetrics,
   getQualityMetrics

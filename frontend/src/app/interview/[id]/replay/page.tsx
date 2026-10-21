@@ -8,8 +8,9 @@
  * Allows candidates to review their performance chronologically without modifying session data.
  */
 
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MessageSquare, Brain, User, Calendar, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Brain, User, Calendar, ShieldCheck, Video } from 'lucide-react';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { PageLoader } from '@/components/feedback/PageLoader';
 import { ErrorAlert } from '@/components/feedback/ErrorAlert';
@@ -17,6 +18,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useSession, useSessionTurns } from '@/hooks/queries/useSessions';
 import { Button } from '@/components/ui/button';
 import SessionBadge from '@/components/SessionBadge';
+import { videoApi } from '@/lib/api';
 
 /**
  * ReplayPage Component.
@@ -32,6 +34,21 @@ export default function ReplayPage() {
   // Session metadata and turns fetching via React Query
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession(sessionId);
   const { data: turns = [], isLoading: turnsLoading, error: turnsError } = useSessionTurns(sessionId);
+
+  // Video recording metadata state
+  const [recording, setRecording] = useState<any>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    videoApi
+      .getRecordingStatus(`session_${sessionId}`)
+      .then((res) => {
+        if (res && (res.status === 'ready' || res.playback_url || res.file_name)) {
+          setRecording(res);
+        }
+      })
+      .catch(() => {});
+  }, [sessionId]);
 
   // Loading skeleton while data resolves
   if (authLoading || sessionLoading || turnsLoading) {
@@ -75,6 +92,29 @@ export default function ReplayPage() {
         {error ? (
           <ErrorAlert message={error instanceof Error ? error.message : 'Replay could not be loaded.'} />
         ) : null}
+
+        {/* Optional Archived Session Video Recording Player */}
+        {recording && (
+          <section className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Video className="w-5 h-5 text-blue-600" />
+                <h2 className="text-base font-bold text-slate-900">Session Video Recording</h2>
+              </div>
+              <span className="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2.5 py-1 rounded-full border border-emerald-200">
+                Archived ({recording.file_size ? `${(recording.file_size / (1024 * 1024)).toFixed(1)} MB` : 'Ready'})
+              </span>
+            </div>
+            <div className="rounded-xl overflow-hidden bg-slate-950 aspect-video max-h-[420px] mx-auto shadow-inner">
+              <video
+                controls
+                playsInline
+                className="w-full h-full object-contain"
+                src={recording.playback_url || `/api/v1/video/room/session_${sessionId}/recording/play`}
+              />
+            </div>
+          </section>
+        )}
 
         {/* Chronological turns list */}
         <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">

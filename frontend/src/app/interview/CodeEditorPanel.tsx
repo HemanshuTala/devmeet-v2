@@ -459,6 +459,28 @@ export default function CodeEditorPanel({
           </button>
         )}
 
+        {/* Load Demo Solution Button */}
+        {problem?.solutions && (
+          <button
+            type="button"
+            onClick={() => {
+              const sol =
+                (problem.solutions as any)?.[language] ||
+                problem.solutions?.python ||
+                '';
+              if (sol) {
+                onCodeChange(sol);
+                setResetConfirm(false);
+              }
+            }}
+            className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-md bg-indigo-950/60 border border-indigo-700/80 text-indigo-300 hover:bg-indigo-900/80 hover:text-white font-bold transition-all shadow-xs cursor-pointer"
+            title="Load optimal solution for demo testing"
+          >
+            <Sparkles className="w-3 h-3 text-indigo-400" />
+            <span>Load Solution</span>
+          </button>
+        )}
+
         {/* Fullscreen toggle */}
         <button
           onClick={() => setExpanded((e) => !e)}

@@ -27,6 +27,14 @@ export interface DSAProblem {
     cpp: string;
     go: string;
   };
+  solutions?: {
+    python?: string;
+    javascript?: string;
+    typescript?: string;
+    java?: string;
+    cpp?: string;
+    go?: string;
+  };
   testCases: DSATestCase[];
 }
 
@@ -158,6 +166,49 @@ public:
 func twoSum(nums []int, target int) []int {
     // Write your solution here
     return []int{}
+}
+`,
+    },
+    solutions: {
+      python: `def twoSum(nums: list[int], target: int) -> list[int]:
+    # Hash map for O(n) time and O(n) space complexity
+    seen = {}
+    for i, num in enumerate(nums):
+        diff = target - num
+        if diff in seen:
+            return [seen[diff], i]
+        seen[num] = i
+    return []
+`,
+      javascript: `/**
+ * @param {number[]} nums
+ * @param {number} target
+ * @return {number[]}
+ */
+function twoSum(nums, target) {
+    // Hash map for O(n) time and O(n) space complexity
+    const seen = new Map();
+    for (let i = 0; i < nums.length; i++) {
+        const diff = target - nums[i];
+        if (seen.has(diff)) {
+            return [seen.get(diff), i];
+        }
+        seen.set(nums[i], i);
+    }
+    return [];
+}
+`,
+      typescript: `function twoSum(nums: number[], target: number): number[] {
+    // Hash map for O(n) time and O(n) space complexity
+    const seen = new Map<number, number>();
+    for (let i = 0; i < nums.length; i++) {
+        const diff = target - nums[i];
+        if (seen.has(diff)) {
+            return [seen.get(diff)!, i];
+        }
+        seen.set(nums[i], i);
+    }
+    return [];
 }
 `,
     },

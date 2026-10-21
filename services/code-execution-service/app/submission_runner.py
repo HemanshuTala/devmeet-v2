@@ -349,7 +349,7 @@ if (!output.trim()) {{
                    typeof wordBreak === 'function' ? wordBreak : null;
         if (fn) {{
             const res = fn(...args);
-            if (res !== undefined) output = String(res);
+            if (res !== undefined) output = (Array.isArray(res) || (res !== null && typeof res === 'object')) ? JSON.stringify(res) : String(res);
         }}
     }} catch (e) {{
         // ignore fallback errors

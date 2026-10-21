@@ -2,91 +2,34 @@
  * ============================================================================
  * DevMeet Video & Real-Time Media Service - Application Entry Point
  * ============================================================================
- * This Express.js microservice coordinates real-time audio/video communications,
- * WebRTC signaling, LiveKit access token generation, pre-flight device diagnostics,
- * network telemetry (QoS monitoring), and consent-gated interview session recording.
+ * Coordinates real-time audio/video communications, WebRTC signaling, LiveKit
+ * access token generation, pre-flight device diagnostics, network QoS telemetry,
+ * and consent-gated interview session recording with persistent video storage.
  *
- * Key Architectural Responsibilities:
- * 1. WebRTC Signaling & Access Tokens (LiveKit Cloud):
- *    - Issues cryptographically signed LiveKit Access Tokens (`/api/v1/video/token`)
- *      permitting candidates to join dedicated interview rooms.
- *    - Falls back to structured mock JWTs if external cloud credentials are unset.
- * 2. Enterprise NAT Traversal (STUN/TURN Protocol):
- *    - Configures and exposes Coturn credentials for clients behind symmetric firewalls.
- * 3. Pre-Flight Hardware Diagnostics (VID-02):
- *    - `/api/v1/video/preflight`: Evaluates client webcam/mic availability, permissions,
- *      and estimated network bandwidth before granting entrance to an interview room.
- * 4. Room Lifecycle & Automated Inactivity Pruning (VID-07):
- *    - Tracks active session rooms in memory with configurable idle auto-termination
- *      timers (default 30 minutes) to prevent memory leaks and orphaned cloud sessions.
- * 5. Real-Time QoS Telemetry (VID-04):
- *    - Ingests and aggregates client-side WebRTC metrics (packet loss, RTT, jitter, bandwidth).
- * 6. Consent-Gated Recording Pipeline (VID-05):
- *    - Restricts recording initiation to requests with explicit participant consent (`consent: true`).
- *    - Mints S3 keys and coordinates background cloud storage persistence.
+ * Architecture Modules:
+ * - tokenService.js: LiveKit server SDK token minting & Coturn TURN relay config
+ * - roomManager.js: Active WebRTC room registry, inactivity pruning & QoS metrics
+ * - recordingService.js: Consent-gated recording, video blob ingestion & streaming replay
  * ============================================================================
  */
 
 const express = require('express');
 const cors = require('cors');
-const { AccessToken } = require('livekit-server-sdk');
+
+const tokenService = require('./tokenService');
+const roomManager = require('./roomManager');
+const recordingService = require('./recordingService');
 
 // Initialize Express server instance
 const app = express();
-const PORT = 8006;
+const PORT = process.env.PORT || 8006;
 
 // Enable Cross-Origin Resource Sharing for frontend client connections
 app.use(cors());
-// Parse incoming JSON request bodies
-app.use(express.json());
 
-// LiveKit WebRTC Cloud / SFU Credentials
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
-const LIVEKIT_URL = process.env.LIVEKIT_URL || 'wss://devmeet.livekit.cloud';
-
-// VID-03: Coturn TURN Server credentials for NAT traversal
-const TURN_SERVER_URL = process.env.TURN_SERVER_URL || 'turn:devmeet-turn.example.com:3478';
-const TURN_USERNAME = process.env.TURN_USERNAME || 'devmeet';
-const TURN_CREDENTIAL = process.env.TURN_CREDENTIAL || 'devmeet_secret';
-const TURN_ENABLED = process.env.TURN_ENABLED === 'true';
-
-// VID-07: Inactivity timer configuration (default: 30 minutes in ms)
-const ROOM_INACTIVITY_TIMEOUT = parseInt(process.env.ROOM_INACTIVITY_TIMEOUT || '1800000', 10);
-const roomInactivityTimers = new Map(); // room_name -> NodeJS.Timeout
-const roomLastActivity = new Map();     // room_name -> timestamp in ms
-
-/**
- * Resets or arms the inactivity timer for a given video interview room.
- *
- * @param {string} room_name - Target room identifier.
- */
-function resetInactivityTimer(room_name) {
-  // Clear existing timer if active
-  if (roomInactivityTimers.has(room_name)) {
-    clearTimeout(roomInactivityTimers.get(room_name));
-  }
-  
-  // Record current timestamp
-  roomLastActivity.set(room_name, Date.now());
-  
-  // Arm teardown timer
-  const timerId = setTimeout(() => {
-    console.log(`[VID-07] Auto-closing room ${room_name} due to inactivity`);
-    activeRooms.delete(room_name);
-    networkQualityMetrics.delete(room_name);
-    roomLastActivity.delete(room_name);
-    roomInactivityTimers.delete(room_name);
-  }, ROOM_INACTIVITY_TIMEOUT);
-  
-  roomInactivityTimers.set(room_name, timerId);
-}
-
-// In-memory cache tracking active session rooms
-const activeRooms = new Map();
-
-// VID-04: Network quality metrics storage (room_name -> [{ participant_identity, metrics, timestamp }])
-const networkQualityMetrics = new Map();
+// Parse incoming JSON request bodies (up to 10MB)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 /**
  * Health check diagnostic endpoint reporting service readiness and configuration flags.
@@ -95,10 +38,10 @@ app.get(['/health', '/api/v1/video/health'], (req, res) => {
   res.json({
     status: 'healthy',
     service: 'video-service',
-    livekit_configured: !!(LIVEKIT_API_KEY && LIVEKIT_API_SECRET),
-    turn_enabled: TURN_ENABLED,
-    turn_configured: !!(TURN_SERVER_URL && TURN_USERNAME && TURN_CREDENTIAL),
-    active_rooms_count: activeRooms.size
+    livekit_configured: tokenService.isConfigured(),
+    turn_enabled: tokenService.isTurnEnabled(),
+    turn_configured: tokenService.isTurnConfigured(),
+    active_rooms_count: roomManager.activeRooms.size,
   });
 });
 
@@ -125,64 +68,21 @@ app.post('/api/v1/video/token', async (req, res) => {
       return res.status(400).json({ error: 'room_name and participant_identity are required' });
     }
 
-    // Register room in active registry if not already present
-    if (!activeRooms.has(room_name)) {
-      activeRooms.set(room_name, {
-        room_name,
-        created_at: new Date().toISOString(),
-        participants: new Set()
-      });
-    }
-
-    const roomInfo = activeRooms.get(room_name);
+    // Register room in active registry
+    const roomInfo = roomManager.getOrCreateRoom(room_name);
     roomInfo.participants.add(participant_identity);
 
-    // VID-07: Reset inactivity timer when participant joins
-    resetInactivityTimer(room_name);
+    // Reset inactivity timer when participant joins
+    roomManager.resetInactivityTimer(room_name);
 
-    // Real LiveKit key integration
-    if (LIVEKIT_API_KEY && LIVEKIT_API_SECRET) {
-      const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
-        identity: participant_identity,
-        name: participant_name || participant_identity
-      });
-
-      // Grant audio/video publish and subscribe permissions
-      at.addGrant({
-        roomJoin: true,
-        room: room_name,
-        canPublish: true,
-        canSubscribe: true
-      });
-
-      // VID-03: Add TURN server configuration if enabled
-      let turnConfig = null;
-      if (TURN_ENABLED && TURN_SERVER_URL && TURN_USERNAME && TURN_CREDENTIAL) {
-        turnConfig = {
-          urls: [TURN_SERVER_URL],
-          username: TURN_USERNAME,
-          credential: TURN_CREDENTIAL
-        };
-      }
-
-      const token = await at.toJwt();
-      return res.json({
-        token,
-        livekit_url: LIVEKIT_URL,
-        room_name,
-        turn_config: turnConfig,
-        mock: false
-      });
-    }
-
-    // Mock Mode fallback for local testing
-    console.log(`Mock Mode active: Generating mock token for room=${room_name}, participant=${participant_identity}`);
-    res.json({
-      token: `mock_jwt_token_${Buffer.from(JSON.stringify({ room: room_name, identity: participant_identity })).toString('base64')}_${Date.now()}`,
-      livekit_url: 'wss://mock.livekit.cloud',
+    // Delegate token minting to tokenService
+    const tokenResult = await tokenService.generateToken({
       room_name,
-      mock: true
+      participant_identity,
+      participant_name,
     });
+
+    res.json(tokenResult);
   } catch (error) {
     console.error('Error generating token:', error);
     res.status(500).json({ error: 'Failed to generate access token', details: error.message });
@@ -199,21 +99,14 @@ app.post('/api/v1/video/room/create', (req, res) => {
       return res.status(400).json({ error: 'room_name is required' });
     }
 
-    activeRooms.set(room_name, {
-      room_name,
-      session_id: session_id || null,
-      created_at: new Date().toISOString(),
-      participants: new Set()
-    });
-
-    // Reset inactivity timer upon creation
-    resetInactivityTimer(room_name);
+    const room = roomManager.getOrCreateRoom(room_name, session_id);
+    roomManager.resetInactivityTimer(room_name);
 
     res.json({
-      room_name,
-      session_id,
-      created_at: activeRooms.get(room_name).created_at,
-      participants_count: 0
+      room_name: room.room_name,
+      session_id: room.session_id,
+      created_at: room.created_at,
+      participants_count: room.participants.size,
     });
   } catch (error) {
     res.status(500).json({ error: 'Room creation failed', details: error.message });
@@ -225,7 +118,7 @@ app.post('/api/v1/video/room/create', (req, res) => {
  */
 app.get('/api/v1/video/room/:room_name', (req, res) => {
   const { room_name } = req.params;
-  const room = activeRooms.get(room_name);
+  const room = roomManager.getRoom(room_name);
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
   }
@@ -234,7 +127,7 @@ app.get('/api/v1/video/room/:room_name', (req, res) => {
     room_name: room.room_name,
     session_id: room.session_id || null,
     created_at: room.created_at,
-    participants: Array.from(room.participants)
+    participants: Array.from(room.participants),
   });
 });
 
@@ -243,19 +136,11 @@ app.get('/api/v1/video/room/:room_name', (req, res) => {
  */
 app.delete('/api/v1/video/room/:room_name', (req, res) => {
   const { room_name } = req.params;
-  if (!activeRooms.has(room_name)) {
+  const removed = roomManager.removeRoom(room_name);
+  if (!removed) {
     return res.status(404).json({ error: 'Room not found' });
   }
-  
-  // Clear inactivity timer
-  if (roomInactivityTimers.has(room_name)) {
-    clearTimeout(roomInactivityTimers.get(room_name));
-    roomInactivityTimers.delete(room_name);
-  }
-  roomLastActivity.delete(room_name);
-  
-  activeRooms.delete(room_name);
-  networkQualityMetrics.delete(room_name);
+
   res.json({ success: true, message: `Room ${room_name} ended successfully` });
 });
 
@@ -270,24 +155,8 @@ app.post('/api/v1/video/room/:room_name/quality', (req, res) => {
     return res.status(400).json({ error: 'room_name, participant_identity, and metrics are required' });
   }
 
-  if (!networkQualityMetrics.has(room_name)) {
-    networkQualityMetrics.set(room_name, []);
-  }
-
-  const roomMetrics = networkQualityMetrics.get(room_name);
-  roomMetrics.push({
-    participant_identity,
-    metrics,
-    timestamp: new Date().toISOString()
-  });
-
-  // Reporting telemetry signals active communication; reset timer
-  resetInactivityTimer(room_name);
-
-  // Keep sliding window of last 100 entries
-  if (roomMetrics.length > 100) {
-    roomMetrics.shift();
-  }
+  roomManager.recordQualityMetrics(room_name, participant_identity, metrics);
+  roomManager.resetInactivityTimer(room_name);
 
   res.json({ success: true, message: 'Quality metrics recorded' });
 });
@@ -299,31 +168,28 @@ app.get('/api/v1/video/room/:room_name/quality', (req, res) => {
   const { room_name } = req.params;
   const { participant_identity } = req.query;
 
-  if (!networkQualityMetrics.has(room_name)) {
+  let metrics = roomManager.getQualityMetrics(room_name);
+  if (!metrics || metrics.length === 0) {
     return res.status(404).json({ error: 'No quality metrics found for this room' });
   }
 
-  let metrics = networkQualityMetrics.get(room_name);
-
-  // Filter by participant if specified
   if (participant_identity) {
-    metrics = metrics.filter(m => m.participant_identity === participant_identity);
+    metrics = metrics.filter((m) => m.participant_identity === participant_identity);
   }
 
-  // Calculate aggregates across samples
   const aggregate = {
     avg_packet_loss: 0,
     avg_latency: 0,
     avg_jitter: 0,
     avg_bandwidth: 0,
-    participant_count: new Set(metrics.map(m => m.participant_identity)).size
+    participant_count: new Set(metrics.map((m) => m.participant_identity)).size,
   };
 
   if (metrics.length > 0) {
-    const totalPacketLoss = metrics.reduce((sum, m) => sum + (m.metrics.packet_loss || 0), 0);
-    const totalLatency = metrics.reduce((sum, m) => sum + (m.metrics.latency || 0), 0);
-    const totalJitter = metrics.reduce((sum, m) => sum + (m.metrics.jitter || 0), 0);
-    const totalBandwidth = metrics.reduce((sum, m) => sum + (m.metrics.bandwidth || 0), 0);
+    const totalPacketLoss = metrics.reduce((sum, m) => sum + (m.metrics?.packet_loss || 0), 0);
+    const totalLatency = metrics.reduce((sum, m) => sum + (m.metrics?.latency || 0), 0);
+    const totalJitter = metrics.reduce((sum, m) => sum + (m.metrics?.jitter || 0), 0);
+    const totalBandwidth = metrics.reduce((sum, m) => sum + (m.metrics?.bandwidth || 0), 0);
 
     aggregate.avg_packet_loss = totalPacketLoss / metrics.length;
     aggregate.avg_latency = totalLatency / metrics.length;
@@ -333,9 +199,9 @@ app.get('/api/v1/video/room/:room_name/quality', (req, res) => {
 
   res.json({
     room_name,
-    metrics: metrics.slice(-20), // Return last 20 samples
+    metrics: metrics.slice(-20),
     aggregate,
-    total_metrics_count: metrics.length
+    total_metrics_count: metrics.length,
   });
 });
 
@@ -348,9 +214,9 @@ app.post('/api/v1/video/preflight', (req, res) => {
     const {
       camera_available,
       microphone_available,
-      camera_permission,    // 'granted' | 'denied' | 'prompt'
-      mic_permission,       // 'granted' | 'denied' | 'prompt'
-      estimated_bandwidth,  // Mbps
+      camera_permission,
+      mic_permission,
+      estimated_bandwidth,
       browser,
       os,
     } = req.body;
@@ -415,21 +281,18 @@ app.post('/api/v1/video/preflight', (req, res) => {
       });
     }
 
-    // TURN server status
-    const turn_configured = TURN_ENABLED && !!(TURN_SERVER_URL && TURN_USERNAME && TURN_CREDENTIAL);
+    const turn_configured = tokenService.isTurnConfigured();
 
     res.json({
       camera_ok,
       mic_ok,
       network_quality,
       turn_configured,
-      livekit_configured: !!(LIVEKIT_API_KEY && LIVEKIT_API_SECRET),
-      all_ok: all_ok && mic_ok,           // Microphone is strictly required, camera is optional
-      can_proceed_audio_only: mic_ok,     // Allows entering without webcam
+      livekit_configured: tokenService.isConfigured(),
+      all_ok: all_ok && mic_ok,
+      can_proceed_audio_only: mic_ok,
       recommendations,
-      turn_config: turn_configured
-        ? { urls: [TURN_SERVER_URL], username: TURN_USERNAME }
-        : null,
+      turn_config: null,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -438,9 +301,6 @@ app.post('/api/v1/video/preflight', (req, res) => {
 });
 
 // ─── VID-05: Recording Management ─────────────────────────────────────────────
-// Pro-tier only. User must provide explicit consent before recording starts.
-const activeRecordings = new Map(); // room_name → { started_at, consent, user_id, status }
-
 /**
  * Initiates audio/video recording for a room with explicit user consent.
  */
@@ -449,56 +309,29 @@ app.post(['/api/v1/video/room/:room_name/recording/start', '/api/v1/video/record
     const room_name = req.params.room_name || req.body.room_name;
     const { user_id, consent, participant_identity } = req.body;
 
-    if (!room_name) {
-      return res.status(400).json({ error: 'room_name is required' });
-    }
-
-    if (!activeRooms.has(room_name)) {
-      return res.status(404).json({ error: 'Room not found' });
-    }
-
-    // Enforce explicit participant consent
-    if (consent !== true) {
-      return res.status(400).json({
-        error: 'CONSENT_REQUIRED',
-        message: 'Explicit recording consent is required (consent: true) before starting recording.',
-      });
-    }
-
-    if (activeRecordings.has(room_name)) {
-      const existing = activeRecordings.get(room_name);
-      if (existing.status === 'recording') {
-        return res.status(409).json({ error: 'Recording already in progress for this room' });
-      }
-    }
-
-    const recording = {
+    const recording = recordingService.startRecording({
       room_name,
-      user_id: user_id || participant_identity || 'unknown',
-      consent: true,
-      consent_timestamp: new Date().toISOString(),
-      started_at: new Date().toISOString(),
-      stopped_at: null,
-      status: 'recording',
-      s3_key: null,
-    };
+      user_id: user_id || participant_identity,
+      consent,
+    });
 
-    activeRecordings.set(room_name, recording);
-
-    console.log(`[VID-05] Recording started for room=${room_name} user=${recording.user_id} consent=granted`);
-
-    // Reset inactivity timer
-    resetInactivityTimer(room_name);
+    roomManager.resetInactivityTimer(room_name);
 
     res.json({
       success: true,
       room_name,
-      status: 'recording',
+      status: recording.status,
       started_at: recording.started_at,
       consent_acknowledged: true,
-      message: 'Recording started. Session will be stored securely in S3 with 7-day retention.',
+      message: 'Recording started. Session will be stored securely with 7-day retention.',
     });
   } catch (error) {
+    if (error.code === 'CONSENT_REQUIRED') {
+      return res.status(400).json({ error: error.code, message: error.message });
+    }
+    if (error.code === 'ALREADY_RECORDING') {
+      return res.status(409).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to start recording', details: error.message });
   }
 });
@@ -509,47 +342,65 @@ app.post(['/api/v1/video/room/:room_name/recording/start', '/api/v1/video/record
 app.post(['/api/v1/video/room/:room_name/recording/stop', '/api/v1/video/recording/stop'], (req, res) => {
   try {
     const room_name = req.params.room_name || req.body.room_name;
+    const { user_id, participant_identity } = req.body;
 
-    if (!room_name) {
-      return res.status(400).json({ error: 'room_name is required' });
-    }
-
-    if (!activeRecordings.has(room_name)) {
-      return res.status(404).json({ error: 'No active recording found for this room' });
-    }
-
-    const recording = activeRecordings.get(room_name);
-    if (recording.status !== 'recording') {
-      return res.status(400).json({ error: 'Recording is not currently active' });
-    }
-
-    recording.stopped_at = new Date().toISOString();
-    recording.status = 'stopped';
-
-    // Assign canonical S3 key path for storage
-    const s3Key = `recordings/${room_name}/${recording.started_at.replace(/[:.]/g, '-')}.webm`;
-    recording.s3_key = s3Key;
-
-    activeRecordings.set(room_name, recording);
-
-    console.log(`[VID-05] Recording stopped for room=${room_name} s3_key=${s3Key}`);
+    const recording = recordingService.stopRecording({
+      room_name,
+      user_id: user_id || participant_identity,
+    });
 
     res.json({
       success: true,
       room_name,
-      status: 'stopped',
+      status: recording.status,
       started_at: recording.started_at,
       stopped_at: recording.stopped_at,
-      s3_key: s3Key,
-      message: 'Recording stopped. Upload to S3 initiated in the background.',
+      s3_key: recording.s3_key,
+      playback_url: recording.playback_url,
+      message: 'Recording stopped. Upload to storage finalized.',
     });
   } catch (error) {
+    if (error.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to stop recording', details: error.message });
   }
 });
 
 /**
- * Queries recording status and S3 storage key.
+ * Ingests recorded video data from the candidate browser (stream/blob).
+ * Accepts raw video payloads or application/octet-stream.
+ */
+app.post(['/api/v1/video/room/:room_name/recording/upload', '/api/v1/video/recording/upload'], async (req, res) => {
+  try {
+    const room_name = req.params.room_name || req.query.room_name;
+    if (!room_name) {
+      return res.status(400).json({ error: 'room_name is required' });
+    }
+
+    const contentType = req.headers['content-type']?.split(';')[0] || 'video/webm';
+    const originalFilename = req.headers['x-filename'] || req.query.filename || `interview_${room_name}.webm`;
+
+    const recording = await recordingService.saveRecordingFile(room_name, req, originalFilename, contentType);
+
+    res.json({
+      success: true,
+      room_name,
+      status: recording.status,
+      file_name: recording.file_name,
+      file_size: recording.file_size,
+      playback_url: recording.playback_url,
+      s3_key: recording.s3_key,
+      message: 'Video recording saved successfully.',
+    });
+  } catch (error) {
+    console.error('Error saving recording upload:', error);
+    res.status(500).json({ error: 'Failed to save recording upload', details: error.message });
+  }
+});
+
+/**
+ * Queries recording status, metadata, and playback URL.
  */
 app.get(['/api/v1/video/room/:room_name/recording/status', '/api/v1/video/recording/status'], (req, res) => {
   const room_name = req.params.room_name || req.query.room_name;
@@ -558,7 +409,8 @@ app.get(['/api/v1/video/room/:room_name/recording/status', '/api/v1/video/record
     return res.status(400).json({ error: 'room_name query parameter or path param is required' });
   }
 
-  if (!activeRecordings.has(room_name)) {
+  const recording = recordingService.getRecordingStatus(room_name);
+  if (!recording) {
     return res.json({
       room_name,
       status: 'not_started',
@@ -566,7 +418,6 @@ app.get(['/api/v1/video/room/:room_name/recording/status', '/api/v1/video/record
     });
   }
 
-  const recording = activeRecordings.get(room_name);
   res.json({
     room_name,
     status: recording.status,
@@ -574,15 +425,30 @@ app.get(['/api/v1/video/room/:room_name/recording/status', '/api/v1/video/record
     started_at: recording.started_at,
     stopped_at: recording.stopped_at,
     s3_key: recording.s3_key,
+    file_name: recording.file_name,
+    file_size: recording.file_size,
+    playback_url: recording.playback_url,
     consent: recording.consent,
     consent_timestamp: recording.consent_timestamp,
   });
 });
 
+/**
+ * Streams stored recording video with HTTP 206 Partial Content (range seeking support).
+ */
+app.get([
+  '/api/v1/video/room/:room_name/recording/play',
+  '/api/v1/video/recordings/:room_name/play',
+  '/api/v1/video/recording/:room_name/play',
+], (req, res) => {
+  const { room_name } = req.params;
+  recordingService.streamRecording(room_name, req, res);
+});
+
 // Start Express HTTP listener on designated port
 app.listen(PORT, () => {
   console.log(`Video service running on port ${PORT}`);
-  console.log(`  VID-02 preflight:  POST /api/v1/video/preflight`);
-  console.log(`  VID-05 recording:  POST /api/v1/video/room/:name/recording/start|stop`);
-  console.log(`  VID-05 rec status: GET  /api/v1/video/room/:name/recording/status`);
+  console.log(`  LiveKit configured: ${tokenService.isConfigured()}`);
+  console.log(`  TURN enabled:       ${tokenService.isTurnEnabled()}`);
+  console.log(`  Recordings dir:     ${recordingService.RECORDINGS_DIR}`);
 });

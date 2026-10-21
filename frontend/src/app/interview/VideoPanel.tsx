@@ -50,6 +50,7 @@ import { useMediaStream } from './hooks/useMediaStream';
 import { useProctoring } from './hooks/useProctoring';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useAudioLevel } from './hooks/useAudioLevel';
+import { useSessionRecorder } from './hooks/useSessionRecorder';
 
 /**
  * Props for VideoPanel component.
@@ -95,14 +96,31 @@ export default function VideoPanel({
   // Sub-system hook integrations
   const media = useMediaStream(addLog);
   const proctor = useProctoring(media.videoRef, media.stream, isActive, media.videoActive, onProctorViolation, addLog);
-  const rtc = useWebRTC(sessionId, effectiveUserId, effectiveDisplayName, media.permissionStatus, addLog);
+  const rtc = useWebRTC(
+    sessionId,
+    effectiveUserId,
+    effectiveDisplayName,
+    media.permissionStatus,
+    addLog,
+    media.stream,
+    media.videoActive,
+    media.audioActive
+  );
   const { subscribe: audioSubscribe } = useAudioLevel(media.stream, media.audioActive);
 
   // User subscription plan & session recording states
   const [userPlan, setUserPlan] = useState('free');
-  const [isRecording, setIsRecording] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
+
+  // Active in-browser MediaRecorder + cloud storage upload hook
+  const recorder = useSessionRecorder({
+    sessionId,
+    userId: effectiveUserId,
+    stream: media.stream,
+    userPlan,
+    addLog,
+  });
 
   // Fetch candidate's quota to determine recording eligibility (Pro / Enterprise feature)
   useEffect(() => {
@@ -126,22 +144,19 @@ export default function VideoPanel({
    */
   const handleRecordingToggle = () => {
     if (!isActive) return;
-    if (isRecording) {
-      videoApi.stopRecording(`session_${sessionId}`, userId).catch(() => {});
-      setIsRecording(false);
-      addLog('Recording stopped. Upload queued to S3.');
+    if (recorder.isRecording) {
+      recorder.stopRecording();
     } else {
       setShowConsentModal(true);
     }
   };
 
   /**
-   * Confirms recording consent and starts cloud capture.
+   * Confirms recording consent and starts browser + cloud capture.
    */
   const confirmRecording = () => {
-    setIsRecording(true);
     setShowConsentModal(false);
-    addLog('Recording started. Consent acknowledged and stored.');
+    recorder.startRecording();
   };
 
   // Avatar border color based on AI speech state
@@ -511,21 +526,31 @@ export default function VideoPanel({
             </div>
 
             <div className="flex items-center gap-2">
-              {isRecording && (
+              {recorder.isUploading && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-blue-400 animate-pulse">
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" /> Saving...
+                </span>
+              )}
+              {recorder.isRecording && (
                 <span className="flex items-center gap-1 text-[10px] font-bold text-rose-400 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> REC
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> REC{' '}
+                  {Math.floor(recorder.recordingDuration / 60)
+                    .toString()
+                    .padStart(2, '0')}
+                  :{(recorder.recordingDuration % 60).toString().padStart(2, '0')}
                 </span>
               )}
               {userPlan !== 'free' && (
                 <button
                   onClick={handleRecordingToggle}
+                  disabled={recorder.isUploading}
                   className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border transition-colors ${
-                    isRecording
+                    recorder.isRecording
                       ? 'bg-rose-950/40 border-rose-800/50 text-rose-400 hover:bg-rose-950/70'
                       : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  {isRecording ? (
+                  {recorder.isRecording ? (
                     <>
                       <Square className="w-2.5 h-2.5 fill-rose-500" /> Stop
                     </>

@@ -522,6 +522,19 @@ export const videoApi = {
     request(`/api/v1/video/room/${room_name}/recording/start`, json('POST', { room_name, user_id, consent })),
   stopRecording: (room_name: string, user_id: string) =>
     request(`/api/v1/video/room/${room_name}/recording/stop`, json('POST', { room_name, user_id })),
+  uploadRecording: (room_name: string, videoBlob: Blob, filename?: string) =>
+    request<any>(`/api/v1/video/room/${room_name}/recording/upload`, {
+      method: 'POST',
+      body: videoBlob,
+      headers: {
+        'Content-Type': videoBlob.type || 'video/webm',
+        'X-Filename': filename || `recording_${room_name}.webm`,
+      },
+    }),
+  getRecordingStatus: (room_name: string) =>
+    request<any>(`/api/v1/video/room/${room_name}/recording/status`),
+  getRecordingPlayUrl: (room_name: string) =>
+    `/api/v1/video/room/${encodeURIComponent(room_name)}/recording/play`,
   reportNetworkQuality: (room_name: string, user_id: string, quality: unknown) =>
     request(`/api/v1/video/room/${room_name}/quality`, json('POST', { participant_identity: user_id, metrics: quality })),
 };
