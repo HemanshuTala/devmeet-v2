@@ -390,7 +390,7 @@ async def upload_avatar(
 @router.put("/{user_id}/plan")
 async def update_user_plan_internal(user_id: str, body: dict):
     """
-    Internal service-to-service endpoint called by `payment-service` upon Stripe webhook confirmation.
+    Internal service-to-service endpoint called by `payment-service` after payment confirmation.
     
     Updates the candidate's subscription tier without requiring an end-user JWT.
     Protected at the network/gateway layer (inaccessible from external public internet).

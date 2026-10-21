@@ -680,8 +680,11 @@ export default function CodeEditorPanel({
                         <div
                           className={`rounded-md px-2.5 py-1.5 border font-mono text-xs ${result.passed ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800' : 'bg-rose-950/40 text-rose-300 border-rose-900'}`}
                         >
-                          {result.error ? (
-                            <span className="text-rose-400">{result.error}</span>
+                          {result.error || (result.actual && result.actual.startsWith('Runtime error:')) ? (
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block">Runtime Error</span>
+                              <span className="text-rose-300 whitespace-pre-wrap">{result.error || result.actual}</span>
+                            </div>
                           ) : result.actual !== undefined && result.actual !== '' ? (
                             <span>{result.actual}</span>
                           ) : (
