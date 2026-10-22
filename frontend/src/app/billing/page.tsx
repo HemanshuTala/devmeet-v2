@@ -1,15 +1,13 @@
 /**
  * @file page.tsx
- * @description Subscription Tiers, Razorpay Payment Gateway & Invoice History Page for DevMeet.
+ * @description Subscription Tiers, Instant Plan Management & Invoice History Page for DevMeet.
  *
  * Responsibilities:
- * 1. Razorpay Payment Gateway Integration:
- *    - Dynamically loads `https://checkout.razorpay.com/v1/checkout.js` on demand via `loadRazorpayScript()`.
- *    - Creates server checkout order (`paymentApi.createCheckoutSession(planId)`).
- *    - Launches the official Razorpay Checkout modal for UPI, credit/debit cards, and NetBanking.
- *    - Verifies payment signatures securely on backend (`paymentApi.verifyPayment`).
- *    - Development mock mode fallback: dispatches `paymentApi.mockWebhook` when payment gateway is mocked.
- * 2. Subscription Management:
+ * 1. Instant Plan Management (Mock Payment Engine):
+ *    - Creates checkout/upgrade session via `paymentApi.createCheckoutSession(planId)`.
+ *    - Instantly activates user plan in database and refreshes quota.
+ *    - Fully offline/mock enabled for frictionless interview demonstration.
+ * 2. Subscription Lifecycle:
  *    - Fetches active subscription state and plans via `paymentApi.getSubscription()` & `getPlans()`.
  *    - Displays active subscription banner with cancellation confirmation dialog (`paymentApi.cancelSubscription`).
  * 3. Monthly / Annual Billing Toggle:
@@ -30,7 +28,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard,
   ShieldCheck,
-  IndianRupee,
+  Zap,
   Lock,
   BadgeCheck,
   AlertCircle,
@@ -49,31 +47,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import PlanCard from '@/components/billing/PlanCard';
 import BillingHistoryTable from '@/components/billing/BillingHistoryTable';
 import BillingFaq from '@/components/billing/BillingFaq';
-
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
-
-/**
- * Loads the external Razorpay Checkout SDK script dynamically into `document.body`.
- *
- * @returns {Promise<boolean>} True if script loaded or already available, false on network failure.
- */
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
 
 /**
  * Skeleton placeholder for the billing page while fetching plans and subscription.
@@ -161,66 +134,20 @@ function BillingPageContent() {
   }, [authGuardLoading, fetchData]);
 
   /**
-   * Initiates payment order creation and triggers the Razorpay modal.
+   * Initiates instant plan upgrade via payment service.
    *
    * @param {string} planId - Target subscription plan identifier ('pro' | 'enterprise').
    */
   const handleUpgrade = async (planId: string) => {
     setUpgrading(planId);
     try {
-      const order = await paymentApi.createCheckoutSession(planId);
-
-      // Handle local mock mode if Razorpay live keys are not configured in environment
-      if (order.mode === 'mock') {
-        if (user?.id) {
-          await paymentApi.mockWebhook(user.id, planId, 'payment.captured');
-          toast.success('Plan upgraded! (Mock mode – payment processed)');
-          await fetchData();
-        }
-        return;
-      }
-
-      // Load external Razorpay script
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        toast.error('Failed to load Razorpay SDK.');
-        return;
-      }
-
-      // Configure Razorpay checkout options
-      const options = {
-        key: order.razorpay_key_id,
-        amount: order.amount,
-        currency: order.currency || 'INR',
-        name: order.name || 'DevMeet AI',
-        description: order.description || `DevMeet ${planId} Subscription`,
-        order_id: order.razorpay_order_id,
-        prefill: { email: order.prefill_email || user?.email || '' },
-        theme: { color: '#2563eb' },
-        handler: async (response: any) => {
-          try {
-            await paymentApi.verifyPayment({
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature,
-              plan: planId,
-            });
-            toast.success('Payment verified! Your plan has been upgraded.');
-            await fetchData();
-          } catch {
-            toast.error('Payment verification failed. Please contact support.');
-          }
-        },
-        modal: { ondismiss: () => setUpgrading(null) },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+      const res = await paymentApi.createCheckoutSession(planId);
+      toast.success(`Successfully upgraded to ${planId.toUpperCase()} plan!`);
+      await fetchData();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to initiate payment.');
+      toast.error(err?.message || 'Failed to update plan. Please try again.');
     } finally {
-      if (!window.Razorpay) setUpgrading(null);
-      else setTimeout(() => setUpgrading(null), 500);
+      setUpgrading(null);
     }
   };
 
@@ -261,7 +188,7 @@ function BillingPageContent() {
               Simple, Transparent <span className="text-blue-600">Pricing</span>
             </h1>
             <p className="text-slate-500 text-base max-w-2xl mx-auto leading-relaxed font-medium">
-              Accelerate your tech career with AI-driven mock interviews, real-time code execution, and STAR behavioral evaluation. Secure instant checkout via Razorpay.
+              Accelerate your tech career with AI-driven mock interviews, real-time code execution, and STAR behavioral evaluation. Instant one-click plan upgrade.
             </p>
 
             {/* Monthly / Annual Billing Toggle Switch */}
@@ -381,11 +308,11 @@ function BillingPageContent() {
           <div className="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-wrap items-center justify-around gap-6 text-xs text-slate-600 font-bold shadow-xs">
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-500" />
-              <span>Razorpay 256-Bit SSL Encryption</span>
+              <span>Instant Mock Payment Sandbox</span>
             </div>
             <div className="flex items-center gap-2.5">
-              <IndianRupee className="w-5 h-5 text-blue-500" />
-              <span>UPI, Cards, NetBanking &amp; Wallets</span>
+              <Zap className="w-5 h-5 text-blue-500" />
+              <span>Zero Friction One-Click Upgrades</span>
             </div>
             <div className="flex items-center gap-2.5">
               <Lock className="w-5 h-5 text-blue-500" />

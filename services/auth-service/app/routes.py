@@ -47,32 +47,13 @@ import httpx
 logger = logging.getLogger(__name__)
 
 async def log_auth_email_event(to: str, template: str, data: dict):
-    """
-    Simulates transactional email dispatch for authentication events.
-
-    Parameters:
-        to (str): Target recipient email address.
-        template (str): Email event template ('welcome', 'verify_email', 'reset_password', 'security_alert').
-        data (dict): Template variables (e.g. candidate name, OTP code, reset link).
-    """
-    logger.info(f"[Auth Email Event] To: {to} | Template: {template} | Data: {data}")
+    """No-op: Email notification service disabled in demo mode."""
+    pass
 
 
 async def _send_registration_verification_otp(user_id: str, email: str, display_name: str) -> None:
-    """
-    Generates and dispatches a 6-digit registration verification OTP.
-    
-    Stores the one-time code in Redis with a 24-hour expiration key `email_verify:{user_id}`.
-    """
-    otp = str(secrets.randbelow(1000000)).zfill(6)
-    r = await get_redis()
-    if r:
-        await r.setex(f"email_verify:{user_id}", 86400, otp)
-    await log_auth_email_event(
-        to=email,
-        template="verify_email",
-        data={"name": display_name, "otp": otp},
-    )
+    """No-op: Email OTP verification disabled in demo mode."""
+    pass
 
 
 # FastAPI router configured under prefix `/api/v1/auth`
@@ -289,15 +270,6 @@ async def register(user_data: UserRegister, request: Request, background_tasks: 
         access_token = auth_manager.create_access_token(token_data)
         refresh_token = auth_manager.create_refresh_token(token_data)
         
-        # 7. Asynchronous welcome email event logging
-        background_tasks.add_task(
-            log_auth_email_event,
-            to=user["email"],
-            template="welcome",
-            data={"name": user["display_name"]}
-        )
-        background_tasks.add_task(_send_registration_verification_otp, str(user["id"]), user["email"], user["display_name"])
-        
         res = JSONResponse(
             content={
                 "access_token": access_token,
@@ -390,37 +362,7 @@ async def login(user_data: UserLogin, request: Request, background_tasks: Backgr
         user_agent=user_agent
     )
     
-    # Alert user if login triggered high anomaly score
-    if risk_assessment["risk_level"] == "high":
-        background_tasks.add_task(
-            log_auth_email_event,
-            to=user["email"],
-            template="security_alert",
-            data={
-                "name": user["display_name"],
-                "ip_address": client_ip,
-                "location": risk_assessment["location"],
-                "reasons": risk_assessment["reasons"],
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-            }
-        )
-    
-    # 5. Handle Multi-Factor Authentication Challenge
-    if user.get("mfa_enabled"):
-        mfa_token = secrets.token_urlsafe(32)
-        r = await get_redis()
-        if r:
-            # 5-minute validity window for candidate to enter 6-digit TOTP code
-            await r.setex(f"mfa_login:{mfa_token}", 300, str(user["id"]))
-        return JSONResponse(
-            content={
-                "mfa_required": True,
-                "mfa_token": mfa_token,
-                "expires_in": 300,
-            }
-        )
-
-    # 6. Issue tokens
+    # 5. Issue tokens directly
     token_data = await build_token_data(user)
     access_token = auth_manager.create_access_token(token_data)
     refresh_token = auth_manager.create_refresh_token(token_data)
@@ -759,14 +701,8 @@ async def reset_password_request(request_data: ResetPasswordRequest, request: Re
     
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     reset_url = f"{frontend_url}/reset-password?token={reset_token}"
-    background_tasks.add_task(
-        log_auth_email_event,
-        to=user["email"],
-        template="reset_password",
-        data={"reset_url": reset_url}
-    )
     
-    return {"message": "If the email exists, a reset link has been sent"}
+    return {"message": "If the email exists, a reset link has been sent", "reset_url": reset_url}
 
 
 @router.post("/reset-password-confirm")
@@ -805,357 +741,30 @@ async def reset_password_confirm(confirm_data: ResetPasswordConfirm):
     return {"message": "Password reset successfully"}
 
 
-# ─── Email Verification (AUTH-06) ─────────────────────────────────────────────
+# ─── Email Verification ───────────────────────────────────────────────────────
 
 @router.post("/verify-email/request")
-async def verify_email_request(background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+async def verify_email_request(current_user: dict = Depends(get_current_user)):
     """
-    Generates a 6-digit verification OTP and delivers it to the user's email.
-    
-    Enforces a 60-second cooldown in Redis to prevent email spamming.
+    Email verification - marks email verified directly without sending emails.
     """
-    r = await get_redis()
-    cooldown_key = f"email_verify_cooldown:{current_user['id']}"
-    if r:
-        if await r.exists(cooldown_key):
-            ttl = await r.ttl(cooldown_key)
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Please wait {max(ttl, 1)} seconds before requesting another code.",
-            )
-
-    otp = str(secrets.randbelow(1000000)).zfill(6)
-    token_key = f"email_verify:{current_user['id']}"
-
-    if r:
-        await r.setex(token_key, 86400, otp)  # 24-hour expiration
-        await r.setex(cooldown_key, 60, "1")  # 60s resend cooldown
-
-    background_tasks.add_task(
-        log_auth_email_event,
-        to=current_user["email"],
-        template="verify_email",
-        data={"name": current_user["display_name"], "otp": otp}
-    )
-    
+    await db.mark_email_verified(current_user["id"])
     return {
-        "message": f"Verification OTP sent to {current_user['email']}. Valid for 24 hours.",
+        "message": f"Email address {current_user['email']} is verified.",
+        "verified": True,
     }
 
 
 @router.post("/verify-email/confirm")
-async def verify_email_confirm(token: str, current_user: dict = Depends(get_current_user)):
+async def verify_email_confirm(token: str = "", current_user: dict = Depends(get_current_user)):
     """
-    Confirms email ownership using the 6-digit OTP code sent to user.
+    Confirms email ownership directly.
     """
-    r = await get_redis()
-    token_key = f"email_verify:{current_user['id']}"
-
-    if r:
-        stored = await r.get(token_key)
-        if not stored or stored != token:
-            raise HTTPException(status_code=400, detail="Invalid or expired verification code.")
-        await r.delete(token_key)
-        
     await db.mark_email_verified(current_user["id"])
     return {"message": "Email address successfully verified.", "verified": True}
 
 
-# ─── MFA / TOTP (AUTH-09) ─────────────────────────────────────────────────────
-
-@router.post("/mfa/enable")
-async def mfa_enable(current_user: dict = Depends(get_current_user)):
-    """
-    Initiates TOTP Multi-Factor Authentication enrollment.
-    
-    Generates a random base32 shared secret and `otpauth://` provisioning URI for QR codes.
-    Stores the pending secret in Redis with a 10-minute TTL until verified.
-    """
-    try:
-        import pyotp
-    except ImportError:
-        raise HTTPException(
-            status_code=500,
-            detail="MFA not available — install 'pyotp' package."
-        )
-
-    secret = pyotp.random_base32()
-    totp = pyotp.TOTP(secret)
-    provisioning_uri = totp.provisioning_uri(
-        name=current_user["email"],
-        issuer_name="DevMeet",
-    )
-
-    r = await get_redis()
-    if r:
-        await r.setex(f"mfa_pending:{current_user['id']}", 600, secret)
-
-    return {
-        "secret": secret,
-        "provisioning_uri": provisioning_uri,
-        "message": "Scan the QR code, then confirm with /mfa/verify",
-        "backup_codes_note": "After confirming, call /mfa/backup-codes to get your backup codes.",
-    }
-
-
-@router.post("/mfa/verify")
-async def mfa_verify(totp_code: str, current_user: dict = Depends(get_current_user)):
-    """
-    Completes MFA enrollment by verifying the user's first 6-digit authenticator code.
-    
-    On success, permanently saves `mfa_secret` to PostgreSQL and marks `mfa_enabled = True`.
-    """
-    try:
-        import pyotp
-    except ImportError:
-        raise HTTPException(status_code=500, detail="MFA not available.")
-
-    r = await get_redis()
-    secret = None
-    if r:
-        secret = await r.get(f"mfa_pending:{current_user['id']}")
-
-    if not secret:
-        raise HTTPException(status_code=400, detail="No pending MFA enrollment. Call /mfa/enable first.")
-
-    totp = pyotp.TOTP(secret)
-    # Valid window allows ±30 seconds clock drift between client phone and server
-    if not totp.verify(totp_code, valid_window=1):
-        raise HTTPException(status_code=400, detail="Invalid TOTP code. Please try again.")
-
-    await db.enable_mfa(current_user["id"], secret)
-    if r:
-        await r.delete(f"mfa_pending:{current_user['id']}")
-
-    return {"message": "MFA enabled successfully.", "mfa_enabled": True}
-
-
-@router.post("/mfa/disable")
-async def mfa_disable(totp_code: str, current_user: dict = Depends(get_current_user)):
-    """
-    Disables MFA for the user after verifying current TOTP code.
-    """
-    try:
-        import pyotp
-    except ImportError:
-        raise HTTPException(status_code=500, detail="MFA not available.")
-
-    user = await db.get_user_by_id(current_user["id"])
-    secret = user.get("mfa_secret") if user else None
-
-    if not secret:
-        raise HTTPException(status_code=400, detail="MFA is not currently enabled.")
-
-    totp = pyotp.TOTP(secret)
-    if not totp.verify(totp_code, valid_window=1):
-        raise HTTPException(status_code=400, detail="Invalid TOTP code.")
-
-    await db.disable_mfa(current_user["id"])
-    return {"message": "MFA disabled successfully.", "mfa_enabled": False}
-
-
-@router.post("/mfa/backup-codes")
-async def mfa_backup_codes(current_user: dict = Depends(get_current_user)):
-    """
-    Generates 8 single-use hex recovery codes for emergency account access.
-    
-    Codes are SHA-256 hashed before storage; plaintext codes are returned only once.
-    """
-    import hashlib
-
-    user = await db.get_user_by_id(current_user["id"])
-    if not user or not user.get("mfa_secret"):
-        raise HTTPException(status_code=400, detail="MFA must be enabled before generating backup codes.")
-
-    codes = [secrets.token_hex(5).upper() for _ in range(8)]
-    hashed = [hashlib.sha256(c.encode()).hexdigest() for c in codes]
-
-    await db.store_backup_codes(current_user["id"], hashed)
-
-    return {
-        "backup_codes": codes,
-        "message": "Save these backup codes in a safe place. They will not be shown again.",
-        "count": len(codes),
-    }
-
-
-@router.post("/mfa/use-backup-code")
-async def mfa_use_backup_code(backup_code: str, current_user: dict = Depends(get_current_user)):
-    """
-    Validates and consumes a single backup recovery code.
-    """
-    import hashlib
-
-    hashed_input = hashlib.sha256(backup_code.upper().encode()).hexdigest()
-    consumed = await db.consume_backup_code(current_user["id"], hashed_input)
-
-    if not consumed:
-        raise HTTPException(status_code=400, detail="Invalid or already-used backup code.")
-
-    return {"message": "Backup code accepted. Please disable and re-enable MFA to generate new codes."}
-
-
-async def _issue_auth_tokens(user: dict) -> JSONResponse:
-    """
-    Internal helper to bundle access token JSON response and set HttpOnly refresh cookie.
-    """
-    token_data = await build_token_data(user)
-    access_token = auth_manager.create_access_token(token_data)
-    refresh_token = auth_manager.create_refresh_token(token_data)
-    res = JSONResponse(
-        content={
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-            "expires_in": auth_manager.access_token_expire_minutes * 60,
-        }
-    )
-    res.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=os.getenv("ENVIRONMENT", "development") == "production",
-        samesite="lax" if os.getenv("ENVIRONMENT", "development") != "production" else "strict",
-        max_age=auth_manager.refresh_token_expire_days * 24 * 3600,
-        path="/api/v1/auth/refresh",
-    )
-    return res
-
-
-@router.post("/mfa/login-verify", response_model=TokenResponse)
-async def mfa_login_verify(body: MfaLoginVerify):
-    """
-    AUTH-09: Completes login verification for MFA-enabled accounts.
-    
-    Accepts either an active 6-digit TOTP code or a single-use backup recovery code.
-    On successful verification, completes authentication and issues JWT tokens.
-    """
-    if not body.totp_code and not body.backup_code:
-        raise HTTPException(status_code=400, detail="Provide totp_code or backup_code.")
-
-    r = await get_redis()
-    user_id = None
-    if r:
-        user_id = await r.get(f"mfa_login:{body.mfa_token}")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Invalid or expired MFA session. Please sign in again.")
-
-    user = await db.get_user_by_id(user_id)
-    if not user or not user.get("mfa_secret"):
-        raise HTTPException(status_code=400, detail="MFA is not configured for this account.")
-
-    verified = False
-    if body.totp_code:
-        try:
-            import pyotp
-            totp = pyotp.TOTP(user["mfa_secret"])
-            verified = totp.verify(body.totp_code, valid_window=1)
-        except ImportError:
-            raise HTTPException(status_code=500, detail="MFA not available.")
-    elif body.backup_code:
-        import hashlib
-        hashed_input = hashlib.sha256(body.backup_code.upper().encode()).hexdigest()
-        verified = await db.consume_backup_code(user_id, hashed_input)
-
-    if not verified:
-        raise HTTPException(status_code=401, detail="Invalid MFA code.")
-
-    if r:
-        await r.delete(f"mfa_login:{body.mfa_token}")
-
-    return await _issue_auth_tokens(user)
-
-
-@router.post("/mfa/verify")
-async def mfa_verify(totp_code: str, current_user: dict = Depends(get_current_user)):
-    """
-    Confirm MFA enrollment by verifying the current TOTP code.
-    On success, stores the secret in the user's profile and activates MFA.
-    """
-    try:
-        import pyotp
-    except ImportError:
-        raise HTTPException(status_code=500, detail="MFA not available.")
-
-    r = await get_redis()
-    secret = None
-    if r:
-        secret = await r.get(f"mfa_pending:{current_user['id']}")
-
-    if not secret:
-        raise HTTPException(status_code=400, detail="No pending MFA enrollment. Call /mfa/enable first.")
-
-    totp = pyotp.TOTP(secret)
-    if not totp.verify(totp_code, valid_window=1):
-        raise HTTPException(status_code=400, detail="Invalid TOTP code. Please try again.")
-
-    # Persist secret and activate MFA
-    await db.enable_mfa(current_user["id"], secret)
-    if r:
-        await r.delete(f"mfa_pending:{current_user['id']}")
-
-    return {"message": "MFA enabled successfully.", "mfa_enabled": True}
-
-
-@router.post("/mfa/disable")
-async def mfa_disable(totp_code: str, current_user: dict = Depends(get_current_user)):
-    """Disable MFA for the current user after confirming current TOTP code."""
-    try:
-        import pyotp
-    except ImportError:
-        raise HTTPException(status_code=500, detail="MFA not available.")
-
-    user = await db.get_user_by_id(current_user["id"])
-    secret = user.get("mfa_secret") if user else None
-
-    if not secret:
-        raise HTTPException(status_code=400, detail="MFA is not currently enabled.")
-
-    totp = pyotp.TOTP(secret)
-    if not totp.verify(totp_code, valid_window=1):
-        raise HTTPException(status_code=400, detail="Invalid TOTP code.")
-
-    await db.disable_mfa(current_user["id"])
-    return {"message": "MFA disabled successfully.", "mfa_enabled": False}
-
-
-@router.post("/mfa/backup-codes")
-async def mfa_backup_codes(current_user: dict = Depends(get_current_user)):
-    """
-    Generate 8 one-time backup codes for account recovery.
-    Codes are hashed before storage; returned in plaintext only once.
-    """
-    import hashlib
-
-    user = await db.get_user_by_id(current_user["id"])
-    if not user or not user.get("mfa_secret"):
-        raise HTTPException(status_code=400, detail="MFA must be enabled before generating backup codes.")
-
-    codes = [secrets.token_hex(5).upper() for _ in range(8)]  # e.g. "A3F92B"
-    hashed = [hashlib.sha256(c.encode()).hexdigest() for c in codes]
-
-    await db.store_backup_codes(current_user["id"], hashed)
-
-    return {
-        "backup_codes": codes,
-        "message": "Save these backup codes in a safe place. They will not be shown again.",
-        "count": len(codes),
-    }
-
-
-@router.post("/mfa/use-backup-code")
-async def mfa_use_backup_code(backup_code: str, current_user: dict = Depends(get_current_user)):
-    """Validate and consume a single backup code for MFA bypass."""
-    import hashlib
-
-    hashed_input = hashlib.sha256(backup_code.upper().encode()).hexdigest()
-    consumed = await db.consume_backup_code(current_user["id"], hashed_input)
-
-    if not consumed:
-        raise HTTPException(status_code=400, detail="Invalid or already-used backup code.")
-
-    return {"message": "Backup code accepted. Please disable and re-enable MFA to generate new codes."}
-
+# ─── MFA Endpoints (Disabled in Demo Mode) ────────────────────────────────────
 
 async def _issue_auth_tokens(user: dict) -> JSONResponse:
     """Helper: create access/refresh tokens and set HttpOnly cookie."""
@@ -1182,43 +791,44 @@ async def _issue_auth_tokens(user: dict) -> JSONResponse:
     return res
 
 
+@router.post("/mfa/enable")
+async def mfa_enable(current_user: dict = Depends(get_current_user)):
+    return {
+        "secret": "",
+        "provisioning_uri": "",
+        "message": "Two-factor authentication is disabled in this environment.",
+        "mfa_enabled": False,
+    }
+
+
+@router.post("/mfa/verify")
+async def mfa_verify(totp_code: str = "", current_user: dict = Depends(get_current_user)):
+    return {"message": "MFA is disabled in demo mode.", "mfa_enabled": False}
+
+
+@router.post("/mfa/disable")
+async def mfa_disable(totp_code: str = "", current_user: dict = Depends(get_current_user)):
+    await db.disable_mfa(current_user["id"])
+    return {"message": "MFA disabled successfully.", "mfa_enabled": False}
+
+
+@router.post("/mfa/backup-codes")
+async def mfa_backup_codes(current_user: dict = Depends(get_current_user)):
+    return {
+        "backup_codes": [],
+        "message": "MFA is disabled in this environment.",
+        "count": 0,
+    }
+
+
+@router.post("/mfa/use-backup-code")
+async def mfa_use_backup_code(backup_code: str = "", current_user: dict = Depends(get_current_user)):
+    return {"message": "MFA is disabled."}
+
+
 @router.post("/mfa/login-verify", response_model=TokenResponse)
 async def mfa_login_verify(body: MfaLoginVerify):
-    """
-    AUTH-09: Complete password login after MFA verification.
-    Accepts TOTP code or single-use backup code.
-    """
-    if not body.totp_code and not body.backup_code:
-        raise HTTPException(status_code=400, detail="Provide totp_code or backup_code.")
-
-    r = await get_redis()
-    user_id = None
-    if r:
-        user_id = await r.get(f"mfa_login:{body.mfa_token}")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Invalid or expired MFA session. Please sign in again.")
-
-    user = await db.get_user_by_id(user_id)
-    if not user or not user.get("mfa_secret"):
-        raise HTTPException(status_code=400, detail="MFA is not configured for this account.")
-
-    verified = False
-    if body.totp_code:
-        try:
-            import pyotp
-            totp = pyotp.TOTP(user["mfa_secret"])
-            verified = totp.verify(body.totp_code, valid_window=1)
-        except ImportError:
-            raise HTTPException(status_code=500, detail="MFA not available.")
-    elif body.backup_code:
-        import hashlib
-        hashed_input = hashlib.sha256(body.backup_code.upper().encode()).hexdigest()
-        verified = await db.consume_backup_code(user_id, hashed_input)
-
-    if not verified:
-        raise HTTPException(status_code=401, detail="Invalid MFA code.")
-
-    if r:
-        await r.delete(f"mfa_login:{body.mfa_token}")
-
-    return await _issue_auth_tokens(user)
+    raise HTTPException(
+        status_code=400,
+        detail="MFA is disabled. Please log in directly with your email and password."
+    )

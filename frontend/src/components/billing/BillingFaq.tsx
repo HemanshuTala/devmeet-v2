@@ -7,7 +7,7 @@ const BILLING_FAQS = [
   {
     question: 'How do payments work on DevMeet?',
     answer:
-      'Payments are processed instantly and securely via Razorpay. We support UPI (Google Pay, PhonePe, Paytm), Credit & Debit Cards, Net Banking, and digital wallets. No international credit card is required.',
+      'Plans can be upgraded instantly with one click. The platform processes upgrades via our instant payment service sandbox, directly updating your account quota and billing history.',
   },
   {
     question: 'Can I upgrade or downgrade my plan anytime?',

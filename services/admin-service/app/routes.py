@@ -295,7 +295,7 @@ async def unblock_user(user_id: str, request: Request, admin: dict = Depends(req
 
 @router.put("/users/{user_id}/plan")
 async def change_user_plan(user_id: str, payload: PlanUpdateRequest, request: Request, admin: dict = Depends(require_admin)):
-    """
+    """                                                                                                                                                                                                                                                                                 
     Manually overrides a user's subscription tier (e.g. promoting candidate to Pro for testing).
 
     Side Effects:

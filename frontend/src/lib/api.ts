@@ -497,16 +497,17 @@ export const adminApi = {
  * Subscription Checkout and Billing Gateway
  */
 export const paymentApi = {
-  getConfig: () => request<{ provider: string; razorpay_enabled: boolean; razorpay_key_id?: string; currency: string }>('/api/v1/payments/config'),
+  getConfig: () => request<{ provider: string; mode: string; currency: string; razorpay_enabled?: boolean }>('/api/v1/payments/config'),
   getPlans: () => request<any>('/api/v1/payments/plans'),
   getSubscription: () => request<any>('/api/v1/payments/subscription'),
   getBillingHistory: () => request<any>('/api/v1/payments/billing-history'),
   createCheckoutSession: (plan: string) =>
     request<any>('/api/v1/payments/checkout-session', json('POST', {
       plan,
-      success_url: `${window.location.origin}/billing?payment=success`,
-      cancel_url: `${window.location.origin}/billing?payment=cancelled`,
+      success_url: typeof window !== 'undefined' ? `${window.location.origin}/billing?payment=success` : '',
+      cancel_url: typeof window !== 'undefined' ? `${window.location.origin}/billing?payment=cancelled` : '',
     })),
+  upgradePlan: (plan: string) => request('/api/v1/payments/upgrade', json('POST', { plan })),
   verifyPayment: (payload: unknown) => request('/api/v1/payments/verify-payment', json('POST', payload)),
   mockWebhook: (user_id: string, plan: string, event_type: string) =>
     request('/api/v1/payments/mock-webhook', json('POST', { user_id, plan, event_type })),
